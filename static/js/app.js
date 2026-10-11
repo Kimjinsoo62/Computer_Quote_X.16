@@ -332,6 +332,101 @@ async function openUsedMarketDirect(source, market, event) {
 
 window.openUsedMarketDirect = openUsedMarketDirect;
 
+// ---------- 다나와 비슷한 PC 찾기 ----------
+// 다나와 완제품 PC 에는 모니터·키보드·세팅비가 없으므로 본체 금액끼리 비교한다.
+const DANAWA_NON_BODY = ["모니터", "키보드마우스", "초기 세팅비", "기술지원"];
+const danawaModal = $("#danawaModal");
+
+function quoteBodyPrice(q) {
+  if (!q.parts?.length) return displayTotal(q); // 노트북 견적은 품목 없이 합계만 있다
+  return displayParts(q)
+    .filter((p) => !DANAWA_NON_BODY.includes(p.category))
+    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+}
+
+function danawaChip(label, state) {
+  const mark = state === "exact" ? "✓" : (state === "near" ? "≈" : "✗");
+  return `<span class="dn-chip dn-${state || "none"}">${label} ${mark}</span>`;
+}
+
+function renderDanawaModal(q, data) {
+  const base = data.base || {};
+  const basePrice = Number(base.price) || 0;
+  $("#danawaBase").innerHTML = `
+    <div><strong>컴퓨존 기준</strong> · ${escapeHtml(q.model || "")}</div>
+    <div class="dn-base-spec">
+      CPU <b>${escapeHtml(base.cpu || "-")}</b> · 그래픽 <b>${escapeHtml(base.gpu || "-")}</b> ·
+      RAM <b>${base.ram_gb ? base.ram_gb + "GB" : "-"}</b> · ${base.notebook ? "노트북 금액" : "본체 금액"} <b>${basePrice ? fmt(basePrice) : "-"}</b>
+      ${base.notebook ? "" : '<span class="dn-note">(모니터·키보드·세팅비 제외)</span>'}
+    </div>
+    <div class="dn-base-query">다나와 검색어: ${escapeHtml(data.query || "")}
+      <a href="${escapeHtml(data.search_url || "#")}" target="_blank" rel="noopener">다나와에서 더 보기 ↗</a></div>`;
+
+  const items = data.items || [];
+  if (!items.length) {
+    $("#danawaList").innerHTML = '<p class="dn-empty">다나와에서 비슷한 완제품 PC를 찾지 못했습니다. 위 링크로 직접 검색해 보세요.</p>';
+  } else {
+    $("#danawaList").innerHTML = `
+      <table class="dn-table">
+        <thead><tr><th>#</th><th></th><th>제품 / 사양</th><th>일치</th><th>다나와 최저가</th><th>컴퓨존 대비</th></tr></thead>
+        <tbody>${items.map((it, idx) => {
+          const price = Number(it.price) || 0;
+          const diff = price && basePrice ? price - basePrice : null;
+          const diffText = diff === null ? "-" : `${diff > 0 ? "+" : ""}${diff.toLocaleString("ko-KR")}원`;
+          const diffClass = diff === null ? "" : (diff > 0 ? "dn-up" : "dn-down");
+          return `
+          <tr>
+            <td class="dn-rank">${idx + 1}</td>
+            <td class="dn-thumb">${it.image ? `<img src="${escapeHtml(it.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}</td>
+            <td class="dn-name">
+              <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a>
+              <div class="dn-spec">${escapeHtml(it.spec || "")}</div>
+            </td>
+            <td class="dn-match">${danawaChip("CPU", it.match?.cpu)}${danawaChip("GPU", it.match?.gpu)}${danawaChip("RAM", it.match?.ram)}</td>
+            <td class="dn-price">${price ? fmt(price) : "가격없음"}</td>
+            <td class="dn-diff ${diffClass}">${diffText}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>`;
+  }
+  show(danawaModal);
+}
+
+async function openDanawaSimilar(index, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const q = quoteData?.quotes?.[index];
+  if (!q) return;
+  const mem = (q.parts || []).find((p) => p.category === "메모리");
+  const params = new URLSearchParams({
+    cpu: quotePartName(q, "CPU") || "",
+    gpu: quotePartName(q, "그래픽카드") || "",
+    ram: mem?.name || "",
+    ram_qty: String(mem?.qty || 1),
+    model: q.model || "",
+    price: String(quoteBodyPrice(q)),
+  });
+  showBusy("다나와에서 사양이 비슷한 PC 찾는 중…");
+  try {
+    const res = await fetch(`/api/danawa/similar?${params.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "다나와 검색에 실패했습니다.");
+    renderDanawaModal(q, data);
+  } catch (e) {
+    alert(e.message || "다나와 검색에 실패했습니다.");
+  } finally {
+    hideBusy();
+  }
+}
+
+window.openDanawaSimilar = openDanawaSimilar;
+$("#danawaClose")?.addEventListener("click", () => hide(danawaModal));
+danawaModal?.addEventListener("click", (e) => {
+  if (e.target === danawaModal) hide(danawaModal);
+});
+
 function renderSummaryCards(quotes) {
   const container = $("#summaryCards");
   if (!container) return;
@@ -362,7 +457,13 @@ function summaryCardHtml(q, i) {
       <span class="tier-badge ${badgeClass(q.tier_key)}">${q.tab_label || q.tier}</span>
       <h3>${escapeHtml(q.model)}</h3>
       <p class="model">${escapeHtml(q.description)}</p>
-      <div class="price">${fmt(displayTotal(q))}</div>
+      <div class="price-row">
+        <div class="price">${fmt(displayTotal(q))}</div>
+        ${q.url ? `
+        <a href="/api/image?redirect=1&url=${encodeURIComponent(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-image" title="원본 페이지의 대표 이미지를 새 창으로 봅니다" onclick="event.stopPropagation()">
+          🖼️ 이미지
+        </a>` : ""}
+      </div>
       <p class="source ${sourceClass}">
         ${sourceText}
       </p>
@@ -378,10 +479,10 @@ function summaryCardHtml(q, i) {
         <a href="${q.url}" target="_blank" rel="noopener" class="btn btn-sm btn-buy" onclick="event.stopPropagation()">
           🛍️ 상품상세 ↗
         </a>`}
-        ${q.url ? `
-        <a href="/api/image?redirect=1&url=${encodeURIComponent(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-image" title="원본 페이지의 대표 이미지를 새 창으로 봅니다" onclick="event.stopPropagation()">
-          🖼️ 이미지
-        </a>` : ""}
+        ${apple ? "" : `
+        <button type="button" class="btn btn-sm btn-danawa" title="컴퓨존 사양(CPU · 그래픽카드 · RAM)과 가장 비슷한 다나와 완제품 PC를 찾습니다" onclick="openDanawaSimilar(${i}, event)">
+          🔍 다나와
+        </button>`}
         <button type="button" class="btn btn-sm btn-coupang btn-coupang-search" data-keyword="${coupangKeyword}" onclick="openCoupangSearch(decodeURIComponent(this.dataset.keyword), event)">
           🛒 쿠팡검색 ↗
         </button>
@@ -1041,6 +1142,7 @@ document.addEventListener("keydown", (e) => {
   if (ctoModal && !ctoModal.classList.contains("hidden")) closeCtoModal();
   if (trModal && !trModal.classList.contains("hidden")) closeTrModal();
   if (netModal && !netModal.classList.contains("hidden")) hide(netModal);
+  if (danawaModal && !danawaModal.classList.contains("hidden")) hide(danawaModal);
 });
 
 $("#quoteInfoSave")?.addEventListener("click", async () => {

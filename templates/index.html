@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261011d" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261011e" />
 </head>
 <body>
   <nav class="nav">
@@ -440,6 +440,20 @@
 
 
 
+  <!-- 다나와 비슷한 PC 모달 -->
+  <div id="danawaModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal danawa-modal" role="dialog" aria-labelledby="danawaTitle">
+      <div class="modal-header">
+        <h3 id="danawaTitle">🔍 다나와 비슷한 PC (CPU · 그래픽카드 · RAM 기준)</h3>
+        <button type="button" class="modal-close btn-modal-close" id="danawaClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <div id="danawaBase" class="danawa-base"></div>
+        <div id="danawaList" class="danawa-list"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- 컴퓨터 작업내역서 모달 -->
   <div id="taskReportModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal modal-xl task-report-modal" role="dialog" aria-labelledby="trModalTitle">
@@ -709,6 +723,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261011d"></script>
+  <script src="/static/js/app.js?v=20261011e"></script>
 </body>
 </html>

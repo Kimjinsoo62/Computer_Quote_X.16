@@ -1,0 +1,275 @@
+# -*- coding: utf-8 -*-
+"""다나와 통합검색에서 컴퓨존 견적과 사양(CPU · 그래픽카드 · RAM)이 가장 비슷한 완제품 PC를 찾는다."""
+from __future__ import annotations
+
+import html
+import logging
+import math
+import re
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any
+
+from app.used_market import _parts_from_model_paren, short_cpu_name, short_gpu_name
+
+logger = logging.getLogger(__name__)
+
+SEARCH_URL = "https://search.danawa.com/dsearch.php"
+PRODUCT_URL = "https://prod.danawa.com/info/?pcode={pcode}"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+FETCH_TIMEOUT_SEC = 15
+# 다나와가 일부 요청을 새 검색 화면(search.danawa.com/?query=)으로 보내는데, 그 화면은 상품 목록이
+# 스크립트로 그려져 읽을 수 없다. 기존 화면이 나올 때까지 몇 번 다시 요청한다.
+FETCH_RETRIES = 3
+CACHE_TTL_SEC = 10 * 60
+MAX_ITEMS = 12
+MIN_RESULTS_BEFORE_FALLBACK = 5
+
+_cache_lock = threading.Lock()
+_search_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+_ITEM_START_RE = re.compile(r'<li[^>]*class="prod_item[^"]*"')
+_PCODE_RE = re.compile(r'id="productItem(\d+)"')
+_CATEGORY_RE = re.compile(r'id="productItem_categoryInfo_\d+"\s+value="([^"]*)"', re.S)
+_MIN_PRICE_RE = re.compile(r'id="min_price_\d+"\s+value="(\d*)"', re.S)
+_NAME_RE = re.compile(r'<p class="prod_name">\s*<a[^>]*>(.*?)</a>', re.S)
+_SPEC_RE = re.compile(r'<div class="spec_list">(.*?)</div>', re.S)
+_IMG_RE = re.compile(r'<img[^>]+src="([^"]+)"')
+_TAG_RE = re.compile(r"<[^>]+>")
+_CHIP_TOKEN_RE = re.compile(r"(\d{3,5}[A-Z0-9]*)")
+_DGPU_RE = re.compile(r"\b(RTX|GTX|RX|ARC)\s*[AB]?\d{3,4}", re.I)
+_RAM_GB_RE = re.compile(r"(\d+)\s*GB", re.I)
+_RAM_MULT_RE = re.compile(r"[×xX]\s*(\d+)")
+_RAM_TB_RE = re.compile(r"(\d+)\s*TB", re.I)
+
+
+def _clean(text: str) -> str:
+    return re.sub(r"\s+", " ", html.unescape(_TAG_RE.sub(" ", text or ""))).strip()
+
+
+def cpu_key(text: str) -> str:
+    """'i5-14400F', 'Ultra 5 225F', '라이젠5 5500GT' → '14400F' / '225F' / '5500GT' (비교용 칩 이름)."""
+    tokens = _CHIP_TOKEN_RE.findall((text or "").upper())
+    return tokens[-1] if tokens else ""
+
+
+def gpu_key(text: str) -> str:
+    """'RTX 4060 Ti' → 'RTX4060TI'. 외장 그래픽카드가 아니면 빈 문자열(내장 그래픽)."""
+    upper = (text or "").upper()
+    if not _DGPU_RE.search(upper):
+        return ""
+    return re.sub(r"[^A-Z0-9]", "", upper)
+
+
+def _gpu_base(key: str) -> str:
+    """'RTX4060TI' → 'RTX4060' (같은 계열인지 볼 때 쓴다)."""
+    match = re.match(r"([A-Z]+\d{3,4})", key)
+    return match.group(1) if match else key
+
+
+def ram_total_gb(name: str, qty: int = 1) -> int:
+    """컴퓨존 메모리 품명 '[16GB] … (×2)' 와 수량으로 총 용량(GB)을 구한다. 모르면 0."""
+    text = name or ""
+    bracket = re.search(r"\[(\d+)\s*GB\]", text, re.I)
+    match = bracket or _RAM_GB_RE.search(text)
+    if not match:
+        return 0
+    per = int(match.group(1))
+    mult = _RAM_MULT_RE.search(text)
+    count = int(mult.group(1)) if mult else 1
+    return per * count * max(int(qty or 1), 1)
+
+
+def _parse_spec(spec: str) -> dict[str, Any]:
+    """다나와 사양 줄에서 CPU · 그래픽 · RAM · 저장장치를 꺼낸다.
+
+    데스크탑: 'CPU / 그래픽 / 칩셋 / … / DDR5 / 32GB / M.2 / 1TB …'
+    노트북:   '노트북 / 39.6cm(15.6인치) / 1.55kg / 인텔 / 코어i5-13세대 / i5-1335U (1.3GHz) / Iris Xe / 16GB / …'
+    """
+    tokens = [t.strip() for t in spec.split(" / ") if t.strip()]
+    if tokens and tokens[0] == "노트북":
+        cpu_idx = next((i for i, t in enumerate(tokens) if "GHz" in t and cpu_key(t)), -1)
+        if cpu_idx >= 0:
+            gpu = tokens[cpu_idx + 1] if cpu_idx + 1 < len(tokens) else ""
+            ram_tok = tokens[cpu_idx + 2] if cpu_idx + 2 < len(tokens) else ""
+            ram_m = _RAM_GB_RE.fullmatch(ram_tok)
+            storage = next((t.split(":", 1)[1].strip() for t in tokens if t.startswith("용량")), "")
+            return {"cpu": tokens[cpu_idx], "gpu": gpu, "ram_gb": int(ram_m.group(1)) if ram_m else 0, "storage": storage}
+    cpu = tokens[0] if tokens else ""
+    gpu = tokens[1] if len(tokens) > 1 else ""
+    ram_gb = 0
+    storage = ""
+    for i, tok in enumerate(tokens):
+        if re.fullmatch(r"DDR\d\w*", tok, re.I) and i + 1 < len(tokens):
+            m = _RAM_GB_RE.fullmatch(tokens[i + 1])
+            if m and not ram_gb:
+                ram_gb = int(m.group(1))
+        if tok in ("M.2", "SSD", "SATA") and i + 1 < len(tokens) and not storage:
+            if _RAM_GB_RE.fullmatch(tokens[i + 1]) or _RAM_TB_RE.fullmatch(tokens[i + 1]):
+                storage = tokens[i + 1]
+    return {"cpu": cpu, "gpu": gpu, "ram_gb": ram_gb, "storage": storage}
+
+
+def _is_pc_category(category: str, notebook: bool = False) -> bool:
+    cat = category or ""
+    if notebook:
+        return "노트북" in cat
+    return ("완제품" in cat or "데스크탑" in cat or "조립PC" in cat) and "노트북" not in cat
+
+
+def _fetch_search_html(query: str) -> str:
+    url = f"{SEARCH_URL}?{urllib.parse.urlencode({'query': query, 'tab': 'main'})}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Referer": "https://www.danawa.com/",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+        },
+    )
+    last = ""
+    for _ in range(FETCH_RETRIES):
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_SEC) as res:
+            body = res.read().decode("utf-8", "ignore")
+            final_url = res.geturl()
+        if "dsearch.php" in final_url and _PCODE_RE.search(body):
+            return body
+        last = body
+    return last
+
+
+def _parse_items(body: str, notebook: bool = False) -> list[dict[str, Any]]:
+    starts = [m.start() for m in _ITEM_START_RE.finditer(body)]
+    items: list[dict[str, Any]] = []
+    for i, start in enumerate(starts):
+        block = body[start: starts[i + 1] if i + 1 < len(starts) else start + 30000]
+        pcode = _PCODE_RE.search(block)
+        if not pcode:
+            continue  # 광고 등 상품 번호가 없는 칸
+        category = _CATEGORY_RE.search(block)
+        if category and not _is_pc_category(category.group(1), notebook):
+            continue
+        name = _NAME_RE.search(block)
+        spec = _SPEC_RE.search(block)
+        price = _MIN_PRICE_RE.search(block)
+        image = _IMG_RE.search(block)
+        spec_text = _clean(spec.group(1)) if spec else ""
+        img = image.group(1) if image else ""
+        if img.startswith("//"):
+            img = "https:" + img
+        items.append({
+            "pcode": pcode.group(1),
+            "name": _clean(name.group(1)) if name else "",
+            "url": PRODUCT_URL.format(pcode=pcode.group(1)),
+            "image": img,
+            "price": int(price.group(1)) if price and price.group(1) else 0,
+            "spec": spec_text,
+            **_parse_spec(spec_text),
+        })
+    return items
+
+
+def _search(query: str, notebook: bool = False) -> list[dict[str, Any]]:
+    now = time.time()
+    key = f"{'nb' if notebook else 'pc'}:{query}"
+    with _cache_lock:
+        hit = _search_cache.get(key)
+        if hit and now - hit[0] < CACHE_TTL_SEC:
+            return hit[1]
+    items = _parse_items(_fetch_search_html(query), notebook)
+    with _cache_lock:
+        _search_cache[key] = (now, items)
+    return items
+
+
+def _ram_from_model(model: str) -> int:
+    """노트북 모델명 괄호 '(i5-1335U/8GB/256GB/FD)' 에서 메모리 용량. 저장장치(두 번째 GB)는 버린다."""
+    match = re.search(r"\(([^)]*)\)", model or "")
+    if not match:
+        return 0
+    for token in match.group(1).split("/"):
+        m = _RAM_GB_RE.fullmatch(token.strip())
+        if m and int(m.group(1)) <= 128:
+            return int(m.group(1))
+    return 0
+
+
+def search_url(query: str) -> str:
+    return f"{SEARCH_URL}?{urllib.parse.urlencode({'query': query, 'tab': 'main'})}"
+
+
+def _score(item: dict[str, Any], cpu_k: str, gpu_k: str, ram_gb: int, price: int) -> dict[str, Any]:
+    item_cpu = cpu_key(item["cpu"])
+    item_gpu = gpu_key(item["gpu"])
+    cpu_match = "exact" if cpu_k and item_cpu == cpu_k else (
+        "near" if cpu_k and item_cpu and re.sub(r"\D", "", item_cpu) == re.sub(r"\D", "", cpu_k) else "")
+    if gpu_k:
+        gpu_match = "exact" if item_gpu == gpu_k else (
+            "near" if item_gpu and _gpu_base(item_gpu) == _gpu_base(gpu_k) else "")
+    else:
+        gpu_match = "exact" if not item_gpu else ""  # 둘 다 내장 그래픽
+    ram_match = "exact" if ram_gb and item["ram_gb"] == ram_gb else (
+        "near" if ram_gb and item["ram_gb"] and abs(math.log2(item["ram_gb"] / ram_gb)) <= 1 else "")
+
+    score = {"exact": 50, "near": 25, "": 0}[cpu_match]
+    score += {"exact": 35, "near": 15, "": 0}[gpu_match]
+    score += {"exact": 15, "near": 6, "": 0}[ram_match]
+    if price and item["price"]:
+        score += 10 * max(0.0, 1 - abs(item["price"] - price) / price)
+    return {
+        **item,
+        "score": round(score, 1),
+        "match": {"cpu": cpu_match, "gpu": gpu_match, "ram": ram_match},
+    }
+
+
+def find_similar(
+    cpu: str = "",
+    gpu: str = "",
+    ram: str = "",
+    ram_qty: int = 1,
+    model: str = "",
+    price: int = 0,
+) -> dict[str, Any]:
+    """컴퓨존 견적의 CPU/그래픽카드/메모리 품명으로 다나와 완제품 PC 중 비슷한 것을 점수순으로 돌려준다."""
+    cpu_s = short_cpu_name(cpu)
+    gpu_s = short_gpu_name(gpu)
+    # 노트북 견적(금액대로 찾기 · 노트북)은 부품 목록 없이 모델명에 '(CPU/RAM/SSD)' 만 있다.
+    notebook = not (cpu or "").strip()
+    if not cpu_s:
+        fb_cpu, fb_gpu = _parts_from_model_paren(model)
+        cpu_s = short_cpu_name(fb_cpu) or fb_cpu
+        gpu_s = gpu_s or short_gpu_name(fb_gpu)
+    cpu_k = cpu_key(cpu_s)
+    if not cpu_k:
+        raise ValueError("이 견적에서 CPU 모델을 찾지 못해 다나와 비교를 할 수 없습니다.")
+    gpu_k = gpu_key(gpu_s)
+    ram_gb = ram_total_gb(ram, ram_qty) or (_ram_from_model(model) if notebook else 0)
+
+    if notebook:
+        query = f"{cpu_k} {gpu_s} 노트북" if gpu_k else f"{cpu_k} 노트북"
+    else:
+        query = f"{cpu_k} {gpu_s}" if gpu_k else f"{cpu_k} 조립PC"
+    items = _search(query, notebook)
+    used_query = query
+    if len(items) < MIN_RESULTS_BEFORE_FALLBACK and gpu_k:
+        # 같은 CPU+그래픽카드 조합이 적으면 CPU 만으로 넓혀 찾는다
+        fallback = f"{cpu_k} 노트북" if notebook else f"{cpu_k} 조립PC"
+        seen = {it["pcode"] for it in items}
+        items = items + [it for it in _search(fallback, notebook) if it["pcode"] not in seen]
+        used_query = f"{query} + {fallback}"
+
+    scored = [_score(it, cpu_k, gpu_k, ram_gb, price) for it in items]
+    scored.sort(key=lambda it: (-it["score"], it["price"] or 10**12))
+    return {
+        "query": used_query,
+        "search_url": search_url(query),
+        "base": {"cpu": cpu_s, "gpu": gpu_s or "내장 그래픽", "ram_gb": ram_gb, "price": price, "notebook": notebook},
+        "items": scored[:MAX_ITEMS],
+    }

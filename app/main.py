@@ -3,6 +3,7 @@ import json
 import socket
 from dataclasses import replace
 from datetime import date
+import urllib.error
 from pathlib import Path
 from urllib.parse import quote
 
@@ -23,6 +24,7 @@ from app.config import (
 from app.excel_export import build_excel
 from app.image_lookup import find_representative_image
 from app.apple_scraper import fetch_apple_cto_live, fetch_apple_cto_options
+from app.danawa_search import find_similar as danawa_find_similar
 from app.used_market import used_market_links
 from app.quote_info import load_quote_info, reset_quote_info, save_quote_info
 from app.quote_engine import (
@@ -199,6 +201,24 @@ def api_used_links(q: str = "", cpu: str = "", gpu: str = ""):
 
 
 
+
+
+@app.get("/api/danawa/similar")
+def api_danawa_similar(
+    cpu: str = "",
+    gpu: str = "",
+    ram: str = "",
+    ram_qty: int = 1,
+    model: str = "",
+    price: int = 0,
+):
+    """컴퓨존 견적의 CPU · 그래픽카드 · RAM 기준으로 다나와에서 가장 비슷한 완제품 PC 목록"""
+    try:
+        return danawa_find_similar(cpu=cpu, gpu=gpu, ram=ram, ram_qty=ram_qty, model=model, price=price)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise HTTPException(status_code=502, detail=f"다나와 검색에 실패했습니다: {e}") from e
 
 
 @app.get("/api/update/check")
