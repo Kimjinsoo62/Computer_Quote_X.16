@@ -867,6 +867,9 @@ const qiFields = {
   monitor_price: "#qiMonitorPrice",
   keyboard_price: "#qiKeyboardPrice",
   setup_price: "#qiSetupPrice",
+  bank_name: "#qiBankName",
+  bank_account: "#qiBankAccount",
+  bank_holder: "#qiBankHolder",
 };
 
 // 사용자가 앱 실행 후 입력 및 저장했는지 상태 관리

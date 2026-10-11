@@ -278,6 +278,37 @@ def _write_validity_note(ws, row: int, last_col: str = "F") -> None:
     ws.row_dimensions[row].height = INFO_ROW_HEIGHT
 
 
+def _bank_account_line(info: dict) -> str:
+    """'입금 계좌 : 국민은행 123-456 (예금주 : 홍길동)' 문구. 계좌번호가 없으면 빈 문자열."""
+    account = (info.get("bank_account") or "").strip()
+    if not account:
+        return ""
+    bank = (info.get("bank_name") or "").strip()
+    holder = (info.get("bank_holder") or "").strip()
+    text = f"■ 입금 계좌 : {bank + ' ' if bank else ''}{account}"
+    if holder:
+        text += f"  (예금주 : {holder})"
+    return text
+
+
+def _write_bank_account(ws, text: str, border) -> None:
+    """시트 내용 끝에서 한 줄 띄우고 입금 계좌를 시트 전체 폭으로 적는다."""
+    row = ws.max_row + 2
+    last_col = get_column_letter(max(ws.max_column, 6))
+    ws.merge_cells(f"A{row}:{last_col}{row}")
+    cell = ws[f"A{row}"]
+    cell.value = text
+    _set_cell(
+        cell,
+        font=Font(name=FONT_NAME, size=11, bold=True, color="1F4E79"),
+        alignment=Alignment(horizontal="left", vertical="center", wrap_text=True, indent=1),
+    )
+    cell.fill = PatternFill("solid", fgColor="EAF1FB")
+    for col in range(1, ws.max_column + 1):
+        ws.cell(row=row, column=col).border = border
+    ws.row_dimensions[row].height = INFO_ROW_HEIGHT
+
+
 def _assert_print_width(ws) -> float:
     """열 너비 합을 반환한다. MAX_TOTAL_COL_WIDTH 초과 시 인쇄에서 잘릴 수 있다."""
     return sum(
@@ -1314,6 +1345,13 @@ def build_excel(
             _set_cell(ws8[f"A{r8}"], font=Font(name=FONT_NAME, size=9), alignment=left)
             ws8.row_dimensions[r8].height = 18.0
             r8 += 1
+
+    # 견적 정보의 입금 계좌를 각 견적서 시트 맨 아래에 붙인다(계좌번호가 있을 때만).
+    bank_line = _bank_account_line(info)
+    if bank_line:
+        for ws in wb.worksheets:
+            if ws is not ws_sum:
+                _write_bank_account(ws, bank_line, border)
 
     # 모든 내용을 채운 뒤에 행 높이를 맞춘다(열 너비·병합이 확정된 상태여야 한다).
     for ws in wb.worksheets:

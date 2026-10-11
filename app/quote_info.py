@@ -24,6 +24,10 @@ DEFAULT_INFO = {
     "monitor_price": "180000",
     "keyboard_price": "30000",
     "setup_price": "0",
+    # 입금 계좌 (계좌번호를 넣으면 모든 Excel 견적서 하단에 표시)
+    "bank_name": "",
+    "bank_account": "",
+    "bank_holder": "",
 }
 
 

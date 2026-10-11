@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261011a" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261011b" />
 </head>
 <body>
   <nav class="nav">
@@ -297,6 +297,21 @@
             </label>
           </div>
           <small>포함으로 켠 항목에만 적용됩니다. 0원이면 별도청구로 표시됩니다.</small>
+        </fieldset>
+        <fieldset class="modal-group extra-price-group">
+          <legend>입금 계좌</legend>
+          <div class="extra-price-grid">
+            <label>은행명
+              <input type="text" id="qiBankName" placeholder="예: 국민은행" />
+            </label>
+            <label>계좌번호
+              <input type="text" id="qiBankAccount" placeholder="예: 123-456-789012" autocomplete="off" />
+            </label>
+            <label>예금주
+              <input type="text" id="qiBankHolder" placeholder="예: 홍길동" />
+            </label>
+          </div>
+          <small>계좌번호를 입력하면 모든 Excel 견적서 하단에 입금 계좌가 표시됩니다. 비워두면 표시하지 않습니다.</small>
         </fieldset>
         <p id="quoteInfoStatus" class="modal-status"></p>
       </div>
@@ -688,6 +703,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261011a"></script>
+  <script src="/static/js/app.js?v=20261011b"></script>
 </body>
 </html>
