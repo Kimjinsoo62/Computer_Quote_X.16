@@ -12,7 +12,7 @@ from typing import Any
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from app.quote_info import load_quote_info
+from app.quote_info import bank_account_line, load_quote_info
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "task_reports.json"
 TEMPLATE_FILE = Path(__file__).resolve().parent.parent / "컴퓨터_작업내역서.xlsx"
@@ -238,6 +238,12 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
         ws["A29"] = f"서명: {report.get('customer_sign')}"
     if report.get("technician_sign"):
         ws["D29"] = f"서명: {report.get('technician_sign')}"
+
+    # 8. 입금 계좌 (견적 정보에서 가져옴, 계좌번호가 없으면 생략)
+    bank_line = bank_account_line(load_quote_info())
+    if bank_line:
+        ws["A31"] = bank_line
+        ws["A31"].font = Font(bold=True, color="1F4E79")
 
     buf = BytesIO()
     wb.save(buf)

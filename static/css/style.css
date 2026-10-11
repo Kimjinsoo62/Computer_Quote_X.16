@@ -1221,6 +1221,18 @@ a:hover { text-decoration: underline; }
 }
 
 /* ?�의?�항 */
+.tr-bank-line {
+  margin-bottom: 6px;
+  padding: 5px 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  background: #eaf1fb;
+  color: #1e3a8a;
+  font-weight: 700;
+  font-size: 1.05rem;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 .tr-notices {
   border: 1px solid #cbd5e1;
   border-radius: 4px;

@@ -56,6 +56,19 @@ def extra_item_prices() -> dict[str, int]:
     }
 
 
+def bank_account_line(info: dict) -> str:
+    """Excel 견적서·작업내역서 공통 '입금 계좌 : 국민은행 123-456 (예금주 : 홍길동)' 문구. 계좌번호가 없으면 빈 문자열."""
+    account = (info.get("bank_account") or "").strip()
+    if not account:
+        return ""
+    bank = (info.get("bank_name") or "").strip()
+    holder = (info.get("bank_holder") or "").strip()
+    text = f"■ 입금 계좌 : {bank + ' ' if bank else ''}{account}"
+    if holder:
+        text += f"  (예금주 : {holder})"
+    return text
+
+
 def load_quote_info() -> dict:
     if DATA_FILE.exists():
         try:

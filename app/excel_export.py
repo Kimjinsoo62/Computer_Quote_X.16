@@ -18,7 +18,7 @@ from openpyxl.worksheet.properties import PageSetupProperties
 
 from app.config import QUOTE_DISCLAIMER
 from app.quote_engine import TodayQuotesResult, fetch_today_quotes
-from app.quote_info import load_quote_info
+from app.quote_info import bank_account_line, load_quote_info
 
 # 견적서마다 사용자가 개별 항목을 추가할 수 있는 빈 행 수
 USER_BLANK_ROWS = 2
@@ -276,19 +276,6 @@ def _write_validity_note(ws, row: int, last_col: str = "F") -> None:
     cell.font = Font(name=FONT_NAME, size=10, bold=True, color="000080")
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     ws.row_dimensions[row].height = INFO_ROW_HEIGHT
-
-
-def _bank_account_line(info: dict) -> str:
-    """'입금 계좌 : 국민은행 123-456 (예금주 : 홍길동)' 문구. 계좌번호가 없으면 빈 문자열."""
-    account = (info.get("bank_account") or "").strip()
-    if not account:
-        return ""
-    bank = (info.get("bank_name") or "").strip()
-    holder = (info.get("bank_holder") or "").strip()
-    text = f"■ 입금 계좌 : {bank + ' ' if bank else ''}{account}"
-    if holder:
-        text += f"  (예금주 : {holder})"
-    return text
 
 
 def _write_bank_account(ws, text: str, border) -> None:
@@ -1347,7 +1334,7 @@ def build_excel(
             r8 += 1
 
     # 견적 정보의 입금 계좌를 각 견적서 시트 맨 아래에 붙인다(계좌번호가 있을 때만).
-    bank_line = _bank_account_line(info)
+    bank_line = bank_account_line(info)
     if bank_line:
         for ws in wb.worksheets:
             if ws is not ws_sum:

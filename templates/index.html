@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261011b" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261011c" />
 </head>
 <body>
   <nav class="nav">
@@ -654,6 +654,9 @@
               </div>
             </div>
 
+            <!-- 입금 계좌 (견적 정보에서 가져옴, 계좌번호가 없으면 숨김) -->
+            <div id="trBankLine" class="tr-bank-line hidden"></div>
+
             <!-- 유의사항 -->
             <div class="tr-notices">
               <div class="tr-notice-title">유의사항</div>
@@ -703,6 +706,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261011b"></script>
+  <script src="/static/js/app.js?v=20261011c"></script>
 </body>
 </html>

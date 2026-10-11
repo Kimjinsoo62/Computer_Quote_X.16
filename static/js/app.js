@@ -2610,6 +2610,19 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) syncTrDateWithSystem();
 });
 
+// 견적 정보의 입금 계좌를 작업내역서에 표시(계좌번호가 없으면 숨김) — Excel 견적서와 같은 문구
+function renderTrBankLine() {
+  const el = $("#trBankLine");
+  if (!el) return;
+  const account = (quoteInfo?.bank_account || "").trim();
+  const bank = (quoteInfo?.bank_name || "").trim();
+  const holder = (quoteInfo?.bank_holder || "").trim();
+  el.textContent = account
+    ? `■ 입금 계좌 : ${bank ? bank + " " : ""}${account}${holder ? `  (예금주 : ${holder})` : ""}`
+    : "";
+  el.classList.toggle("hidden", !account);
+}
+
 function fillTrForm(data) {
   currentTrId = data?.id || null;
   trFormDay = localTodayStr();
@@ -2704,6 +2717,7 @@ function openTrModal() {
   initSignCanvas(signCanvasCust);
   initSignCanvas(signCanvasTech);
   syncTrDateWithSystem();
+  renderTrBankLine();
   if (!currentTrId) {
     resetTrForm();
   }
