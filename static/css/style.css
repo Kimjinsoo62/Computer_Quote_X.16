@@ -1288,21 +1288,22 @@ a:hover { text-decoration: underline; }
     size: A4 portrait;
     margin: 8mm 10mm;
   }
-  body * {
-    visibility: hidden;
+  /* visibility:hidden 은 숨긴 메인 화면이 자리를 그대로 차지해 뒤에 빈 페이지가 생긴다 → display:none 으로 제거 */
+  body > *:not(#taskReportModal) {
+    display: none !important;
   }
   body, html {
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
-  }
-  #taskReportModal,
-  #taskReportModal * {
-    visibility: visible;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
   #taskReportModal {
-    position: absolute !important;
+    position: static !important;
+    backdrop-filter: none !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
@@ -1317,6 +1318,11 @@ a:hover { text-decoration: underline; }
   .modal {
     max-width: 100% !important;
     width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
     box-shadow: none !important;
     border: none !important;
     background: #ffffff !important;
@@ -1325,8 +1331,9 @@ a:hover { text-decoration: underline; }
   .modal-body {
     padding: 0 !important;
     overflow: visible !important;
+    height: auto !important;
   }
-  .no-print, .modal-header, .tr-toolbar {
+  .no-print, .modal-header, .tr-toolbar, #trListPanel {
     display: none !important;
   }
   .tr-paper {

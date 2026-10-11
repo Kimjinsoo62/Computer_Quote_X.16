@@ -2513,7 +2513,7 @@ function getTrFormData() {
   const companyPhone = $("#trCompanyPhone")?.value.trim() || "";
   const businessNumber = $("#trBusinessNumber")?.value.trim() || "";
   const docNo = $("#trDocNo")?.value.trim() || "";
-  const receiptDate = $("#trReceiptDate")?.value || new Date().toISOString().split("T")[0];
+  const receiptDate = $("#trReceiptDate")?.value || localTodayStr();
 
   const customerName = $("#trCustName")?.value.trim() || "";
   const customerPhone = $("#trCustPhone")?.value.trim() || "";
@@ -2573,8 +2573,43 @@ function getTrFormData() {
   };
 }
 
+// 컴퓨터(시스템) 기준 오늘 날짜 YYYY-MM-DD — toISOString()은 UTC라 한국 시간 오전 9시 전에는 전날로 나온다
+function localTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+let trFormDay = null; // 작업내역서 폼을 채운 날짜(날짜가 바뀌었는지 판단용)
+
+// 프로그램을 켜 둔 채 날짜가 바뀌면 시스템 날짜로 맞춘다
+function syncTrDateWithSystem() {
+  const today = localTodayStr();
+  const quoteDateEl = $("#quoteDate");
+  if (quoteDateEl && quoteDateEl.textContent !== today) quoteDateEl.textContent = today;
+  if (!trFormDay || trFormDay === today) return;
+  const oldDay = trFormDay;
+  if (currentTrId) {
+    // 저장된 내역서는 목록에 남아 있으므로, 날짜가 바뀌면 새 내역서로 시작한다(모달이 열려 있으면 작업 방해 않음)
+    if (!trModal || trModal.classList.contains("hidden")) resetTrForm();
+    return;
+  }
+  // 작성 중인 새 내역서: 입력 내용은 두고, 이전 날짜 그대로인 칸만 오늘로 바꾼다
+  if ($("#trReceiptDate")?.value === oldDay) $("#trReceiptDate").value = today;
+  if ($("#trExpectedDate")?.value === oldDay) $("#trExpectedDate").value = today;
+  const docNoEl = $("#trDocNo");
+  const oldPrefix = `TR-${oldDay.replace(/-/g, "")}-`;
+  if (docNoEl?.value.startsWith(oldPrefix)) {
+    docNoEl.value = `TR-${today.replace(/-/g, "")}-${docNoEl.value.slice(oldPrefix.length)}`;
+  }
+  trFormDay = today;
+}
+setInterval(syncTrDateWithSystem, 60 * 1000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncTrDateWithSystem();
+});
+
 function fillTrForm(data) {
   currentTrId = data?.id || null;
+  trFormDay = localTodayStr();
   const badge = $("#trCurrentStatusBadge");
   if (badge) {
     badge.textContent = currentTrId ? `작업내역서 #${data.doc_no || currentTrId}` : "신규 작성중";
@@ -2586,7 +2621,7 @@ function fillTrForm(data) {
   if ($("#trCompanyPhone")) $("#trCompanyPhone").value = data?.company_phone || quoteInfo?.supplier_phone || "010-1234-5678";
   if ($("#trBusinessNumber")) $("#trBusinessNumber").value = data?.business_number || "121-18-24250";
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = trFormDay;
   if ($("#trDocNo")) $("#trDocNo").value = data?.doc_no || `TR-${todayStr.replace(/-/g, "")}-${Math.floor(Math.random()*900+100)}`;
   if ($("#trReceiptDate")) $("#trReceiptDate").value = data?.receipt_date || todayStr;
 
@@ -2665,6 +2700,7 @@ function openTrModal() {
   if (!trModal) return;
   initSignCanvas(signCanvasCust);
   initSignCanvas(signCanvasTech);
+  syncTrDateWithSystem();
   if (!currentTrId) {
     resetTrForm();
   }
