@@ -432,7 +432,8 @@ def build_excel(
     valid_font = Font(name=FONT_NAME, size=10, bold=True, color="3057B9")
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-    right = Alignment(horizontal="right", vertical="center")
+    # 금액이 칸보다 길면 ##### 대신 글자를 줄여 보여 준다(1,000만 원 이상 합계 등).
+    right = Alignment(horizontal="right", vertical="center", shrink_to_fit=True)
     # 상단 견적처/공급자 정보칸: 줄바꿈 대신 칸에 맞춰 축소한다.
     # 줄바꿈을 쓰면 글자 수에 따라 행 높이가 제각각이 되어 좌우 정보가 어긋난다.
     fit = Alignment(horizontal="left", vertical="center", shrink_to_fit=True, indent=1)
@@ -1181,16 +1182,18 @@ def build_excel(
         _set_cell(ws7.cell(row=11, column=6), font=bold, border=border, alignment=right, number_format="#,##0")
 
         # 합계 행
-        ws7.merge_cells("A12:E12")
+        # 금액 칸을 E:F 로 넓힌다. F 한 칸(12폭)이면 "₩ 1,190,000" 이 ##### 로 표시된다.
+        ws7.merge_cells("A12:D12")
         ws7["A12"] = "합   계 (VAT 포함)"
-        ws7["F12"] = q.total
+        ws7.merge_cells("E12:F12")
+        ws7["E12"] = q.total
         ws7.row_dimensions[12].height = 24.0
         for col in range(1, 7):
             c = ws7.cell(row=12, column=col)
             c.fill = PatternFill("solid", fgColor="FFF2CC")
             c.border = border
         _set_cell(ws7["A12"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=center)
-        _set_cell(ws7["F12"], font=Font(name=FONT_NAME, size=12, bold=True), alignment=right, number_format="₩ #,##0")
+        _set_cell(ws7["E12"], font=Font(name=FONT_NAME, size=12, bold=True), alignment=right, number_format="₩ #,##0")
 
         # 조건 안내
         ws7["A13"] = "■ 납품/보증: 발주 후 3~7일 이내 납품 | 모든 신품 하드웨어 1년 무상 보증 (당사 구매 제품 무상 점검 지원)"
