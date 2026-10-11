@@ -58,7 +58,7 @@ def create_task_report(data: dict[str, Any]) -> dict[str, Any]:
         "company_name": data.get("company_name") or qi.get("supplier_name", "대한민국주식회사"),
         "company_address": data.get("company_address") or qi.get("supplier_address", "서울시"),
         "company_phone": data.get("company_phone") or qi.get("supplier_phone", "010-1234-5678"),
-        "business_number": data.get("business_number", "121-18-24250"),
+        "business_number": data.get("business_number") or qi.get("supplier_business_number", ""),
         "doc_no": data.get("doc_no") or f"TR-{datetime.now().strftime('%Y%m%d')}-{report_id[:4].upper()}",
         "receipt_date": data.get("receipt_date") or datetime.now().strftime("%Y-%m-%d"),
         

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261011c" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261011d" />
 </head>
 <body>
   <nav class="nav">
@@ -269,6 +269,9 @@
             <label>공급자 (상호명)
               <input type="text" id="qiSupplierName" placeholder="예: 대한민국주식회사" />
             </label>
+            <label>사업자등록번호
+              <input type="text" id="qiSupplierBizNo" placeholder="예: 123-45-67890" autocomplete="off" />
+            </label>
             <label>대표/담당자
               <input type="text" id="qiSupplierManager" placeholder="예: 홍길동대표" />
             </label>
@@ -485,7 +488,7 @@
                     <span class="tr-meta-lbl">전화 :</span>
                     <input type="text" id="trCompanyPhone" class="tr-inp-meta tr-inp-phone" value="010-1234-5678" placeholder="업체 전화번호" />
                     <span class="tr-meta-lbl">사업자번호 :</span>
-                    <input type="text" id="trBusinessNumber" class="tr-inp-meta tr-inp-biz" value="121-18-24250" />
+                    <input type="text" id="trBusinessNumber" class="tr-inp-meta tr-inp-biz" value="" />
                   </div>
                 </div>
               </div>
@@ -706,6 +709,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261011c"></script>
+  <script src="/static/js/app.js?v=20261011d"></script>
 </body>
 </html>

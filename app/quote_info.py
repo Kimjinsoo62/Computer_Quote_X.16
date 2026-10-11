@@ -15,6 +15,8 @@ DEFAULT_INFO = {
     "supplier_address": SUPPLIER.get("address", "서울시"),
     "supplier_phone": SUPPLIER.get("phone", "010-1234-5678"),
     "supplier_email": SUPPLIER.get("email", "email1234@gmail.com"),
+    # 사업자등록번호: 견적서 폼7·폼8 등록번호 칸과 작업내역서에 쓰인다(기존 고정값을 기본값으로 둔다)
+    "supplier_business_number": SUPPLIER.get("business_number", "121-18-24250"),
     "customer_name": "대한민국주식회사",
     "customer_manager": "홍길동대표",
     "customer_address": "서울시",

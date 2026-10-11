@@ -860,6 +860,7 @@ const qiFields = {
   customer_email: "#qiCustomerEmail",
   quote_date: "#qiQuoteDate",
   supplier_name: "#qiSupplierName",
+  supplier_business_number: "#qiSupplierBizNo",
   supplier_manager: "#qiSupplierManager",
   supplier_address: "#qiSupplierAddress",
   supplier_phone: "#qiSupplierPhone",
@@ -2635,7 +2636,7 @@ function fillTrForm(data) {
   if ($("#trCompanyName")) $("#trCompanyName").value = data?.company_name || quoteInfo?.supplier_name || "대한민국주식회사";
   if ($("#trCompanyAddress")) $("#trCompanyAddress").value = data?.company_address || quoteInfo?.supplier_address || "서울시";
   if ($("#trCompanyPhone")) $("#trCompanyPhone").value = data?.company_phone || quoteInfo?.supplier_phone || "010-1234-5678";
-  if ($("#trBusinessNumber")) $("#trBusinessNumber").value = data?.business_number || "121-18-24250";
+  if ($("#trBusinessNumber")) $("#trBusinessNumber").value = data?.business_number || quoteInfo?.supplier_business_number || "";
 
   const todayStr = trFormDay;
   if ($("#trDocNo")) $("#trDocNo").value = data?.doc_no || `TR-${todayStr.replace(/-/g, "")}-${Math.floor(Math.random()*900+100)}`;

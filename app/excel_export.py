@@ -609,6 +609,7 @@ def build_excel(
         cust_mgr = info["customer_manager"]
         cust_phone = (info.get("customer_phone") or "").strip()
         sup_addr = (info.get("supplier_address") or "").strip()
+        sup_biz_no = (info.get("supplier_business_number") or "").strip()
         sup_name = info["supplier_name"]
         sup_mgr = info["supplier_manager"]
         sup_phone = info["supplier_phone"]
@@ -1137,7 +1138,7 @@ def build_excel(
 
         sup_rows7 = [
             ("상    호", f"{sup_name} (대표: {sup_mgr})"),
-            ("등록번호", "121-18-24250"),
+            ("등록번호", sup_biz_no),
             ("연 락 처", sup_phone),
             ("이 메 일", sup_email),
             ("주    소", sup_addr),
@@ -1282,7 +1283,7 @@ def build_excel(
             ("일 자", date_str),
         ]
         sup_rows8 = [
-            ("등록번호", "121-18-24250"),
+            ("등록번호", sup_biz_no),
             ("상    호", f"{sup_name} (대표: {sup_mgr})" if sup_mgr else sup_name),
             ("사 업 장", sup_addr),
             ("연 락 처", sup_phone),
