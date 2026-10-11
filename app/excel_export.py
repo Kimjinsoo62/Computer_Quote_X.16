@@ -36,12 +36,14 @@ BODY_ROW_HEIGHT = 26.25
 PRINT_MARGIN_LR_MM = 15.0
 PRINT_MARGIN_LR_INCH = PRINT_MARGIN_LR_MM / 25.4
 MAX_TOTAL_COL_WIDTH = 88.0
+# 위아래 여백도 15mm 로 맞춘다(기존 25mm 는 한 장짜리 견적서를 두 장으로 밀어냈다).
+PRINT_MARGIN_TB_INCH = 15.0 / 25.4
 
 # 줄바꿈으로 여러 줄이 된 행의 높이는 "줄 수 x 줄 높이 + 여백" 으로 잡는다.
 # 기본 행 높이에 배수를 곱하면(26.25 x 2 = 52.5) 위아래 여백만 커져 어색해진다.
 DEFAULT_ROW_HEIGHT = 15.0
-LINE_HEIGHT = 14.5   # 맑은 고딕 10pt 한 줄
-ROW_PADDING = 5.0
+LINE_HEIGHT = 13.5   # 맑은 고딕 10pt 한 줄(엑셀 출력물 기준)
+ROW_PADDING = 4.0
 MAX_WRAP_LINES = 4
 
 # 폼1: 다른 폼(기본 15pt)과 눈높이를 맞춘 값
@@ -75,9 +77,9 @@ FORM2_COL_WIDTHS = {"A": 4, "B": 15, "C": 35, "D": 8, "E": 10, "F": 12}      # �
 FORM_REPORT_COL_WIDTHS = {"A": 4, "B": 42, "C": 8, "D": 14, "E": 10, "F": 10}  # 합 88 (기존 94)
 FORM4_COL_WIDTHS = {"A": 5, "B": 12, "C": 40, "D": 8, "E": 10, "F": 12}      # 합 87
 FORM5_COL_WIDTHS = {"A": 3, "B": 18, "C": 40, "D": 8, "E": 5, "F": 14}       # 합 88 (기존 96)
-FORM6_COL_WIDTHS = {"A": 13, "B": 32, "C": 6, "D": 11, "E": 12, "F": 8, "G": 6}   # 합 88
-FORM7_COL_WIDTHS = {"A": 6, "B": 18, "C": 32, "D": 8, "E": 12, "F": 12}          # 합 88
-FORM8_COL_WIDTHS = {"A": 5, "B": 15, "C": 35, "D": 8, "E": 12, "F": 13}          # 합 88
+FORM6_COL_WIDTHS = {"A": 11.5, "B": 31, "C": 5, "D": 10, "E": 10.5, "F": 8, "G": 12}   # 합 88 (비고 G 가 6 이면 "초기불량 케어"가 3줄로 접힌다)
+FORM7_COL_WIDTHS = {"A": 6, "B": 18, "C": 31, "D": 9, "E": 12, "F": 12}          # 합 88
+FORM8_COL_WIDTHS = {"A": 7, "B": 14, "C": 30, "D": 6, "E": 11, "F": 20}          # 합 88 (F 가 13 이면 이메일이 잘린다)
 
 
 def _as_warranty_period(category: str) -> str:
@@ -197,31 +199,86 @@ def _draw_box(
             )
 
 
-def _apply_page_setup(ws) -> None:
+def _apply_page_setup(ws, one_page: bool = True) -> None:
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.orientation = "portrait"
     ws.page_margins.left = PRINT_MARGIN_LR_INCH
     ws.page_margins.right = PRINT_MARGIN_LR_INCH
-    ws.page_margins.top = 1.0
-    ws.page_margins.bottom = 1.0
-    ws.page_margins.header = 0.5
-    ws.page_margins.footer = 0.5
+    ws.page_margins.top = PRINT_MARGIN_TB_INCH
+    ws.page_margins.bottom = PRINT_MARGIN_TB_INCH
+    ws.page_margins.header = 0.3
+    ws.page_margins.footer = 0.3
     # 열 너비를 규격에 맞춰도 폰트/환경 차이로 넘칠 수 있어 가로 1페이지 맞춤을 함께 건다.
-    # (세로는 0 = 자동, 내용만큼 여러 장으로 출력)
+    # 견적서 한 건은 세로도 1페이지로 맞춰 두 장으로 나뉘지 않게 한다(넘치면 엑셀이 살짝 축소).
+    # 견적요약처럼 건수만큼 길어지는 시트는 one_page=False 로 세로 자동(여러 장)을 쓴다.
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToHeight = 1 if one_page else 0
     ws.print_options.horizontalCentered = True
 
 
+# 행 높이 추정용 글자 폭(열 너비 단위). 엑셀 실제 줄바꿈 위치에 맞춰 보정한 값이다.
+# 한글을 2칸, 공백·괄호를 1칸으로 세면 한 줄짜리 품명도 두 줄로 잡혀 행이 불필요하게 커지고
+# 그만큼 견적서가 두 장으로 밀려난다.
+_NARROW_CHARS = set("()[]/.,:;|'`!il1-")
+_WIDE_ASCII = set("mwMW@%&")
+# 열 너비 중 실제로 글자가 들어가는 비율(셀 안쪽 여백 포함). 엑셀 출력물에서 잰 값.
+WRAP_CAPACITY_RATIO = 0.86
+
+
+def _char_width(ch: str) -> float:
+    if ord(ch) > 127:
+        return 1.8 if ("\uac00" <= ch <= "\ud7a3" or "\u3130" <= ch <= "\u318f") else 1.0
+    if ch == " ":
+        return 0.5
+    if ch in _NARROW_CHARS:
+        return 0.6
+    if ch.isupper() or ch in _WIDE_ASCII:
+        return 1.15
+    return 1.0
+
+
+def _wrap_tokens(segment: str) -> list[str]:
+    """엑셀 줄바꿈 단위: 영문·숫자 낱말은 통째로, 한글 등은 글자 단위, 공백은 따로."""
+    tokens: list[str] = []
+    word = ""
+    for ch in segment:
+        if ch == " " or ord(ch) > 127:
+            if word:
+                tokens.append(word)
+                word = ""
+            tokens.append(ch)
+        else:
+            word += ch
+    if word:
+        tokens.append(word)
+    return tokens
+
+
 def _lines_needed(value, usable_width: float) -> int:
-    """wrap_text 셀이 몇 줄로 표시될지 추정한다. 한글은 2칸으로 센다."""
+    """wrap_text 셀이 몇 줄로 표시될지 엑셀처럼 낱말 단위로 줄을 채워 보며 센다."""
     if value is None or usable_width <= 0:
         return 1
     total = 0
     for segment in str(value).split("\n"):
-        seg_width = _cell_display_width(segment)
-        total += max(1, math.ceil(seg_width / usable_width))
+        lines, cur = 1, 0.0
+        for tok in _wrap_tokens(segment):
+            tw = sum(_char_width(c) for c in tok)
+            if cur + tw <= usable_width:
+                cur += tw
+            elif tok == " ":
+                continue  # 줄 끝 공백은 다음 줄로 넘기지 않는다
+            elif tw > usable_width:
+                # 칸보다 긴 낱말은 엑셀도 글자 단위로 끊는다
+                if cur > 0:
+                    lines += 1
+                extra = math.ceil(tw / usable_width) - 1
+                lines += extra
+                cur = tw - extra * usable_width
+            else:
+                lines += 1
+                cur = tw
+        total += lines
     return max(1, total)
 
 
@@ -232,13 +289,32 @@ def _auto_fit_row_heights(ws) -> None:
     병합된 셀은 병합 범위 전체 너비를 기준으로 판단한다.
     """
     merged_width: dict[tuple[int, int], float] = {}
+    # 여러 행에 걸친 병합(예: 세로 "공/급/자")은 높이를 여러 행이 나눠 가지므로 첫 행만 키우지 않고,
+    # 다 돌고 나서 걸친 행 높이 합이 모자랄 때만 마지막 행에 부족분을 더한다.
+    multi_row: dict[tuple[int, int], int] = {}
     for rng in ws.merged_cells.ranges:
+        if rng.max_row > rng.min_row:
+            multi_row[(rng.min_row, rng.min_col)] = rng.max_row
         width = 0.0
         for col in range(rng.min_col, rng.max_col + 1):
             dim = ws.column_dimensions.get(get_column_letter(col))
             width += (dim.width if dim and dim.width else 8.43)
         merged_width[(rng.min_row, rng.min_col)] = width
 
+    def needed_height(cell) -> float:
+        width = merged_width.get((cell.row, cell.column))
+        if width is None:
+            dim = ws.column_dimensions.get(get_column_letter(cell.column))
+            width = dim.width if dim and dim.width else 8.43
+        # 열 너비는 기준 폰트(10pt) 기준이라 큰 글꼴은 그만큼 좁게 봐야 한다.
+        # 이걸 빼먹으면 16pt 합계 금액이 1줄로 계산되고 실제로는 2줄로 접힌다.
+        size = (cell.font.size if cell.font and cell.font.size else 10.0)
+        scale = max(size / 10.0, 0.8)
+        usable = max(width * WRAP_CAPACITY_RATIO, 1.0) / scale
+        lines = min(_lines_needed(cell.value, usable), MAX_WRAP_LINES)
+        return lines * LINE_HEIGHT * scale + ROW_PADDING
+
+    spanning = []
     for row in ws.iter_rows():
         if not row:
             continue
@@ -250,22 +326,22 @@ def _auto_fit_row_heights(ws) -> None:
             alignment = cell.alignment
             if not (alignment and alignment.wrap_text):
                 continue
-            width = merged_width.get((cell.row, cell.column))
-            if width is None:
-                dim = ws.column_dimensions.get(get_column_letter(cell.column))
-                width = dim.width if dim and dim.width else 8.43
-            # 열 너비는 기준 폰트(10pt) 기준이라 큰 글꼴은 그만큼 좁게 봐야 한다.
-            # 이걸 빼먹으면 16pt 합계 금액이 1줄로 계산되고 실제로는 2줄로 접힌다.
-            size = (cell.font.size if cell.font and cell.font.size else 10.0)
-            scale = max(size / 10.0, 1.0)
-            usable = max(width - 1.0, 1.0) / scale
-            lines = min(_lines_needed(cell.value, usable), MAX_WRAP_LINES)
-            needed = max(needed, lines * LINE_HEIGHT * scale + ROW_PADDING)
+            if (cell.row, cell.column) in multi_row:
+                spanning.append(cell)
+                continue
+            needed = max(needed, needed_height(cell))
 
         if needed <= 0:
             continue
         current = ws.row_dimensions[row_no].height or DEFAULT_ROW_HEIGHT
         ws.row_dimensions[row_no].height = max(current, needed)
+
+    for cell in spanning:
+        last = multi_row[(cell.row, cell.column)]
+        have = sum(ws.row_dimensions[r].height or DEFAULT_ROW_HEIGHT for r in range(cell.row, last + 1))
+        lack = needed_height(cell) - have
+        if lack > 0:
+            ws.row_dimensions[last].height = (ws.row_dimensions[last].height or DEFAULT_ROW_HEIGHT) + lack
 
 
 def _write_validity_note(ws, row: int, last_col: str = "F") -> None:
@@ -281,19 +357,26 @@ def _write_validity_note(ws, row: int, last_col: str = "F") -> None:
 def _write_bank_account(ws, text: str, border) -> None:
     """시트 내용 끝에서 한 줄 띄우고 입금 계좌를 시트 전체 폭으로 적는다."""
     row = ws.max_row + 2
-    last_col = get_column_letter(max(ws.max_column, 6))
+    last_col = get_column_letter(ws.max_column)
     ws.merge_cells(f"A{row}:{last_col}{row}")
     cell = ws[f"A{row}"]
     cell.value = text
     _set_cell(
         cell,
-        font=Font(name=FONT_NAME, size=11, bold=True, color="1F4E79"),
-        alignment=Alignment(horizontal="left", vertical="center", wrap_text=True, indent=1),
+        font=Font(name=FONT_NAME, size=12, bold=True, color="0B2D57"),
+        alignment=Alignment(horizontal="left", vertical="center", shrink_to_fit=True, indent=1),
     )
-    cell.fill = PatternFill("solid", fgColor="EAF1FB")
-    for col in range(1, ws.max_column + 1):
-        ws.cell(row=row, column=col).border = border
-    ws.row_dimensions[row].height = INFO_ROW_HEIGHT
+    cell.fill = PatternFill("solid", fgColor="E2ECF8")
+    edge = Side(style="medium", color="1F4E79")
+    last = ws.max_column
+    for col in range(1, last + 1):
+        ws.cell(row=row, column=col).border = Border(
+            left=edge if col == 1 else None,
+            right=edge if col == last else None,
+            top=edge,
+            bottom=edge,
+        )
+    ws.row_dimensions[row].height = 26.0
 
 
 def _assert_print_width(ws) -> float:
@@ -350,10 +433,14 @@ def build_excel(
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left = Alignment(horizontal="left", vertical="center", wrap_text=True)
     right = Alignment(horizontal="right", vertical="center")
+    # 상단 견적처/공급자 정보칸: 줄바꿈 대신 칸에 맞춰 축소한다.
+    # 줄바꿈을 쓰면 글자 수에 따라 행 높이가 제각각이 되어 좌우 정보가 어긋난다.
+    fit = Alignment(horizontal="left", vertical="center", shrink_to_fit=True, indent=1)
+    fit_center = Alignment(horizontal="center", vertical="center", shrink_to_fit=True)
 
     # ---------------- 견적요약 시트 ----------------
     ws_sum = wb.create_sheet("견적요약", 0)
-    _apply_page_setup(ws_sum)
+    _apply_page_setup(ws_sum, one_page=False)
     ws_sum.merge_cells("A1:F1")
     kind_suffix = f" — {quote_kind_label}" if quote_kind_label else ""
     ws_sum["A1"] = f"{result.event_title}{kind_suffix} — 오늘의 견적 — {result.quote_date}"
@@ -519,6 +606,8 @@ def build_excel(
         date_str = quote_date
         cust_name = info["customer_name"]
         cust_mgr = info["customer_manager"]
+        cust_phone = (info.get("customer_phone") or "").strip()
+        sup_addr = (info.get("supplier_address") or "").strip()
         sup_name = info["supplier_name"]
         sup_mgr = info["supplier_manager"]
         sup_phone = info["supplier_phone"]
@@ -538,10 +627,12 @@ def build_excel(
         ws1["A1"].alignment = center
         
         c_fill = PatternFill("solid", fgColor="E7E6E6")
+        # 좌우 모두 4행으로 맞추고, 값은 줄바꿈 없이 칸에 맞춰 축소해 행 높이를 고정한다.
         for rn, lk, lv, rk, rv in [
             (3, "견 적 처", cust_name, "공 급 자", sup_name),
             (4, "담 당 자", cust_mgr, "담 당 자", sup_mgr),
-            (5, "견 적 일", date_str, "연 락 처", sup_phone),
+            (5, "연 락 처", cust_phone, "연 락 처", sup_phone),
+            (6, "견 적 일", date_str, "이 메 일", sup_email),
         ]:
             ws1[f"A{rn}"] = lk
             ws1[f"B{rn}"] = lv
@@ -553,15 +644,8 @@ def build_excel(
                 ws1[f"{col}{rn}"].fill = c_fill
                 _set_cell(ws1[f"{col}{rn}"], font=bold, border=border, alignment=center)
             # 값은 좌우 모두 왼쪽 정렬로 통일한다(한쪽만 가운데면 행마다 글자 위치가 어긋난다).
-            for col in ("B", "F"):
-                _set_cell(ws1[f"{col}{rn}"], font=normal, border=border, alignment=left)
-
-        ws1["E6"] = "이 메 일"
-        ws1["F6"] = sup_email
-        ws1.row_dimensions[6].height = INFO_ROW_HEIGHT
-        ws1["E6"].fill = c_fill
-        _set_cell(ws1["E6"], font=bold, border=border, alignment=center)
-        _set_cell(ws1["F6"], font=normal, border=border, alignment=left)
+            for col in ("B", "C", "F"):
+                _set_cell(ws1[f"{col}{rn}"], font=normal, border=border, alignment=fit)
 
         ws1["A7"] = "합계금액 (부가세포함)"
         ws1["D7"] = q.total
@@ -601,15 +685,17 @@ def build_excel(
             ws2.merge_cells("D3:F3")
             _set_cell(ws2["D3"], font=normal, alignment=right)
 
-        ws2["A4"] = "BILL TO:"
-        _set_cell(ws2["A4"], font=bold, alignment=left)
-        ws2["B4"] = cust_name
-        ws2["B5"] = f"Attn: {cust_mgr}"
+        ws2["A3"] = "BILL TO:"
+        ws2.merge_cells("A3:C3")
+        _set_cell(ws2["A3"], font=bold, alignment=left)
+        ws2["A4"] = cust_name
+        ws2["A5"] = f"Attn: {cust_mgr}" + (f"  /  Tel: {cust_phone}" if cust_phone else "")
         ws2["E4"] = "DATE:"
         ws2["F4"] = date_str
-        
-        ws2.merge_cells("B4:C4")
-        ws2.merge_cells("B5:C5")
+        ws2.merge_cells("A4:C4")
+        ws2.merge_cells("A5:C5")
+        _set_cell(ws2["A4"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=fit)
+        _set_cell(ws2["A5"], font=normal, alignment=fit)
         
         _write_validity_note(ws2, 6)  # 표 헤더(7행) 직전 빈 행
 
@@ -686,16 +772,16 @@ def build_excel(
                 ws3.cell(row=rr, column=cc).fill = PatternFill("solid", fgColor="FDF2E9")
                 
         ws3["A3"] = f"To: {cust_name} ({cust_mgr})"
-        ws3.merge_cells("A3:B3")
-        _set_cell(ws3["A3"], font=bold, alignment=left)
+        ws3.merge_cells("A3:C3")
+        _set_cell(ws3["A3"], font=bold, alignment=fit)
         
         ws3["A4"] = f"From: {sup_name} ({sup_mgr} / {sup_phone})"
-        ws3.merge_cells("A4:B4")
-        _set_cell(ws3["A4"], font=normal, alignment=left)
+        ws3.merge_cells("A4:C4")
+        _set_cell(ws3["A4"], font=normal, alignment=fit)
         if sup_email:
             ws3["A5"] = f"E-mail: {sup_email}"
-            ws3.merge_cells("A5:B5")
-            _set_cell(ws3["A5"], font=normal, alignment=left)
+            ws3.merge_cells("A5:C5")
+            _set_cell(ws3["A5"], font=normal, alignment=fit)
 
         ws3["D3"] = "TOTAL ESTIMATE"
         ws3.merge_cells("D3:F3")
@@ -710,27 +796,34 @@ def build_excel(
         r = 7
         ws3["A7"] = "Description"
         ws3["C7"] = "Qty"
-        ws3["D7"] = "Amount"
+        ws3["D7"] = "Unit Price"
+        ws3["E7"] = "Amount"
         ws3.merge_cells("A7:B7")
+        ws3.merge_cells("E7:F7")
         
         th_font = Font(name=FONT_NAME, size=11, bold=True, color="FFFFFF")
         th_fill = PatternFill("solid", fgColor="D35400")
-        for c in [1, 3, 4]:
+        for c in range(1, 7):
             cell = ws3.cell(row=r, column=c)
             cell.font = th_font
             cell.fill = th_fill
             cell.alignment = center
             
         r += 1
+        row_line = Border(bottom=Side(style="thin", color="F0C9A8"))
         for p in q.parts:
             ws3.merge_cells(f"A{r}:B{r}")
+            ws3.merge_cells(f"E{r}:F{r}")
             ws3[f"A{r}"] = f"[{p.category}] {p.name}"
             ws3[f"C{r}"] = p.qty
-            ws3[f"D{r}"] = _maybe_price(p.amount)
-            
+            ws3[f"D{r}"] = _maybe_price(p.unit_price)
+            ws3[f"E{r}"] = _maybe_price(p.amount)
             _set_cell(ws3[f"A{r}"], font=normal, alignment=left)
             _set_cell(ws3[f"C{r}"], font=normal, alignment=center)
-            _set_cell(ws3[f"D{r}"], font=bold, alignment=right, number_format="#,##0")
+            _set_cell(ws3[f"D{r}"], font=normal, alignment=right, number_format="#,##0")
+            _set_cell(ws3[f"E{r}"], font=bold, alignment=right, number_format="#,##0")
+            for cc in range(1, 7):
+                ws3.cell(row=r, column=cc).border = row_line
             r += 1
             
         ws3.merge_cells(f"A{r+1}:F{r+1}")
@@ -762,8 +855,10 @@ def build_excel(
         )
         ws4.merge_cells("A4:C4")
         ws4.merge_cells("A5:C5")
-        _set_cell(ws4["A4"], font=bold, alignment=left)
-        _set_cell(ws4["A5"], font=normal, alignment=left)
+        _set_cell(ws4["A4"], font=bold, alignment=fit)
+        _set_cell(ws4["A5"], font=normal, alignment=fit)
+        ws4.row_dimensions[4].height = INFO_ROW_HEIGHT
+        ws4.row_dimensions[5].height = INFO_ROW_HEIGHT
         
         # 라벨과 금액을 한 셀에 넣으면 16pt 에서 두 줄로 접힌다. 폼3 처럼 위아래로 나눈다.
         ws4["D4"] = "총 견적금액"
@@ -905,68 +1000,47 @@ def build_excel(
         _set_cell(ws6["A2"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=left)
 
         info_header_fill = PatternFill("solid", fgColor="F2F2F2")
-        ws6.row_dimensions[3].height = 20.0
-        ws6.row_dimensions[4].height = 20.0
-        ws6.row_dimensions[5].height = 20.0
-        ws6.row_dimensions[6].height = 20.0
 
-        # Row 3
-        ws6["A3"] = "견적 일자"
-        ws6["B3"] = date_str
-        ws6.merge_cells("B3:C3")
-        ws6["D3"] = "상 호 명"
-        ws6["E3"] = sup_name
-        ws6.merge_cells("E3:G3")
-
-        # Row 4
-        ws6["A4"] = "고 객 명"
-        ws6["B4"] = cust_name
-        ws6.merge_cells("B4:C4")
-        ws6["D4"] = "대표자명"
-        ws6["E4"] = sup_mgr
-        ws6.merge_cells("E4:G4")
-
-        # Row 5
-        ws6["A5"] = "연 락 처"
-        ws6["B5"] = cust_mgr or ""
-        ws6.merge_cells("B5:C5")
-        ws6["D5"] = "연 락 처"
-        ws6["E5"] = f"{sup_phone} / {sup_email}".strip(" /") if sup_email else sup_phone
-        ws6.merge_cells("E5:G5")
-
-        # Row 6
-        ws6["A6"] = "용    도"
-        ws6["B6"] = "[  ] 게이밍   [  ] 사무/인터넷   [  ] 영상편집/작업"
-        ws6.merge_cells("B6:C6")
-        ws6["D6"] = "매장주소"
-        ws6["E6"] = "인천광역시 동구 방축로 37번길 30, 35동 131호"
-        ws6.merge_cells("E6:G6")
-
-        for rn in range(3, 7):
+        # 좌(고객) · 우(판매자) 모두 5행. 값은 줄바꿈 없이 칸에 맞춰 축소해 행 높이를 고정한다.
+        info6 = [
+            ("견적 일자", date_str, "상 호 명", sup_name),
+            ("고 객 명", cust_name, "대 표 자", sup_mgr),
+            ("담 당 자", cust_mgr, "연 락 처", sup_phone),
+            ("연 락 처", cust_phone, "이 메 일", sup_email),
+            ("용    도", "□ 게이밍   □ 사무/인터넷   □ 영상편집", "매장주소", sup_addr),
+        ]
+        for rn, (lk, lv, rk, rv) in enumerate(info6, 3):
+            ws6[f"A{rn}"] = lk
+            ws6[f"B{rn}"] = lv
+            ws6.merge_cells(f"B{rn}:C{rn}")
+            ws6[f"D{rn}"] = rk
+            ws6[f"E{rn}"] = rv
+            ws6.merge_cells(f"E{rn}:G{rn}")
+            ws6.row_dimensions[rn].height = INFO_ROW_HEIGHT
             for col in range(1, 8):
                 c = ws6.cell(row=rn, column=col)
                 c.border = border
                 if col in (1, 4):
                     c.fill = info_header_fill
-                    _set_cell(c, font=bold, alignment=center)
+                    _set_cell(c, font=bold, alignment=fit_center)
                 else:
-                    _set_cell(c, font=normal, alignment=left)
+                    _set_cell(c, font=normal, alignment=fit)
 
         # 2. 조립 부품 세부 견적 내역
-        ws6["A7"] = "2. 조립 부품 세부 견적 내역"
-        ws6.merge_cells("A7:G7")
-        ws6.row_dimensions[7].height = 22.0
-        ws6["A7"].fill = PatternFill("solid", fgColor="D9E1F2")
-        _set_cell(ws6["A7"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=left)
-
-        headers6 = ["부품 구분", "제조사 / 제품명 (상세 스펙)", "수량", "단가 (원)", "금액 (원)", "무상 A/S", "비고"]
+        ws6["A8"] = "2. 조립 부품 세부 견적 내역"
+        ws6.merge_cells("A8:G8")
         ws6.row_dimensions[8].height = 22.0
+        ws6["A8"].fill = PatternFill("solid", fgColor="D9E1F2")
+        _set_cell(ws6["A8"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=left)
+
+        headers6 = ["부품 구분", "제조사 / 제품명 (상세 스펙)", "수량", "단가 (원)", "금액 (원)", "무상A/S", "비고"]
+        ws6.row_dimensions[9].height = 22.0
         for i, h in enumerate(headers6, 1):
-            c = ws6.cell(row=8, column=i, value=h)
+            c = ws6.cell(row=9, column=i, value=h)
             c.fill = info_header_fill
             _set_cell(c, font=bold, border=border, alignment=center)
 
-        r6 = 9
+        r6 = 10
         for p in q.parts:
             as_text = _as_warranty_period(p.category)
             remark_text = _spec_remark(p.category, p.name)
@@ -1048,100 +1122,97 @@ def build_excel(
         ws7.row_dimensions[2].height = 16.0
         _set_cell(ws7["A2"], font=Font(name=FONT_NAME, size=9, italic=True, color="555555"), alignment=center)
 
-        # 공급자 정보 테이블
+        # 좌: 수신 정보 / 우: 공급자 박스(5행). 값은 줄바꿈 없이 칸에 맞춰 축소해 행 높이를 고정한다.
         ws7["A4"] = f"견적일 : {date_str}"
         ws7["A5"] = f"수  신 : {cust_name} ({cust_mgr})"
-        ws7["A6"] = "아래와 같이 견적하여 드립니다."
-        ws7.merge_cells("A4:C4")
-        ws7.merge_cells("A5:C5")
-        ws7.merge_cells("A6:C6")
-        _set_cell(ws7["A4"], font=bold, alignment=left)
-        _set_cell(ws7["A5"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=left)
-        _set_cell(ws7["A6"], font=normal, alignment=left)
+        ws7["A6"] = f"연락처 : {cust_phone}" if cust_phone else None
+        ws7["A8"] = "아래와 같이 견적하여 드립니다."
+        for rn in (4, 5, 6, 8):
+            ws7.merge_cells(f"A{rn}:C{rn}")
+        _set_cell(ws7["A4"], font=bold, alignment=fit)
+        _set_cell(ws7["A5"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=fit)
+        _set_cell(ws7["A6"], font=normal, alignment=fit)
+        _set_cell(ws7["A8"], font=normal, alignment=fit)
 
-        ws7["D4"] = "등록번호"
-        ws7["E4"] = "121-18-24250"
-        ws7.merge_cells("E4:F4")
-        ws7["D5"] = "상  호"
-        ws7["E5"] = f"{sup_name} (대표: {sup_mgr})"
-        ws7.merge_cells("E5:F5")
-        ws7["D6"] = "사업장/연락처"
-        ws7["E6"] = (
-            f"{sup_phone} / {sup_email} / 인천 동구 방축로 37길 30"
-            if sup_email
-            else f"{sup_phone} / 인천 동구 방축로 37길 30"
-        )
-        ws7.merge_cells("E6:F6")
-
-        for rn in range(4, 7):
-            ws7.row_dimensions[rn].height = 20.0
+        sup_rows7 = [
+            ("상    호", f"{sup_name} (대표: {sup_mgr})"),
+            ("등록번호", "121-18-24250"),
+            ("연 락 처", sup_phone),
+            ("이 메 일", sup_email),
+            ("주    소", sup_addr),
+        ]
+        for rn, (lbl, val) in enumerate(sup_rows7, 4):
+            ws7[f"D{rn}"] = lbl
+            ws7[f"E{rn}"] = val
+            ws7.merge_cells(f"E{rn}:F{rn}")
+            ws7.row_dimensions[rn].height = INFO_ROW_HEIGHT
             for col in range(4, 7):
                 c = ws7.cell(row=rn, column=col)
                 c.border = border
                 if col == 4:
                     c.fill = PatternFill("solid", fgColor="E7E6E6")
-                    _set_cell(c, font=bold, alignment=center)
+                    _set_cell(c, font=bold, alignment=fit_center)
                 else:
-                    _set_cell(c, font=normal, alignment=left)
+                    _set_cell(c, font=normal, alignment=fit)
 
         # 메인 요약표
-        ws7.row_dimensions[8].height = 22.0
-        sum_headers = ["No", "구분/품명", "상세 모델명", "수량", "공급가(원)", "합계금액(VAT포함)"]
+        ws7.row_dimensions[10].height = 22.0
+        sum_headers = ["No", "구분/품명", "상세 모델명", "수량", "공급가(원)", "합계(VAT포함)"]
         sum_h_fill = PatternFill("solid", fgColor="61D1C6")
         for i, h in enumerate(sum_headers, 1):
-            c = ws7.cell(row=8, column=i, value=h)
+            c = ws7.cell(row=10, column=i, value=h)
             c.fill = sum_h_fill
             _set_cell(c, font=Font(name=FONT_NAME, size=10, bold=True, color="FFFFFF"), border=border, alignment=center)
 
         supply_price = int(round(q.total / 1.1))
-        ws7.row_dimensions[9].height = 24.0
-        ws7.cell(row=9, column=1, value=1)
-        ws7.cell(row=9, column=2, value="데스크탑 컴퓨터")
-        ws7.cell(row=9, column=3, value=q.model or q.tier)
-        ws7.cell(row=9, column=4, value=1)
-        ws7.cell(row=9, column=5, value=supply_price)
-        ws7.cell(row=9, column=6, value=q.total)
+        ws7.row_dimensions[11].height = 24.0
+        ws7.cell(row=11, column=1, value=1)
+        ws7.cell(row=11, column=2, value="데스크탑 컴퓨터")
+        ws7.cell(row=11, column=3, value=q.model or q.tier)
+        ws7.cell(row=11, column=4, value=1)
+        ws7.cell(row=11, column=5, value=supply_price)
+        ws7.cell(row=11, column=6, value=q.total)
 
-        _set_cell(ws7.cell(row=9, column=1), font=normal, border=border, alignment=center)
-        _set_cell(ws7.cell(row=9, column=2), font=bold, border=border, alignment=center)
-        _set_cell(ws7.cell(row=9, column=3), font=normal, border=border, alignment=left)
-        _set_cell(ws7.cell(row=9, column=4), font=normal, border=border, alignment=center)
-        _set_cell(ws7.cell(row=9, column=5), font=normal, border=border, alignment=right, number_format="#,##0")
-        _set_cell(ws7.cell(row=9, column=6), font=bold, border=border, alignment=right, number_format="#,##0")
+        _set_cell(ws7.cell(row=11, column=1), font=normal, border=border, alignment=center)
+        _set_cell(ws7.cell(row=11, column=2), font=bold, border=border, alignment=center)
+        _set_cell(ws7.cell(row=11, column=3), font=normal, border=border, alignment=left)
+        _set_cell(ws7.cell(row=11, column=4), font=normal, border=border, alignment=center)
+        _set_cell(ws7.cell(row=11, column=5), font=normal, border=border, alignment=right, number_format="#,##0")
+        _set_cell(ws7.cell(row=11, column=6), font=bold, border=border, alignment=right, number_format="#,##0")
 
         # 합계 행
-        ws7.merge_cells("A10:E10")
-        ws7["A10"] = "합   계 (VAT 포함)"
-        ws7["F10"] = q.total
-        ws7.row_dimensions[10].height = 24.0
+        ws7.merge_cells("A12:E12")
+        ws7["A12"] = "합   계 (VAT 포함)"
+        ws7["F12"] = q.total
+        ws7.row_dimensions[12].height = 24.0
         for col in range(1, 7):
-            c = ws7.cell(row=10, column=col)
+            c = ws7.cell(row=12, column=col)
             c.fill = PatternFill("solid", fgColor="FFF2CC")
             c.border = border
-        _set_cell(ws7["A10"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=center)
-        _set_cell(ws7["F10"], font=Font(name=FONT_NAME, size=12, bold=True), alignment=right, number_format="₩ #,##0")
+        _set_cell(ws7["A12"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=center)
+        _set_cell(ws7["F12"], font=Font(name=FONT_NAME, size=12, bold=True), alignment=right, number_format="₩ #,##0")
 
         # 조건 안내
-        ws7["A11"] = "■ 납품/보증: 발주 후 3~7일 이내 납품 | 모든 신품 하드웨어 1년 무상 보증 (당사 구매 제품 무상 점검 지원)"
-        ws7.merge_cells("A11:F11")
-        ws7.row_dimensions[11].height = 20.0
-        _set_cell(ws7["A11"], font=Font(name=FONT_NAME, size=9, bold=True, color="333333"), alignment=left)
+        ws7["A13"] = "■ 납품/보증: 발주 후 3~7일 이내 납품 | 모든 신품 하드웨어 1년 무상 보증 (당사 구매 제품 무상 점검 지원)"
+        ws7.merge_cells("A13:F13")
+        ws7.row_dimensions[13].height = 20.0
+        _set_cell(ws7["A13"], font=Font(name=FONT_NAME, size=9, bold=True, color="333333"), alignment=left)
 
         # 제품 상세 SPEC 표 헤더
-        ws7["A13"] = "【 제 품  상 세  S P E C 】"
-        ws7.merge_cells("A13:F13")
-        ws7.row_dimensions[13].height = 22.0
-        ws7["A13"].fill = PatternFill("solid", fgColor="2E75B6")
-        _set_cell(ws7["A13"], font=Font(name=FONT_NAME, size=11, bold=True, color="FFFFFF"), alignment=center)
+        ws7["A15"] = "【 제 품  상 세  S P E C 】"
+        ws7.merge_cells("A15:F15")
+        ws7.row_dimensions[15].height = 22.0
+        ws7["A15"].fill = PatternFill("solid", fgColor="2E75B6")
+        _set_cell(ws7["A15"], font=Font(name=FONT_NAME, size=11, bold=True, color="FFFFFF"), alignment=center)
 
         spec_headers = ["No", "구 분", "부품 및 상세 사양", "수량", "금액", "비고"]
-        ws7.row_dimensions[14].height = 20.0
+        ws7.row_dimensions[16].height = 20.0
         for i, h in enumerate(spec_headers, 1):
-            c = ws7.cell(row=14, column=i, value=h)
+            c = ws7.cell(row=16, column=i, value=h)
             c.fill = PatternFill("solid", fgColor="D9E1F2")
             _set_cell(c, font=bold, border=border, alignment=center)
 
-        r7 = 15
+        r7 = 17
         for i, p in enumerate(q.parts, 1):
             ws7.cell(row=r7, column=1, value=i)
             ws7.cell(row=r7, column=2, value=p.category)
@@ -1198,83 +1269,72 @@ def build_excel(
         ws8.row_dimensions[1].height = 32.0
         _set_cell(ws8["A1"], font=Font(name=FONT_NAME, size=22, bold=True, color="1F4E79"), alignment=center)
 
-        # 좌측 고객 정보 & 우측 공급자 세로 표 (Row 3 to 6)
-        ws8["A3"] = "상  호"
-        ws8["B3"] = cust_name
-        ws8.merge_cells("B3:C3")
-        ws8["A4"] = "내  용"
-        ws8["B4"] = q.model or "컴퓨터 견적 외"
-        ws8.merge_cells("B4:C4")
-        ws8["A5"] = "담  당"
-        ws8["B5"] = f"{cust_mgr} 귀하"
-        ws8.merge_cells("B5:C5")
-        ws8["A6"] = "일  자"
-        ws8["B6"] = date_str
-        ws8.merge_cells("B6:C6")
+        # 좌측 고객 정보 & 우측 공급자 세로 표 (Row 3 to 7) — 좌우 모두 5행.
+        # 값은 줄바꿈 없이 칸에 맞춰 축소해 글자 수와 무관하게 행 높이를 고정한다.
+        cust_rows8 = [
+            ("상 호", cust_name),
+            ("담 당", f"{cust_mgr} 귀하" if cust_mgr else ""),
+            ("연락처", cust_phone),
+            ("내 용", q.model or "컴퓨터 견적 외"),
+            ("일 자", date_str),
+        ]
+        sup_rows8 = [
+            ("등록번호", "121-18-24250"),
+            ("상    호", f"{sup_name} (대표: {sup_mgr})" if sup_mgr else sup_name),
+            ("사 업 장", sup_addr),
+            ("연 락 처", sup_phone),
+            ("이 메 일", sup_email),
+        ]
+        label_fill8 = PatternFill("solid", fgColor="F2F2F2")
+        for rn, ((ck, cv), (sk, sv)) in enumerate(zip(cust_rows8, sup_rows8), 3):
+            ws8[f"A{rn}"] = ck
+            ws8[f"B{rn}"] = cv
+            ws8.merge_cells(f"B{rn}:C{rn}")
+            ws8[f"E{rn}"] = sk
+            ws8[f"F{rn}"] = sv
+            ws8.row_dimensions[rn].height = INFO_ROW_HEIGHT
+            for col in (1, 2, 3, 5, 6):
+                c = ws8.cell(row=rn, column=col)
+                c.border = border
+                if col in (1, 5):
+                    c.fill = label_fill8
+                    _set_cell(c, font=bold, alignment=fit_center)
+                else:
+                    _set_cell(c, font=normal, alignment=fit)
 
-        for rn in range(3, 7):
-            ws8.cell(row=rn, column=1).border = border
-            ws8.cell(row=rn, column=2).border = border
-            ws8.cell(row=rn, column=3).border = border
-            ws8.cell(row=rn, column=1).fill = PatternFill("solid", fgColor="F2F2F2")
-            _set_cell(ws8.cell(row=rn, column=1), font=bold, alignment=center)
-            _set_cell(ws8.cell(row=rn, column=2), font=normal, alignment=left)
-
-        # 우측 공급자 박스 (D3:D6 병합)
-        ws8.merge_cells("D3:D6")
-        ws8["D3"] = "공\n\n급\n\n자"
+        # 우측 공급자 박스 라벨 (D3:D7 병합)
+        ws8.merge_cells("D3:D7")
+        ws8["D3"] = "공\n급\n자"
         _set_cell(ws8["D3"], font=bold, border=border, alignment=center)
         ws8["D3"].fill = PatternFill("solid", fgColor="E7E6E6")
+        for rn in range(3, 8):
+            ws8.cell(row=rn, column=4).border = border
 
-        sup_addr = (info.get("supplier_address") or "서울시").strip()
-        sup_rows = [
-            ("등록번호", "121-18-24250"),
-            ("상    호", sup_name),
-            ("사업장", sup_addr),
-            (
-                "연락처/이메일" if sup_email else "연락처/FAX",
-                (
-                    f"{sup_phone} / {sup_email} / FAX 0504-282-9692"
-                    if sup_email
-                    else f"{sup_phone} / 0504-282-9692"
-                ),
-            ),
-        ]
-        for idx, (lbl, val) in enumerate(sup_rows, 3):
-            ws8[f"E{idx}"] = lbl
-            ws8[f"F{idx}"] = val
-            ws8.cell(row=idx, column=5).border = border
-            ws8.cell(row=idx, column=6).border = border
-            ws8.cell(row=idx, column=5).fill = PatternFill("solid", fgColor="F2F2F2")
-            _set_cell(ws8[f"E{idx}"], font=bold, alignment=center)
-            _set_cell(ws8[f"F{idx}"], font=normal, alignment=left)
-            ws8.row_dimensions[idx].height = 20.0
-
-        # Row 7: VAT 포함 합계금액 배너
-        ws8.merge_cells("A7:C7")
-        ws8["A7"] = "합계금액 (VAT 포함)"
-        ws8.merge_cells("D7:F7")
-        ws8["D7"] = q.total
-        ws8.row_dimensions[7].height = 26.0
+        # Row 8: VAT 포함 합계금액 배너
+        ws8.merge_cells("A8:C8")
+        ws8["A8"] = "합계금액 (VAT 포함)"
+        ws8.merge_cells("D8:F8")
+        ws8["D8"] = q.total
+        ws8.row_dimensions[8].height = 26.0
         for col in range(1, 7):
-            c = ws8.cell(row=7, column=col)
+            c = ws8.cell(row=8, column=col)
             c.border = border
             if col <= 3:
                 c.fill = PatternFill("solid", fgColor="E7E6E6")
             else:
                 c.fill = PatternFill("solid", fgColor="FFF2CC")
-        _set_cell(ws8["A7"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=center)
-        _set_cell(ws8["D7"], font=Font(name=FONT_NAME, size=14, bold=True, color="1F4E79"), alignment=right, number_format="₩ #,##0")
+        _set_cell(ws8["A8"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=center)
+        _set_cell(ws8["D8"], font=Font(name=FONT_NAME, size=14, bold=True, color="1F4E79"), alignment=right, number_format="₩ #,##0")
 
-        # Row 8: 표 헤더
+        # Row 9: 표 헤더
         headers8 = ["NO", "품  목", "규격 및 상세 사양", "수 량", "단  가", "금  액"]
-        ws8.row_dimensions[8].height = 22.0
+        ws8.row_dimensions[9].height = 22.0
         for i, h in enumerate(headers8, 1):
-            c = ws8.cell(row=8, column=i, value=h)
+            c = ws8.cell(row=9, column=i, value=h)
             c.fill = PatternFill("solid", fgColor="1F4E79")
             _set_cell(c, font=Font(name=FONT_NAME, size=10, bold=True, color="FFFFFF"), border=border, alignment=center)
 
-        r8 = 9
+        r8 = 10
         for i, p in enumerate(q.parts, 1):
             ws8.cell(row=r8, column=1, value=i)
             ws8.cell(row=r8, column=2, value=p.category)
@@ -1292,8 +1352,8 @@ def build_excel(
             ws8.row_dimensions[r8].height = 20.0
             r8 += 1
 
-        # 최소 15행까지 빈 그리드 행 채우기 (클래식 양식)
-        target_grid_rows = max(len(q.parts) + 2, 15)
+        # 최소 12행까지 빈 그리드 행 채우기 (클래식 양식) — 15행이면 부품이 많을 때 두 장으로 넘어간다
+        target_grid_rows = max(len(q.parts) + USER_BLANK_ROWS, 12)
         for blank_idx in range(len(q.parts) + 1, target_grid_rows + 1):
             for col in range(1, 7):
                 c = ws8.cell(row=r8, column=col)
