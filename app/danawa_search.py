@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""다나와 통합검색에서 컴퓨존 견적과 사양(CPU · 그래픽카드 · RAM)이 가장 비슷한 완제품 PC를 찾는다."""
+"""다나와 통합검색에서 컴퓨존 견적과 사양(CPU · 그래픽카드 · RAM · SSD)이 가장 비슷한 완제품 PC를 찾는다."""
 from __future__ import annotations
 
 import html
@@ -204,40 +204,35 @@ def search_url(query: str) -> str:
     return f"{SEARCH_URL}?{urllib.parse.urlencode({'query': query, 'tab': 'main'})}"
 
 
-def _score(item: dict[str, Any], cpu_k: str, gpu_k: str, ram_gb: int, price: int) -> dict[str, Any]:
-    item_cpu = cpu_key(item["cpu"])
-    item_gpu = gpu_key(item["gpu"])
-    cpu_match = "exact" if cpu_k and item_cpu == cpu_k else (
-        "near" if cpu_k and item_cpu and re.sub(r"\D", "", item_cpu) == re.sub(r"\D", "", cpu_k) else "")
-    if gpu_k:
-        gpu_match = "exact" if item_gpu == gpu_k else (
-            "near" if item_gpu and _gpu_base(item_gpu) == _gpu_base(gpu_k) else "")
-    else:
-        gpu_match = "exact" if not item_gpu else ""  # 둘 다 내장 그래픽
-    ram_match = "exact" if ram_gb and item["ram_gb"] == ram_gb else (
-        "near" if ram_gb and item["ram_gb"] and abs(math.log2(item["ram_gb"] / ram_gb)) <= 1 else "")
-
-    score = {"exact": 50, "near": 25, "": 0}[cpu_match]
-    score += {"exact": 35, "near": 15, "": 0}[gpu_match]
-    score += {"exact": 15, "near": 6, "": 0}[ram_match]
-    if price and item["price"]:
-        score += 10 * max(0.0, 1 - abs(item["price"] - price) / price)
-    return {
-        **item,
-        "score": round(score, 1),
-        "match": {"cpu": cpu_match, "gpu": gpu_match, "ram": ram_match},
-    }
+def capacity_gb(text: str) -> int:
+    """'1TB' → 1024, '512GB' → 512, '[256GB]' → 256. 없으면 0."""
+    tb = _RAM_TB_RE.search(text or "")
+    if tb:
+        return int(tb.group(1)) * 1024
+    gb = _RAM_GB_RE.search(text or "")
+    return int(gb.group(1)) if gb else 0
 
 
-def find_similar(
+def _ssd_from_model(model: str) -> int:
+    """노트북 모델명 괄호 '(i5-1335U/8GB/256GB/FD)' 에서 저장장치 용량(두 번째 용량)."""
+    match = re.search(r"\(([^)]*)\)", model or "")
+    if not match:
+        return 0
+    caps = [capacity_gb(t) for t in match.group(1).split("/") if _RAM_GB_RE.fullmatch(t.strip()) or _RAM_TB_RE.fullmatch(t.strip())]
+    return caps[1] if len(caps) > 1 else 0
+
+
+def resolve_base(
     cpu: str = "",
     gpu: str = "",
     ram: str = "",
     ram_qty: int = 1,
+    ssd: str = "",
+    ssd_qty: int = 1,
     model: str = "",
-    price: int = 0,
+    store: str = "다나와",
 ) -> dict[str, Any]:
-    """컴퓨존 견적의 CPU/그래픽카드/메모리 품명으로 다나와 완제품 PC 중 비슷한 것을 점수순으로 돌려준다."""
+    """컴퓨존 견적의 부품 품명(또는 노트북 모델명)에서 비교 기준 CPU · 그래픽 · RAM · SSD 를 뽑는다."""
     cpu_s = short_cpu_name(cpu)
     gpu_s = short_gpu_name(gpu)
     # 노트북 견적(금액대로 찾기 · 노트북)은 부품 목록 없이 모델명에 '(CPU/RAM/SSD)' 만 있다.
@@ -248,9 +243,82 @@ def find_similar(
         gpu_s = gpu_s or short_gpu_name(fb_gpu)
     cpu_k = cpu_key(cpu_s)
     if not cpu_k:
-        raise ValueError("이 견적에서 CPU 모델을 찾지 못해 다나와 비교를 할 수 없습니다.")
-    gpu_k = gpu_key(gpu_s)
+        raise ValueError(f"이 견적에서 CPU 모델을 찾지 못해 {store} 비교를 할 수 없습니다.")
     ram_gb = ram_total_gb(ram, ram_qty) or (_ram_from_model(model) if notebook else 0)
+    ssd_gb = capacity_gb(ssd) * max(int(ssd_qty or 1), 1) if ssd else (_ssd_from_model(model) if notebook else 0)
+    return {
+        "cpu": cpu_s,
+        "gpu": gpu_s,
+        "cpu_key": cpu_k,
+        "gpu_key": gpu_key(gpu_s),
+        "ram_gb": ram_gb,
+        "ssd_gb": ssd_gb,
+        "notebook": notebook,
+    }
+
+
+def _size_match(want: int, have: int) -> str:
+    if not want or not have:
+        return ""
+    if want == have:
+        return "exact"
+    return "near" if abs(math.log2(have / want)) <= 1 else ""
+
+
+def score_item(item: dict[str, Any], base: dict[str, Any], price: int) -> dict[str, Any]:
+    """CPU > 그래픽카드 > RAM > SSD 순으로 가중치를 두고, 가격이 가까우면 조금 더 준다."""
+    cpu_k, gpu_k = base["cpu_key"], base["gpu_key"]
+    item_cpu = cpu_key(item.get("cpu", ""))
+    item_gpu = gpu_key(item.get("gpu", ""))
+    cpu_match = "exact" if item_cpu == cpu_k else (
+        "near" if item_cpu and re.sub(r"\D", "", item_cpu) == re.sub(r"\D", "", cpu_k) else "")
+    if gpu_k:
+        gpu_match = "exact" if item_gpu == gpu_k else (
+            "near" if item_gpu and _gpu_base(item_gpu) == _gpu_base(gpu_k) else "")
+    else:
+        # 둘 다 내장 그래픽. 상품명에 CPU 도 없으면(쿠팡의 '라이젠5 5000 시리즈' 등) 사양을 모르는 것이므로 일치로 보지 않는다.
+        gpu_match = "exact" if not item_gpu and item_cpu else ""
+    ram_match = _size_match(base["ram_gb"], item.get("ram_gb", 0))
+    ssd_match = _size_match(base["ssd_gb"], item.get("ssd_gb", 0))
+
+    score = {"exact": 40, "near": 20, "": 0}[cpu_match]
+    score += {"exact": 30, "near": 12, "": 0}[gpu_match]
+    score += {"exact": 15, "near": 6, "": 0}[ram_match]
+    score += {"exact": 10, "near": 4, "": 0}[ssd_match]
+    item_price = item.get("price") or 0
+    if price and item_price:
+        score += 5 * max(0.0, 1 - abs(item_price - price) / price)
+    return {
+        **item,
+        "score": round(score, 1),
+        "match": {"cpu": cpu_match, "gpu": gpu_match, "ram": ram_match, "ssd": ssd_match},
+    }
+
+
+def base_summary(base: dict[str, Any], price: int) -> dict[str, Any]:
+    return {
+        "cpu": base["cpu"],
+        "gpu": base["gpu"] or "내장 그래픽",
+        "ram_gb": base["ram_gb"],
+        "ssd_gb": base["ssd_gb"],
+        "price": price,
+        "notebook": base["notebook"],
+    }
+
+
+def find_similar(
+    cpu: str = "",
+    gpu: str = "",
+    ram: str = "",
+    ram_qty: int = 1,
+    ssd: str = "",
+    ssd_qty: int = 1,
+    model: str = "",
+    price: int = 0,
+) -> dict[str, Any]:
+    """컴퓨존 견적과 CPU · 그래픽카드 · RAM · SSD 가 가장 비슷한 다나와 완제품 PC를 점수순으로 돌려준다."""
+    base = resolve_base(cpu, gpu, ram, ram_qty, ssd, ssd_qty, model, store="다나와")
+    cpu_k, gpu_k, gpu_s, notebook = base["cpu_key"], base["gpu_key"], base["gpu"], base["notebook"]
 
     if notebook:
         query = f"{cpu_k} {gpu_s} 노트북" if gpu_k else f"{cpu_k} 노트북"
@@ -265,11 +333,13 @@ def find_similar(
         items = items + [it for it in _search(fallback, notebook) if it["pcode"] not in seen]
         used_query = f"{query} + {fallback}"
 
-    scored = [_score(it, cpu_k, gpu_k, ram_gb, price) for it in items]
+    for it in items:
+        it["ssd_gb"] = capacity_gb(it.get("storage", ""))
+    scored = [score_item(it, base, price) for it in items]
     scored.sort(key=lambda it: (-it["score"], it["price"] or 10**12))
     return {
         "query": used_query,
         "search_url": search_url(query),
-        "base": {"cpu": cpu_s, "gpu": gpu_s or "내장 그래픽", "ram_gb": ram_gb, "price": price, "notebook": notebook},
+        "base": base_summary(base, price),
         "items": scored[:MAX_ITEMS],
     }

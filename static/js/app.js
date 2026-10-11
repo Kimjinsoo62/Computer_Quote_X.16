@@ -332,43 +332,56 @@ async function openUsedMarketDirect(source, market, event) {
 
 window.openUsedMarketDirect = openUsedMarketDirect;
 
-// ---------- 다나와 비슷한 PC 찾기 ----------
-// 다나와 완제품 PC 에는 모니터·키보드·세팅비가 없으므로 본체 금액끼리 비교한다.
-const DANAWA_NON_BODY = ["모니터", "키보드마우스", "초기 세팅비", "기술지원"];
+// ---------- 다나와 · 쿠팡 비슷한 PC 찾기 (CPU · 그래픽카드 · RAM · SSD 기준) ----------
+// 완제품 PC 에는 모니터·키보드·세팅비가 없으므로 본체 금액끼리 비교한다.
+const SIMILAR_NON_BODY = ["모니터", "키보드마우스", "초기 세팅비", "기술지원"];
+const SIMILAR_STORES = {
+  danawa: { label: "다나와", icon: "🔍", api: "/api/danawa/similar", unit: "다나와 최저가" },
+  coupang: { label: "쿠팡", icon: "🛒", api: "/api/coupang/similar", unit: "쿠팡 판매가" },
+};
 const danawaModal = $("#danawaModal");
 
 function quoteBodyPrice(q) {
   if (!q.parts?.length) return displayTotal(q); // 노트북 견적은 품목 없이 합계만 있다
   return displayParts(q)
-    .filter((p) => !DANAWA_NON_BODY.includes(p.category))
+    .filter((p) => !SIMILAR_NON_BODY.includes(p.category))
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 }
 
-function danawaChip(label, state) {
+function similarChip(label, state) {
   const mark = state === "exact" ? "✓" : (state === "near" ? "≈" : "✗");
   return `<span class="dn-chip dn-${state || "none"}">${label} ${mark}</span>`;
 }
 
-function renderDanawaModal(q, data) {
+function fmtCapacity(gb) {
+  if (!gb) return "-";
+  return gb >= 1024 && gb % 1024 === 0 ? `${gb / 1024}TB` : `${gb}GB`;
+}
+
+function renderSimilarModal(store, q, data) {
+  const conf = SIMILAR_STORES[store];
   const base = data.base || {};
   const basePrice = Number(base.price) || 0;
+  $("#danawaTitle").textContent = `${conf.icon} ${conf.label} 비슷한 PC (CPU · 그래픽카드 · RAM · SSD 기준)`;
   $("#danawaBase").innerHTML = `
     <div><strong>컴퓨존 기준</strong> · ${escapeHtml(q.model || "")}</div>
     <div class="dn-base-spec">
       CPU <b>${escapeHtml(base.cpu || "-")}</b> · 그래픽 <b>${escapeHtml(base.gpu || "-")}</b> ·
-      RAM <b>${base.ram_gb ? base.ram_gb + "GB" : "-"}</b> · ${base.notebook ? "노트북 금액" : "본체 금액"} <b>${basePrice ? fmt(basePrice) : "-"}</b>
+      RAM <b>${fmtCapacity(base.ram_gb)}</b> · SSD <b>${fmtCapacity(base.ssd_gb)}</b> ·
+      ${base.notebook ? "노트북 금액" : "본체 금액"} <b>${basePrice ? fmt(basePrice) : "-"}</b>
       ${base.notebook ? "" : '<span class="dn-note">(모니터·키보드·세팅비 제외)</span>'}
     </div>
-    <div class="dn-base-query">다나와 검색어: ${escapeHtml(data.query || "")}
-      <a href="${escapeHtml(data.search_url || "#")}" target="_blank" rel="noopener">다나와에서 더 보기 ↗</a></div>`;
+    <div class="dn-base-query">${conf.label} 검색어: ${escapeHtml(data.query || "")}
+      <a href="${escapeHtml(data.search_url || "#")}" target="_blank" rel="noopener">${conf.label}에서 더 보기 ↗</a></div>
+    ${data.disclosure ? `<div class="dn-disclosure">${escapeHtml(data.disclosure)}</div>` : ""}`;
 
   const items = data.items || [];
   if (!items.length) {
-    $("#danawaList").innerHTML = '<p class="dn-empty">다나와에서 비슷한 완제품 PC를 찾지 못했습니다. 위 링크로 직접 검색해 보세요.</p>';
+    $("#danawaList").innerHTML = `<p class="dn-empty">${conf.label}에서 비슷한 PC를 찾지 못했습니다. 위 링크로 직접 검색해 보세요.</p>`;
   } else {
     $("#danawaList").innerHTML = `
       <table class="dn-table">
-        <thead><tr><th>#</th><th></th><th>제품 / 사양</th><th>일치</th><th>다나와 최저가</th><th>컴퓨존 대비</th></tr></thead>
+        <thead><tr><th>#</th><th></th><th>제품 / 사양</th><th>일치</th><th>${conf.unit}</th><th>컴퓨존 대비</th></tr></thead>
         <tbody>${items.map((it, idx) => {
           const price = Number(it.price) || 0;
           const diff = price && basePrice ? price - basePrice : null;
@@ -380,9 +393,10 @@ function renderDanawaModal(q, data) {
             <td class="dn-thumb">${it.image ? `<img src="${escapeHtml(it.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}</td>
             <td class="dn-name">
               <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a>
+              ${it.rocket ? '<span class="dn-rocket">로켓배송</span>' : ""}
               <div class="dn-spec">${escapeHtml(it.spec || "")}</div>
             </td>
-            <td class="dn-match">${danawaChip("CPU", it.match?.cpu)}${danawaChip("GPU", it.match?.gpu)}${danawaChip("RAM", it.match?.ram)}</td>
+            <td class="dn-match">${similarChip("CPU", it.match?.cpu)}${similarChip("GPU", it.match?.gpu)}${similarChip("RAM", it.match?.ram)}${similarChip("SSD", it.match?.ssd)}</td>
             <td class="dn-price">${price ? fmt(price) : "가격없음"}</td>
             <td class="dn-diff ${diffClass}">${diffText}</td>
           </tr>`;
@@ -392,36 +406,47 @@ function renderDanawaModal(q, data) {
   show(danawaModal);
 }
 
-async function openDanawaSimilar(index, event) {
+async function openSimilarCompare(store, index, event) {
   if (event) {
     event.preventDefault();
     event.stopPropagation();
   }
+  const conf = SIMILAR_STORES[store];
   const q = quoteData?.quotes?.[index];
-  if (!q) return;
-  const mem = (q.parts || []).find((p) => p.category === "메모리");
+  if (!conf || !q) return;
+  const part = (cat) => (q.parts || []).find((p) => p.category === cat);
+  const mem = part("메모리");
+  const ssd = part("SSD");
   const params = new URLSearchParams({
     cpu: quotePartName(q, "CPU") || "",
     gpu: quotePartName(q, "그래픽카드") || "",
     ram: mem?.name || "",
     ram_qty: String(mem?.qty || 1),
+    ssd: ssd?.name || "",
+    ssd_qty: String(ssd?.qty || 1),
     model: q.model || "",
     price: String(quoteBodyPrice(q)),
   });
-  showBusy("다나와에서 사양이 비슷한 PC 찾는 중…");
+  showBusy(`${conf.label}에서 사양이 비슷한 PC 찾는 중…`);
   try {
-    const res = await fetch(`/api/danawa/similar?${params.toString()}`);
+    const res = await fetch(`${conf.api}?${params.toString()}`);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || "다나와 검색에 실패했습니다.");
-    renderDanawaModal(q, data);
+    const detail = data.detail;
+    if (res.status === 503 && detail?.search_url) {
+      // 쿠팡 파트너스 키가 없는 PC: 사양 검색어로 쿠팡 검색 페이지를 연다
+      window.open(detail.search_url, "_blank", "noopener");
+      return;
+    }
+    if (!res.ok) throw new Error((detail && (detail.message || detail)) || `${conf.label} 검색에 실패했습니다.`);
+    renderSimilarModal(store, q, data);
   } catch (e) {
-    alert(e.message || "다나와 검색에 실패했습니다.");
+    alert(e.message || `${conf.label} 검색에 실패했습니다.`);
   } finally {
     hideBusy();
   }
 }
 
-window.openDanawaSimilar = openDanawaSimilar;
+window.openSimilarCompare = openSimilarCompare;
 $("#danawaClose")?.addEventListener("click", () => hide(danawaModal));
 danawaModal?.addEventListener("click", (e) => {
   if (e.target === danawaModal) hide(danawaModal);
@@ -480,12 +505,16 @@ function summaryCardHtml(q, i) {
           🛍️ 상품상세 ↗
         </a>`}
         ${apple ? "" : `
-        <button type="button" class="btn btn-sm btn-danawa" title="컴퓨존 사양(CPU · 그래픽카드 · RAM)과 가장 비슷한 다나와 완제품 PC를 찾습니다" onclick="openDanawaSimilar(${i}, event)">
+        <button type="button" class="btn btn-sm btn-danawa" title="컴퓨존 사양(CPU · 그래픽카드 · RAM · SSD)과 가장 비슷한 다나와 완제품 PC를 찾습니다" onclick="openSimilarCompare('danawa', ${i}, event)">
           🔍 다나와
         </button>`}
+        ${apple ? `
         <button type="button" class="btn btn-sm btn-coupang btn-coupang-search" data-keyword="${coupangKeyword}" onclick="openCoupangSearch(decodeURIComponent(this.dataset.keyword), event)">
           🛒 쿠팡검색 ↗
-        </button>
+        </button>` : `
+        <button type="button" class="btn btn-sm btn-coupang" title="컴퓨존 사양(CPU · 그래픽카드 · RAM · SSD)과 가장 비슷한 쿠팡 PC를 찾습니다" onclick="openSimilarCompare('coupang', ${i}, event)">
+          🛒 쿠팡
+        </button>`}
         <button type="button" class="btn btn-sm btn-bunjang" ${usedSearchButtonAttrs(q)} onclick="openUsedMarketDirect(this, 'bunjang', event)">
           ⚡ 번개장터
         </button>

@@ -24,6 +24,7 @@ from app.config import (
 from app.excel_export import build_excel
 from app.image_lookup import find_representative_image
 from app.apple_scraper import fetch_apple_cto_live, fetch_apple_cto_options
+from app import coupang_search
 from app.danawa_search import find_similar as danawa_find_similar
 from app.used_market import used_market_links
 from app.quote_info import load_quote_info, reset_quote_info, save_quote_info
@@ -209,16 +210,47 @@ def api_danawa_similar(
     gpu: str = "",
     ram: str = "",
     ram_qty: int = 1,
+    ssd: str = "",
+    ssd_qty: int = 1,
     model: str = "",
     price: int = 0,
 ):
-    """컴퓨존 견적의 CPU · 그래픽카드 · RAM 기준으로 다나와에서 가장 비슷한 완제품 PC 목록"""
+    """컴퓨존 견적의 CPU · 그래픽카드 · RAM · SSD 기준으로 다나와에서 가장 비슷한 완제품 PC 목록"""
     try:
-        return danawa_find_similar(cpu=cpu, gpu=gpu, ram=ram, ram_qty=ram_qty, model=model, price=price)
+        return danawa_find_similar(
+            cpu=cpu, gpu=gpu, ram=ram, ram_qty=ram_qty, ssd=ssd, ssd_qty=ssd_qty, model=model, price=price
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise HTTPException(status_code=502, detail=f"다나와 검색에 실패했습니다: {e}") from e
+
+
+@app.get("/api/coupang/similar")
+def api_coupang_similar(
+    cpu: str = "",
+    gpu: str = "",
+    ram: str = "",
+    ram_qty: int = 1,
+    ssd: str = "",
+    ssd_qty: int = 1,
+    model: str = "",
+    price: int = 0,
+):
+    """컴퓨존 견적의 CPU · 그래픽카드 · RAM · SSD 기준으로 쿠팡(파트너스 검색 API)에서 비슷한 PC 목록.
+
+    파트너스 키가 없는 PC 는 503 과 함께 일반 쿠팡 검색 주소를 돌려준다(화면이 그 주소를 연다).
+    """
+    try:
+        return coupang_search.find_similar(
+            cpu=cpu, gpu=gpu, ram=ram, ram_qty=ram_qty, ssd=ssd, ssd_qty=ssd_qty, model=model, price=price
+        )
+    except coupang_search.NotConfigured as e:
+        raise HTTPException(status_code=503, detail={"message": str(e), "search_url": e.search_url}) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except (urllib.error.URLError, TimeoutError, OSError, RuntimeError) as e:
+        raise HTTPException(status_code=502, detail=f"쿠팡 검색에 실패했습니다: {e}") from e
 
 
 @app.get("/api/update/check")
