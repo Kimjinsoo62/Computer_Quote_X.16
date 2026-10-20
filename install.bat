@@ -89,7 +89,7 @@ echo   - requirements.txt 설치 완료
 REM ── 4) 설치 검증 ──
 echo.
 echo [4/4] 설치 검증...
-"%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl; print('   - fastapi, uvicorn, jinja2, openpyxl OK')"
+"%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl, PIL; print('   - fastapi, uvicorn, jinja2, openpyxl, Pillow OK')"
 if errorlevel 1 (
     echo.
     echo [오류] 패키지 import 검증 실패
@@ -113,7 +113,7 @@ echo   설치 완료
 echo.
 echo   설치된 패키지 (requirements.txt):
 echo     - fastapi, uvicorn, jinja2
-echo     - openpyxl, python-multipart
+echo     - openpyxl, python-multipart, Pillow
 echo.
 echo   가상환경: .venv
 echo.

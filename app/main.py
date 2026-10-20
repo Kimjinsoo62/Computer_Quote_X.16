@@ -48,11 +48,15 @@ from app.calc_window import close_calc_window, open_calc_window
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
+    backup_task_report,
     build_task_report_excel,
+    choose_backup_dir_dialog,
     create_task_report,
     delete_task_report,
+    get_backup_dir,
     get_task_report,
     load_task_reports,
+    set_backup_dir,
     update_task_report,
 )
 
@@ -794,6 +798,42 @@ def api_create_task_report(data: dict = Body(...)):
     """새 작업내역서 저장"""
     created = create_task_report(data)
     return {"status": "ok", "report": created}
+
+
+@app.get("/api/task-reports/backup/settings")
+def api_task_report_backup_settings():
+    """작업내역서 백업 폴더(서버 PC 기준 경로)"""
+    return {"dir": get_backup_dir()}
+
+
+@app.post("/api/task-reports/backup/choose-dir")
+def api_task_report_backup_choose_dir(payload: dict = Body(default={})):
+    """백업 폴더 지정. dir 를 주면 그 경로를, 없으면 서버 PC 화면에 폴더 선택 창을 띄운다."""
+    typed = str(payload.get("dir") or "").strip()
+    try:
+        if typed:
+            return {"ok": True, "dir": set_backup_dir(typed), "source": "typed"}
+        picked = choose_backup_dir_dialog(get_backup_dir())
+        if not picked:
+            return {"ok": False, "dir": get_backup_dir(), "message": "폴더를 고르지 않았습니다."}
+        return {"ok": True, "dir": set_backup_dir(picked), "source": "dialog"}
+    except (OSError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"폴더를 쓸 수 없습니다: {e}") from e
+
+
+@app.post("/api/task-reports/backup")
+def api_task_report_backup(data: dict = Body(...)):
+    """현재 작성 중인 내역서를 백업 폴더에 Excel + JSON 으로 저장. 폴더가 없으면 428."""
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요."})
+    try:
+        result = backup_task_report(data, folder)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"백업 파일을 쓰지 못했습니다: {e}") from e
+    return {"ok": True, **result}
 
 
 @app.get("/api/task-reports/{report_id}")

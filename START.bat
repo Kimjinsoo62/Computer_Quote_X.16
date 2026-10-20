@@ -8,7 +8,7 @@ set "PYTHONIOENCODING=utf-8"
 REM Dependencies missing (no .venv or packages) -> run install.bat once
 set "PY="
 if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
-if defined PY "%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl" >nul 2>&1 || set "PY="
+if defined PY "%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl, PIL" >nul 2>&1 || set "PY="
 if not defined PY (
     echo [*] Dependencies not installed. Running install.bat...
     call "%~dp0install.bat" /auto

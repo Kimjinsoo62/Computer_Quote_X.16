@@ -21,8 +21,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 종료 | `stop.bat` — `POST /api/shutdown` 호출 후 포트 8090/8091 · uvicorn · `--app` 브라우저 창을 정리. 서버가 죽었을 땐 `force_stop.bat`(관리자 권한) |
 | 업데이트 | `update.bat` — `git pull origin main` → pip 재설치 → `START.bat` 재시작. 화면 [업데이트] 버튼은 `update_service.py`를 통해 같은 일을 한다 |
 | 캐시 삭제만 | `.venv\Scripts\python.exe -c "from app.shutdown_service import clear_python_cache; clear_python_cache()"` |
+| 서식 썸네일 재생성 | `.venv\Scripts\python.exe tools\make_form_thumbnails.py` — 폼1~8 디자인을 고쳤을 때만. Excel(COM)이 필요하고 잠깐 Excel 창이 뜬다. 샘플 견적 + 기본(가짜) 견적처 정보로 `static/img/forms/formN.png`(480px)를 만든다 |
 
-런타임 데이터 파일은 모두 `.gitignore`에 있다: `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(쿠팡 파트너스 API 키 — 절대 커밋 금지).
+런타임 데이터 파일은 모두 `.gitignore`에 있다: `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(쿠팡 파트너스 API 키 — 절대 커밋 금지), `app_settings.json`(작업내역서 백업 폴더 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
 
 ## 아키텍처
 
@@ -66,7 +67,7 @@ Mac 계열(`MAC_TIER_PREFIXES`)은 공식몰 구성하기 API로 **실시간 CTO
 
 ### Excel
 
-`excel_export.build_excel()`은 `견적요약` 시트 1장 + **견적(카드)마다** 폼1~8 시트 8장을 만든다. `forms=[1,3]`을 주면 전부 만든 뒤 `_keep_selected_forms()`가 견적요약과 선택 외 폼 시트를 지운다(폼 생성 코드는 한 함수에 순서대로 있어 쪼개지 않는다). 시트 하나만 남는 카드별 추출은 `main.SINGLE_SHEET_TITLE`("견   적   서", 공백 3칸)로 이름을 바꾼다. 화면은 서식마다 `forms=N`으로 따로 호출해 파일을 하나씩 받고, 선택은 브라우저 localStorage `excelForms`에만 저장한다(종료 시 캐시 삭제에서 보존). 폼 시트는 A4 세로 1페이지 강제(`_apply_page_setup`, 견적요약만 예외), 총 열 너비는 `MAX_TOTAL_COL_WIDTH = 88`을 `_assert_print_width()`가 검사한다. 열을 추가하면 다른 열 너비를 줄여 88 안에 맞춘다. 행 높이는 `_auto_fit_row_heights()`가 글자 폭 추정으로 계산한다.
+`excel_export.build_excel()`은 `견적요약` 시트 1장 + **견적(카드)마다** 폼1~8 시트 8장을 만든다. `forms=[1,3]`을 주면 전부 만든 뒤 `_keep_selected_forms()`가 견적요약과 선택 외 폼 시트를 지운다(폼 생성 코드는 한 함수에 순서대로 있어 쪼개지 않는다). 시트 하나만 남는 카드별 추출은 `main.SINGLE_SHEET_TITLE`("견   적   서", 공백 3칸)로 이름을 바꾼다. 화면은 서식마다 `forms=N`으로 따로 호출해 파일을 하나씩 받고, 선택은 브라우저 localStorage `excelForms`에만 저장한다(종료 시 캐시 삭제에서 보존). 서식 선택이 없는 전체 파일은 맨 앞에 `서식 목록` 시트(`_add_form_gallery_sheet`, 썸네일 + 시트 내부 링크)가 붙는다. 썸네일은 `static/img/forms/formN.png`로 저장소에 포함되며 Excel 삽입에 Pillow가 필요하다. 화면 갤러리(`openFormGallery`)도 같은 PNG를 쓴다. 폼 시트는 A4 세로 1페이지 강제(`_apply_page_setup`, 견적요약만 예외), 총 열 너비는 `MAX_TOTAL_COL_WIDTH = 88`을 `_assert_print_width()`가 검사한다. 열을 추가하면 다른 열 너비를 줄여 88 안에 맞춘다. 행 높이는 `_auto_fit_row_heights()`가 글자 폭 추정으로 계산한다.
 
 ## 반드시 지켜야 할 불변 조건
 

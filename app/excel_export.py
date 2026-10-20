@@ -10,11 +10,13 @@
 import math
 import re
 from io import BytesIO
+from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.hyperlink import Hyperlink
 from openpyxl.worksheet.properties import PageSetupProperties
 
 from app.config import QUOTE_DISCLAIMER
@@ -415,6 +417,85 @@ FORM_LABELS = {
 _FORM_NO_RE = re.compile(r"폼([1-8])\(")
 
 
+# 서식 목록 시트: 폼1~8 썸네일(static/img/forms/formN.png, tools/make_form_thumbnails.py 로 생성)과 시트 링크
+GALLERY_SHEET_TITLE = "서식 목록"
+FORMS_IMG_DIR = Path(__file__).resolve().parent.parent / "static" / "img" / "forms"
+GALLERY_IMG_WIDTH_PX = 200
+GALLERY_COLS = 4
+
+
+def _add_form_gallery_sheet(wb) -> None:
+    """맨 앞에 '서식 목록' 시트를 넣는다. 썸네일 아래 링크를 누르면 그 서식의 첫 시트로 간다.
+
+    Pillow 가 없거나 썸네일 파일이 없으면 그림 없이 이름·링크만 넣는다.
+    """
+    first_sheet_of: dict[int, str] = {}
+    for ws in wb.worksheets:
+        n = _form_no(ws.title)
+        if n and n not in first_sheet_of:
+            first_sheet_of[n] = ws.title
+    if not first_sheet_of:
+        return
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+    except ImportError:  # Pillow 미설치
+        XLImage = None
+
+    ws = wb.create_sheet(GALLERY_SHEET_TITLE, 0)
+    ws.sheet_view.showGridLines = False
+    ws["B1"] = "견적서 서식 목록 — 그림 아래 링크를 누르면 그 서식 시트로 이동합니다"
+    ws["B1"].font = Font(name=FONT_NAME, size=14, bold=True, color="1F4E79")
+    ws["B2"] = (
+        "같은 서식만 따로 파일로 받으려면 프로그램의 [서식] 버튼이나 [서식 미리보기]에서 고르세요. "
+        "Excel 에서는 시트 탭 우클릭 → '이동/복사' → '새 통합 문서'로 뽑을 수 있습니다."
+    )
+    ws["B2"].font = Font(name=FONT_NAME, size=9, color="64748B")
+    ws.column_dimensions["A"].width = 2
+    col_width = GALLERY_IMG_WIDTH_PX / 7.0 + 1  # 글자 폭 단위 ≈ 7px
+    for i in range(GALLERY_COLS):
+        ws.column_dimensions[get_column_letter(2 + i * 2)].width = col_width
+        ws.column_dimensions[get_column_letter(3 + i * 2)].width = 2
+    link_font = Font(name=FONT_NAME, size=10, bold=True, color="0563C1", underline="single")
+    name_font = Font(name=FONT_NAME, size=10, bold=True)
+    row = 4
+    img_height_px = 0
+    for n in sorted(FORM_LABELS):
+        if n not in first_sheet_of:
+            continue
+        slot = (n - 1) % GALLERY_COLS
+        if n > 1 and slot == 0:
+            row += 4
+        col = get_column_letter(2 + slot * 2)
+        img_path = FORMS_IMG_DIR / f"form{n}.png"
+        if XLImage is not None and img_path.is_file():
+            try:
+                img = XLImage(str(img_path))
+                ratio = GALLERY_IMG_WIDTH_PX / float(img.width or GALLERY_IMG_WIDTH_PX)
+                img.width = GALLERY_IMG_WIDTH_PX
+                img.height = int(round((img.height or GALLERY_IMG_WIDTH_PX) * ratio))
+                img_height_px = max(img_height_px, img.height)
+                ws.add_image(img, f"{col}{row}")
+            except (OSError, ValueError, ImportError):  # Pillow 없음은 생성 시점에 ImportError
+                pass
+        name_cell = ws[f"{col}{row + 1}"]
+        name_cell.value = f"폼{n} ({FORM_LABELS[n]})"
+        name_cell.font = name_font
+        name_cell.alignment = Alignment(horizontal="center")
+        link_cell = ws[f"{col}{row + 2}"]
+        link_cell.value = "▶ 이 서식 시트로 이동"
+        target = first_sheet_of[n].replace("'", "''")
+        link_cell.hyperlink = Hyperlink(ref=link_cell.coordinate, location=f"'{target}'!A1")
+        link_cell.font = link_font
+        link_cell.alignment = Alignment(horizontal="center")
+    # 그림이 들어간 행은 그림 높이만큼(px → pt 0.75)
+    r = 4
+    while r <= row:
+        ws.row_dimensions[r].height = max(20.0, img_height_px * 0.75 + 4) if img_height_px else 20.0
+        ws.row_dimensions[r + 1].height = 18.0
+        ws.row_dimensions[r + 2].height = 18.0
+        r += 4
+
+
 def _form_no(sheet_title: str) -> int | None:
     m = _FORM_NO_RE.search(sheet_title or "")
     return int(m.group(1)) if m else None
@@ -442,11 +523,13 @@ def build_excel(
     quote_kind_label: str = "",
     forms: list[int] | None = None,
     single_sheet_title: str = "",
+    gallery: bool = True,
 ) -> BytesIO:
     """hide_unit_prices=True 면 품목별 단가·금액을 비우고 합계만 남긴다.
 
     forms 를 주면(예: [1, 3]) 견적요약을 빼고 해당 폼 시트만 남긴다. 비우면 지금처럼 전체를 만든다.
     single_sheet_title 은 시트가 하나만 남을 때 그 시트의 이름이다.
+    gallery=True 면(서식 선택이 없는 전체 파일일 때만) 맨 앞에 폼1~8 썸네일 '서식 목록' 시트를 넣는다.
     """
     if result is None:
         result = fetch_today_quotes()
@@ -1453,6 +1536,10 @@ def build_excel(
     # 모든 내용을 채운 뒤에 행 높이를 맞춘다(열 너비·병합이 확정된 상태여야 한다).
     for ws in wb.worksheets:
         _auto_fit_row_heights(ws)
+
+    # 서식 목록은 행 높이 자동 맞춤 뒤에 넣는다(그림 행 높이를 직접 정하므로).
+    if gallery and not forms:
+        _add_form_gallery_sheet(wb)
 
     buf = BytesIO()
     wb.save(buf)

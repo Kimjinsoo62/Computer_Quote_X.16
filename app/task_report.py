@@ -2,7 +2,10 @@
 """컴퓨터 작업내역서 관리 및 엑셀 내보내기 모듈"""
 from __future__ import annotations
 
+import base64
 import json
+import re
+import subprocess
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -12,10 +15,14 @@ from typing import Any
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from app.app_settings import get_setting, set_setting
 from app.quote_info import bank_account_line, load_quote_info
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "task_reports.json"
 TEMPLATE_FILE = Path(__file__).resolve().parent.parent / "컴퓨터_작업내역서.xlsx"
+# 화면 기본 행 수. Excel 도 최소 이만큼 번호를 매긴다.
+MIN_TASK_ROWS = 5
+BACKUP_DIR_KEY = "task_report_backup_dir"
 
 
 def load_task_reports() -> list[dict[str, Any]]:
@@ -197,13 +204,14 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
     # 4. 증상 / 요청 사항
     ws["A15"] = report.get("symptoms", "")
 
-    # 5. 진단 및 작업 내역 (Row 20, 21, 22 등)
+    # 5. 진단 및 작업 내역: 20행부터 행 수만큼(최소 MIN_TASK_ROWS). 뒤 항목은 행 수에 따라 밀린다.
     tasks = report.get("tasks", [])
-    for idx in range(3):
+    n_rows = max(MIN_TASK_ROWS, len(tasks))
+    for idx in range(n_rows):
         row_num = 20 + idx
+        ws[f"A{row_num}"] = idx + 1
         if idx < len(tasks):
             t = tasks[idx]
-            ws[f"A{row_num}"] = idx + 1
             ws[f"B{row_num}"] = t.get("description", "")
             ws[f"D{row_num}"] = t.get("parts", "")
             cost_val = int(t.get("cost", 0) or 0)
@@ -211,13 +219,13 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
             if cost_val > 0:
                 ws[f"F{row_num}"].number_format = "#,##0"
         else:
-            ws[f"A{row_num}"] = idx + 1
             ws[f"B{row_num}"] = ""
             ws[f"D{row_num}"] = ""
             ws[f"F{row_num}"] = ""
 
-    ws["F23"] = int(report.get("total_cost", 0) or 0)
-    ws["F23"].number_format = "#,##0"
+    total_row = 20 + n_rows  # 행이 3개였을 때의 23행과 같은 간격
+    ws[f"F{total_row}"] = int(report.get("total_cost", 0) or 0)
+    ws[f"F{total_row}"].number_format = "#,##0"
 
     # 6. 처리 현황
     status_val = report.get("status", "완료")
@@ -228,24 +236,109 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
         f"{'■' if status_val == '완료' else '□'} 완료   "
         f"{'■' if status_val == '인도완료' else '□'} 인도완료"
     )
-    ws["B25"] = status_str
-    ws["E25"] = report.get("expected_date", "")
-    ws["B26"] = report.get("technician", "김대건")
-    ws["E26"] = report.get("warranty_period", "3개월")
+    ws[f"B{total_row + 2}"] = status_str
+    ws[f"E{total_row + 2}"] = report.get("expected_date", "")
+    ws[f"B{total_row + 3}"] = report.get("technician", "김대건")
+    ws[f"E{total_row + 3}"] = report.get("warranty_period", "3개월")
 
     # 7. 확인 및 서명
     if report.get("customer_sign"):
-        ws["A29"] = f"서명: {report.get('customer_sign')}"
+        ws[f"A{total_row + 6}"] = f"서명: {report.get('customer_sign')}"
     if report.get("technician_sign"):
-        ws["D29"] = f"서명: {report.get('technician_sign')}"
+        ws[f"D{total_row + 6}"] = f"서명: {report.get('technician_sign')}"
 
     # 8. 입금 계좌 (견적 정보에서 가져옴, 계좌번호가 없으면 생략)
     bank_line = bank_account_line(load_quote_info())
     if bank_line:
-        ws["A31"] = bank_line
-        ws["A31"].font = Font(bold=True, color="1F4E79")
+        ws[f"A{total_row + 8}"] = bank_line
+        ws[f"A{total_row + 8}"].font = Font(bold=True, color="1F4E79")
 
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf
+
+
+# ---------------------------------------------------------------------------
+# 백업: 지정한 폴더에 내역서 한 건을 Excel + JSON 으로 모아 둔다
+# ---------------------------------------------------------------------------
+_FILENAME_BAD_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
+
+
+def safe_filename_part(text: str, limit: int = 60) -> str:
+    """파일 이름에 못 쓰는 문자를 공백으로 바꾸고 길이를 자른다."""
+    cleaned = _FILENAME_BAD_RE.sub(" ", str(text or ""))
+    cleaned = " ".join(cleaned.split()).strip(" .")
+    return cleaned[:limit]
+
+
+def get_backup_dir() -> str:
+    return str(get_setting(BACKUP_DIR_KEY, "") or "")
+
+
+def set_backup_dir(path: str) -> str:
+    """폴더를 확인(없으면 생성)하고 설정에 저장한다. 빈 값이면 설정을 지운다."""
+    path = (path or "").strip().strip('"')
+    if not path:
+        set_setting(BACKUP_DIR_KEY, "")
+        return ""
+    folder = Path(path).expanduser()
+    folder.mkdir(parents=True, exist_ok=True)
+    if not folder.is_dir():
+        raise ValueError(f"폴더가 아닙니다: {folder}")
+    resolved = str(folder.resolve())
+    set_setting(BACKUP_DIR_KEY, resolved)
+    return resolved
+
+
+def choose_backup_dir_dialog(initial: str = "", timeout_sec: int = 600) -> str:
+    """서버 PC 화면에 폴더 선택 창을 띄운다. 취소하면 빈 문자열."""
+    initial_ps = (initial or "").replace("'", "''")
+    script = f"""
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Windows.Forms
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.Opacity = 0
+$owner.StartPosition = 'CenterScreen'
+$owner.Show()
+$owner.Activate()
+$d = New-Object System.Windows.Forms.FolderBrowserDialog
+$d.Description = '작업내역서 백업 폴더를 고르세요'
+$d.ShowNewFolderButton = $true
+if ('{initial_ps}' -ne '') {{ $d.SelectedPath = '{initial_ps}' }}
+if ($d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) {{ Write-Output $d.SelectedPath }}
+$owner.Close()
+"""
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    try:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-STA", "-EncodedCommand", encoded],
+            capture_output=True,
+            timeout=timeout_sec,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    out = completed.stdout.decode("utf-8", "replace").strip()
+    return out.splitlines()[-1].strip() if out else ""
+
+
+def backup_task_report(data: dict[str, Any], folder: str) -> dict[str, Any]:
+    """현재 내역서를 folder 에 작업내역서_{고객}_{접수번호}.xlsx / .json 으로 저장한다(같은 이름은 덮어쓴다)."""
+    target = Path(folder)
+    if not target.is_dir():
+        raise FileNotFoundError(f"백업 폴더를 찾을 수 없습니다: {folder}")
+    report = dict(data)
+    if "total_cost" not in report:
+        report["total_cost"] = sum(int(t.get("cost", 0) or 0) for t in report.get("tasks", []))
+    cust = safe_filename_part(report.get("customer_name") or "고객")
+    doc_no = safe_filename_part(report.get("doc_no") or datetime.now().strftime("%Y%m%d"))
+    stem = f"작업내역서_{cust}_{doc_no}"
+    xlsx_path = target / f"{stem}.xlsx"
+    json_path = target / f"{stem}.json"
+    xlsx_path.write_bytes(build_task_report_excel(report).getvalue())
+    report["backed_up_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"dir": str(target), "files": [xlsx_path.name, json_path.name]}

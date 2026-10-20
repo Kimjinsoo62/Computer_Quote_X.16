@@ -526,6 +526,9 @@ function summaryCardHtml(q, i) {
         <button type="button" class="btn btn-sm btn-excel-one" data-index="${i}" title="이 항목만 견적서 Excel 로 내려받습니다">
           📥 엑셀 견적서
         </button>
+        <button type="button" class="btn btn-sm btn-outline btn-form-gallery" data-index="${i}" title="폼1~8 썸네일을 보고 하나를 골라 이 항목만 그 서식으로 받습니다">
+          🖼️ 서식 미리보기 · 하나만 골라 받기
+        </button>
       </div>
     </div>`;
 }
@@ -555,6 +558,13 @@ function bindSummaryCardEvents(container) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       downloadOneExcel(parseInt(btn.dataset.index, 10));
+    });
+  });
+
+  container.querySelectorAll(".btn-form-gallery").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openFormGallery(parseInt(btn.dataset.index, 10));
     });
   });
 }
@@ -914,6 +924,90 @@ async function downloadExcelFiles(index = -1) {
     if (!ok) break; // 서버가 죽었으면 남은 서식마다 오류창을 띄우지 않는다
   }
 }
+
+// ---------- 서식 미리보기 갤러리 (폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
+// 썸네일은 static/img/forms/formN.png (샘플 견적으로 만든 디자인 미리보기, 실제 금액 아님).
+const FORM_GALLERY_DESC = {
+  1: "B2B 표준 견적서 · 공급자/수급자 직인란",
+  2: "영문 모던 INVOICE 스타일",
+  3: "결재·보고용 총액 강조 요약형",
+  4: "부품 기술 명세서형",
+  5: "매장 즉시 발송용 영수증 스타일",
+  6: "부품별 A/S 기간 · 소비자 유의사항",
+  7: "제품 SPEC 표 · 고객 발주확인란",
+  8: "관공서/기업 납품 세로형 전통 서식",
+};
+let formGalleryIndex = -1; // -1 = 현재 목록 전체, 0 이상 = 카드 한 건
+
+function openFormGallery(index = -1) {
+  const modal = $("#formGalleryModal");
+  const grid = $("#formGalleryGrid");
+  if (!modal || !grid) return;
+  const quotes = quoteData?.quotes || [];
+  if (!quotes.length) {
+    alert("먼저 견적을 불러오세요.");
+    return;
+  }
+  formGalleryIndex = index >= 0 && index < quotes.length ? index : -1;
+  const title = $("#formGalleryTitle");
+  const hint = $("#formGalleryHint");
+  if (formGalleryIndex >= 0) {
+    const q = quotes[formGalleryIndex];
+    if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — ${q.tab_label || q.tier || ""} ${q.model || ""}`.trim();
+    if (hint) hint.textContent = "서식을 누르면 이 항목만 그 서식으로 담긴 파일(시트 이름 \"견   적   서\")을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
+  } else {
+    if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — 현재 목록 ${quotes.length}건`;
+    if (hint) hint.textContent = "서식을 누르면 현재 목록 전체가 그 서식(카드마다 시트 1장)으로 담긴 파일을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
+  }
+  grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
+    const n = Number(k);
+    const checked = excelForms.includes(n);
+    return `
+      <div class="form-gallery-item${checked ? " is-checked" : ""}" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 서식으로 받기">
+        <img class="form-gallery-thumb" src="/static/img/forms/form${n}.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 미리보기" loading="lazy" />
+        <div class="form-gallery-name">폼${n} (${EXCEL_FORM_LABELS[n]})</div>
+        <div class="form-gallery-desc">${FORM_GALLERY_DESC[n] || ""}</div>
+        <button type="button" class="btn btn-sm btn-primary">📥 이 서식으로 받기</button>
+      </div>`;
+  }).join("");
+  grid.querySelectorAll(".form-gallery-item").forEach((item) => {
+    const pick = () => downloadFormFromGallery(Number(item.dataset.form));
+    item.addEventListener("click", pick);
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        pick();
+      }
+    });
+  });
+  show(modal);
+}
+
+function closeFormGallery() {
+  hide($("#formGalleryModal"));
+}
+
+async function downloadFormFromGallery(n) {
+  if (!EXCEL_FORM_LABELS[n]) return;
+  closeFormGallery();
+  const index = formGalleryIndex;
+  const base = `/api/download/excel?${excelQueryParams(index)}`;
+  await downloadWithBusy(
+    `${base}&forms=${n}`,
+    {},
+    `견적서_폼${n}.xlsx`,
+    `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`
+  );
+}
+
+$("#formGalleryClose")?.addEventListener("click", closeFormGallery);
+$("#formGalleryModal")?.addEventListener("click", (e) => {
+  if (e.target === $("#formGalleryModal")) closeFormGallery();
+});
+$("#excelFormsPreview")?.addEventListener("click", () => {
+  toggleExcelFormsPop(false);
+  openFormGallery(-1);
+});
 
 /** 모니터·무선키보드 공통 표시: "{이름} (포함됨|제외됨)" */
 function extraStatusText(included) {
@@ -1299,6 +1393,8 @@ document.addEventListener("keydown", (e) => {
   if (danawaModal && !danawaModal.classList.contains("hidden")) hide(danawaModal);
   const excelPop = $("#excelFormsPop");
   if (excelPop && !excelPop.classList.contains("hidden")) toggleExcelFormsPop(false);
+  const galleryModal = $("#formGalleryModal");
+  if (galleryModal && !galleryModal.classList.contains("hidden")) closeFormGallery();
 });
 
 $("#quoteInfoSave")?.addEventListener("click", async () => {
@@ -2713,29 +2809,28 @@ function clearSignCanvas(type) {
   }
 }
 
-// 작업 행 렌더링 & 계산
+// 작업 행 렌더링 & 계산 (기본 5행, 삭제 ✕ 는 맨 끝 조작 열)
+const TR_MIN_TASK_ROWS = 5;
+
 function renderTrTaskRows(tasks = []) {
   const tbody = $("#trTasksTbody");
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  const items = tasks.length > 0 ? tasks : [
-    { no: 1, description: "", parts: "", cost: 0 },
-    { no: 2, description: "", parts: "", cost: 0 },
-    { no: 3, description: "", parts: "", cost: 0 },
-  ];
+  const items = tasks.map((t) => ({ ...t }));
+  while (items.length < TR_MIN_TASK_ROWS) {
+    items.push({ no: items.length + 1, description: "", parts: "", cost: 0 });
+  }
 
   items.forEach((task, idx) => {
     const tr = document.createElement("tr");
     tr.className = "tr-task-row";
     tr.innerHTML = `
-      <td style="text-align:center;">
-        <span class="tr-row-no">${idx + 1}</span>
-        ${items.length > 1 ? `<button type="button" class="tr-task-del-btn no-print" title="행 삭제" onclick="deleteTrTaskRow(${idx})">✕</button>` : ''}
-      </td>
-      <td><input type="text" class="tr-inp tr-task-desc" value="${escapeHtml(task.description || '')}" placeholder="작업 내용 (예: SSD 교체 및 윈도우 재설치)" /></td>
-      <td><input type="text" class="tr-inp tr-task-parts" value="${escapeHtml(task.parts || '')}" placeholder="부품 (예: SK하이닉스 500GB)" /></td>
+      <td style="text-align:center;"><span class="tr-row-no">${idx + 1}</span></td>
+      <td><input type="text" class="tr-inp tr-task-desc" value="${escapeHtml(task.description || '')}" placeholder="작업 내용" /></td>
+      <td><input type="text" class="tr-inp tr-task-parts" value="${escapeHtml(task.parts || '')}" placeholder="부품 / 자재" /></td>
       <td><input type="number" class="tr-inp tr-task-cost" style="text-align:right;" value="${task.cost || ''}" placeholder="0" oninput="calcTrTotal()" /></td>
+      <td class="tr-col-act no-print"><button type="button" class="tr-task-del-btn" title="이 행 삭제" onclick="deleteTrTaskRow(${idx})"${items.length <= 1 ? " disabled" : ""}>✕</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -2744,27 +2839,35 @@ function renderTrTaskRows(tasks = []) {
 }
 
 function addTrTaskRow() {
-  const currentTasks = getTrTasksFromForm();
+  const currentTasks = getTrTasksFromForm({ keepEmpty: true });
   currentTasks.push({ no: currentTasks.length + 1, description: "", parts: "", cost: 0 });
   renderTrTaskRows(currentTasks);
 }
 
 window.deleteTrTaskRow = function(idx) {
-  const currentTasks = getTrTasksFromForm();
+  const currentTasks = getTrTasksFromForm({ keepEmpty: true });
   if (currentTasks.length <= 1) return;
   currentTasks.splice(idx, 1);
+  // 5행 아래로 줄어들면 renderTrTaskRows 가 빈 행을 채워 넣는다
   renderTrTaskRows(currentTasks);
 };
 
-function getTrTasksFromForm() {
+/** 화면의 작업 행. 기본은 끝의 빈 행을 떼어 낸다(저장·Excel 에 빈 번호 행이 늘어나지 않게). keepEmpty 는 화면 편집용. */
+function getTrTasksFromForm({ keepEmpty = false } = {}) {
   const rows = document.querySelectorAll("#trTasksTbody tr");
   const tasks = [];
-  rows.forEach((tr, idx) => {
+  rows.forEach((tr) => {
     const desc = tr.querySelector(".tr-task-desc")?.value.trim() || "";
     const parts = tr.querySelector(".tr-task-parts")?.value.trim() || "";
     const cost = parseInt(tr.querySelector(".tr-task-cost")?.value, 10) || 0;
-    tasks.push({ no: idx + 1, description: desc, parts: parts, cost: cost });
+    tasks.push({ no: 0, description: desc, parts: parts, cost: cost });
   });
+  if (!keepEmpty) {
+    while (tasks.length && !tasks[tasks.length - 1].description && !tasks[tasks.length - 1].parts && !tasks[tasks.length - 1].cost) {
+      tasks.pop();
+    }
+  }
+  tasks.forEach((t, i) => { t.no = i + 1; });
   return tasks;
 }
 
@@ -2985,6 +3088,7 @@ function openTrModal() {
   initSignCanvas(signCanvasTech);
   syncTrDateWithSystem();
   renderTrBankLine();
+  loadTrBackupDir();
   if (!currentTrId) {
     resetTrForm();
   }
@@ -3122,6 +3226,131 @@ async function saveTrForm() {
   }
 }
 
+// ---------- 백업: 지정 폴더에 Excel + JSON 으로 모아 두기 ----------
+let trBackupDir = "";
+
+async function postJsonRaw(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, ok: res.ok, data };
+}
+
+function syncTrBackupDirUI() {
+  const btn = $("#trBtnBackupDir");
+  if (btn) {
+    btn.title = trBackupDir
+      ? `백업 폴더: ${trBackupDir}\n눌러서 바꿉니다 (폴더 선택 창은 서버 PC 화면에 뜹니다)`
+      : "백업 폴더를 지정합니다 (폴더 선택 창은 서버 PC 화면에 뜹니다)";
+  }
+  const backupBtn = $("#trBtnBackup");
+  if (backupBtn) {
+    backupBtn.title = trBackupDir
+      ? `현재 내역서를 백업 폴더에 Excel + JSON 으로 저장합니다\n${trBackupDir}`
+      : "현재 내역서를 백업 폴더에 Excel + JSON 으로 저장합니다. 폴더가 없으면 먼저 고릅니다";
+  }
+}
+
+async function loadTrBackupDir() {
+  try {
+    const res = await fetch("/api/task-reports/backup/settings", { cache: "no-store" });
+    const data = await res.json();
+    trBackupDir = data.dir || "";
+  } catch (_) {
+    trBackupDir = "";
+  }
+  syncTrBackupDirUI();
+}
+
+/** 폴더 선택 창(서버 PC 화면) → 취소하면 경로 직접 입력. 정해진 폴더를 돌려주고, 없으면 "". */
+async function chooseTrBackupDir() {
+  const btn = $("#trBtnBackupDir");
+  if (btn) btn.disabled = true;
+  showBusy("백업 폴더 선택 창이 서버 PC 화면에 열렸습니다. 폴더를 고르세요…");
+  let res;
+  try {
+    res = await postJsonRaw("/api/task-reports/backup/choose-dir", {});
+  } catch (_) {
+    res = { ok: false, data: { message: "서버에 연결할 수 없습니다." } };
+  } finally {
+    hideBusy();
+    if (btn) btn.disabled = false;
+  }
+  if (res.ok && res.data.ok && res.data.dir) {
+    trBackupDir = res.data.dir;
+    syncTrBackupDirUI();
+    return trBackupDir;
+  }
+  const typed = prompt(
+    "폴더 선택 창에서 폴더를 고르지 않았습니다.\n백업 폴더 경로를 직접 입력하세요 (서버 PC 기준 경로, 없으면 새로 만듭니다).",
+    res.data?.dir || trBackupDir || ""
+  );
+  if (!typed || !typed.trim()) return "";
+  let typedRes;
+  try {
+    typedRes = await postJsonRaw("/api/task-reports/backup/choose-dir", { dir: typed.trim() });
+  } catch (_) {
+    alert("서버에 연결할 수 없습니다.");
+    return "";
+  }
+  if (!typedRes.ok || !typedRes.data.ok) {
+    alert(typedRes.data?.detail || typedRes.data?.message || "폴더를 지정하지 못했습니다.");
+    return "";
+  }
+  trBackupDir = typedRes.data.dir;
+  syncTrBackupDirUI();
+  return trBackupDir;
+}
+
+async function backupTrReport() {
+  const data = getTrFormData();
+  if (!data.customer_name) {
+    alert("고객명을 입력해 주세요.");
+    $("#trCustName")?.focus();
+    return;
+  }
+  const btn = $("#trBtnBackup");
+  if (btn) btn.disabled = true;
+  try {
+    if (!trBackupDir) {
+      const dir = await chooseTrBackupDir();
+      if (!dir) return;
+    }
+    showBusy("백업 파일 생성 중…");
+    let res;
+    try {
+      res = await postJsonRaw("/api/task-reports/backup", data);
+    } finally {
+      hideBusy();
+    }
+    if (res.status === 428) {
+      // 폴더가 아직 없거나 사라졌다 → 다시 고르고 한 번 더
+      trBackupDir = "";
+      syncTrBackupDirUI();
+      const dir = await chooseTrBackupDir();
+      if (!dir) return;
+      showBusy("백업 파일 생성 중…");
+      try {
+        res = await postJsonRaw("/api/task-reports/backup", data);
+      } finally {
+        hideBusy();
+      }
+    }
+    if (!res.ok || !res.data.ok) {
+      const d = res.data?.detail;
+      throw new Error((d && (d.message || d)) || "백업에 실패했습니다.");
+    }
+    alert(`✔ 백업 완료\n폴더: ${res.data.dir}\n${(res.data.files || []).join("\n")}`);
+  } catch (e) {
+    alert("백업 오류: " + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // 인쇄 / PDF 출력
 function printTrPaper() {
   // 폼의 최신 입력값들을 인쇄 전 DOM value에 정확히 매핑
@@ -3158,6 +3387,11 @@ $("#trBtnNew")?.addEventListener("click", () => {
 });
 $("#trBtnAddTaskRow")?.addEventListener("click", addTrTaskRow);
 $("#trBtnSave")?.addEventListener("click", saveTrForm);
+$("#trBtnBackup")?.addEventListener("click", backupTrReport);
+$("#trBtnBackupDir")?.addEventListener("click", async () => {
+  const dir = await chooseTrBackupDir();
+  if (dir) alert(`백업 폴더: ${dir}`);
+});
 $("#trBtnPrint")?.addEventListener("click", printTrPaper);
 $("#trBtnExcel")?.addEventListener("click", downloadTrExcelDirect);
 $("#trBtnRefreshList")?.addEventListener("click", loadTrReportsList);

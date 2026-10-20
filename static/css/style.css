@@ -1227,9 +1227,15 @@ a:hover { text-decoration: underline; }
   padding: 1px 6px;
   font-size: 1rem;
   cursor: pointer;
-  margin-left: 4px;
 }
 .tr-task-del-btn:hover { background: #fecaca; }
+.tr-task-del-btn:disabled { opacity: 0.35; cursor: default; }
+/* 맨 끝 조작 열: 머리글에 [＋ 행추가], 행마다 [✕]. 인쇄·Excel 에는 없다. */
+.tr-table .tr-col-act { text-align: center; padding: 1px 3px; }
+.btn-xs { padding: 1px 6px; font-size: 0.95rem; white-space: nowrap; }
+/* 표 머리글은 밝은 배경이라 어두운 글자·테두리로 보이게 한다 */
+.tr-table .tr-col-act .btn-outline { color: #1e3a8a; border-color: #64748b; background: #ffffff; }
+.tr-table .tr-col-act .btn-outline:hover { color: #fff; background: var(--primary); border-color: var(--primary); }
 .tr-total-row th, .tr-total-row td {
   background: #fef3c7;
   color: #92400e;
@@ -1412,6 +1418,8 @@ a:hover { text-decoration: underline; }
   .no-print, .modal-header, .tr-toolbar, #trListPanel {
     display: none !important;
   }
+  /* 안내 문구(placeholder)는 종이에 찍지 않는다 */
+  ::placeholder { color: transparent !important; }
   .tr-paper {
     border: none !important;
     box-shadow: none !important;
@@ -1724,3 +1732,27 @@ html.calc-html body {
   margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--border);
 }
 .excel-forms-foot .excel-forms-hint { flex: 1; text-align: center; }
+
+/* 견적서 서식 미리보기 갤러리 (폼1~8 썸네일, 클릭하면 그 서식만 담긴 파일) */
+.form-gallery-modal { max-width: 1180px; }
+.form-gallery-hint { margin: 0 0 6px; color: var(--muted); font-size: 1rem; }
+.form-gallery-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.form-gallery-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card2); cursor: pointer; text-align: center;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.form-gallery-item:hover { border-color: var(--primary); transform: translateY(-2px); }
+.form-gallery-item.is-checked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.form-gallery-thumb {
+  width: 100%; height: 300px; object-fit: contain; object-position: top;
+  background: #fff; border-radius: 3px;
+}
+.form-gallery-name { font-weight: 700; }
+.form-gallery-desc { color: var(--muted); font-size: 0.95rem; line-height: 1.3; }
+.form-gallery-item .btn { margin-top: 2px; width: 100%; justify-content: center; }
+/* 카드 맨 아래 한 줄짜리 미리보기 버튼 */
+.card-actions .btn-form-gallery { grid-column: 1 / -1; }

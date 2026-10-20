@@ -8,3 +8,4 @@ __pycache__/
 .pytest_cache/
 quote_info.json
 task_reports.json
+app_settings.json

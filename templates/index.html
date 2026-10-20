@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261020a" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261020c" />
 </head>
 <body>
   <nav class="nav">
@@ -71,6 +71,7 @@
             </div>
             <div class="excel-forms-foot">
               <button type="button" id="excelFormsAll" class="btn btn-outline btn-sm" title="선택을 모두 지우고 지금처럼 견적요약 + 폼1~8을 한 파일로 받습니다">전체(기본)</button>
+              <button type="button" id="excelFormsPreview" class="btn btn-outline btn-sm" title="폼1~8 썸네일을 보고 하나를 골라 현재 목록 전체를 그 서식으로 받습니다">🖼️ 미리보기</button>
               <span id="excelFormsStatus" class="excel-forms-hint"></span>
               <button type="button" id="excelFormsClose" class="btn btn-primary btn-sm">닫기</button>
             </div>
@@ -466,6 +467,19 @@
 
 
   <!-- 다나와 비슷한 PC 모달 -->
+  <div id="formGalleryModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal form-gallery-modal" role="dialog" aria-labelledby="formGalleryTitle">
+      <div class="modal-header">
+        <h3 id="formGalleryTitle">🖼️ 견적서 서식 미리보기</h3>
+        <button type="button" class="modal-close btn-modal-close" id="formGalleryClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <p id="formGalleryHint" class="form-gallery-hint"></p>
+        <div id="formGalleryGrid" class="form-gallery-grid"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="danawaModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal danawa-modal" role="dialog" aria-labelledby="danawaTitle">
       <div class="modal-header">
@@ -502,6 +516,8 @@
               <span id="trCurrentStatusBadge" class="badge-status">신규 작성중</span>
             </div>
             <div class="tr-toolbar-right">
+              <button type="button" id="trBtnBackupDir" class="btn btn-outline btn-sm" title="백업 폴더를 바꿉니다 (폴더 선택 창은 서버 PC 화면에 뜹니다)">📁</button>
+              <button type="button" id="trBtnBackup" class="btn btn-outline btn-sm" title="현재 내역서를 백업 폴더에 Excel + JSON 으로 저장합니다. 폴더가 없으면 먼저 고릅니다">💽 백업</button>
               <button type="button" id="trBtnSave" class="btn btn-primary btn-sm">💾 저장하기</button>
               <button type="button" id="trBtnPrint" class="btn btn-accent btn-sm">🖨️ 종이 인쇄 / PDF 출력</button>
               <button type="button" id="trBtnExcel" class="btn btn-outline btn-sm">📥 Excel 다운로드</button>
@@ -535,7 +551,7 @@
                 <div class="tr-doc-title">작업 내역서</div>
                 <div class="tr-doc-meta-grid">
                   <div class="tr-doc-meta-lbl">접수번호 :</div>
-                  <div><input type="text" id="trDocNo" class="tr-inp-doc" placeholder="자동 생성 (예: TR-20260824-01)" /></div>
+                  <div><input type="text" id="trDocNo" class="tr-inp-doc" placeholder="자동 생성" /></div>
                   <div class="tr-doc-meta-lbl">접수일자 :</div>
                   <div><input type="date" id="trReceiptDate" class="tr-inp-doc" /></div>
                 </div>
@@ -550,7 +566,7 @@
                   <th style="width: 15%;">고객명</th>
                   <td style="width: 35%;"><input type="text" id="trCustName" class="tr-inp" placeholder="성명 / 회사명" /></td>
                   <th style="width: 15%;">연락처</th>
-                  <td style="width: 35%;"><input type="text" id="trCustPhone" class="tr-inp" placeholder="010-0000-0000" /></td>
+                  <td style="width: 35%;"><input type="text" id="trCustPhone" class="tr-inp" /></td>
                 </tr>
                 <tr>
                   <th>주소</th>
@@ -558,7 +574,7 @@
                 </tr>
                 <tr>
                   <th>이메일</th>
-                  <td><input type="email" id="trCustEmail" class="tr-inp" placeholder="example@email.com" /></td>
+                  <td><input type="email" id="trCustEmail" class="tr-inp" /></td>
                   <th>선호 연락 방식</th>
                   <td>
                     <div class="tr-radio-group">
@@ -586,7 +602,7 @@
                     </div>
                   </td>
                   <th style="width: 15%;">제조사/모델명</th>
-                  <td style="width: 35%;"><input type="text" id="trDeviceModel" class="tr-inp" placeholder="예: 삼성 갤럭시북 / 조립PC" /></td>
+                  <td style="width: 35%;"><input type="text" id="trDeviceModel" class="tr-inp" /></td>
                 </tr>
                 <tr>
                   <th>일련 번호</th>
@@ -613,27 +629,27 @@
             <div class="tr-sec">
               <div class="tr-sec-title">3. 증상 / 요청 사항</div>
               <div class="tr-box-content">
-                <textarea id="trSymptoms" class="tr-textarea" rows="3" placeholder="고객 불편 증상 및 출장 요청 사항을 기재하세요 (예: 전원 불량, 윈도우 부팅 불가, 서멀 재도포 및 내부 청소 요청 등)"></textarea>
+                <textarea id="trSymptoms" class="tr-textarea" rows="3" placeholder="고객 불편 증상 및 출장 요청 사항을 기재하세요"></textarea>
               </div>
             </div>
 
             <!-- 4. 진단 및 작업 내역 -->
             <div class="tr-sec">
-              <div class="tr-sec-title-row">
-                <div class="tr-sec-title">4. 진단 및 작업 내역</div>
-                <button type="button" id="trBtnAddTaskRow" class="btn btn-xs btn-outline no-print">＋ 작업 행 추가</button>
-              </div>
+              <div class="tr-sec-title">4. 진단 및 작업 내역</div>
               <table class="tr-table" id="trTasksTable">
                 <thead>
                   <tr>
-                    <th style="width: 8%;">번호</th>
-                    <th style="width: 47%;">작업 내용</th>
-                    <th style="width: 25%;">부품 / 자재</th>
-                    <th style="width: 20%;">비용 (원)</th>
+                    <th style="width: 7%;">번호</th>
+                    <th style="width: 43%;">작업 내용</th>
+                    <th style="width: 24%;">부품 / 자재</th>
+                    <th style="width: 18%;">비용 (원)</th>
+                    <th class="tr-col-act no-print" style="width: 8%;">
+                      <button type="button" id="trBtnAddTaskRow" class="btn btn-xs btn-outline" title="작업 행을 하나 더 추가합니다">＋ 행추가</button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody id="trTasksTbody">
-                  <!-- 동적 행 생성 -->
+                  <!-- 동적 행 생성 (기본 5행, 맨 끝 칸에 ✕ 삭제) -->
                 </tbody>
                 <tfoot>
                   <tr class="tr-total-row">
@@ -641,6 +657,7 @@
                     <td style="text-align: right; font-weight: bold;">
                       <span id="trTotalCostDisplay" class="tr-total-cost">0</span> 원
                     </td>
+                    <td class="tr-col-act no-print"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -668,7 +685,7 @@
                   <th>담당 기술자</th>
                   <td><input type="text" id="trTechnician" class="tr-inp" value="김대건" placeholder="담당 기사명" /></td>
                   <th>보증 기간</th>
-                  <td><input type="text" id="trWarrantyPeriod" class="tr-inp" value="3개월" placeholder="예: 1개월 / 3개월 / 무상 1년" /></td>
+                  <td><input type="text" id="trWarrantyPeriod" class="tr-inp" value="3개월" /></td>
                 </tr>
               </table>
             </div>
@@ -748,6 +765,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261020a"></script>
+  <script src="/static/js/app.js?v=20261020c"></script>
 </body>
 </html>
