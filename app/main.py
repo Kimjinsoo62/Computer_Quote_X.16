@@ -45,10 +45,11 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
+from app import quote_archive
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
-    backup_task_report,
+    backup_all_task_reports,
     build_task_report_excel,
     choose_backup_dir_dialog,
     create_task_report,
@@ -56,6 +57,7 @@ from app.task_report import (
     get_backup_dir,
     get_task_report,
     load_task_reports,
+    open_in_explorer,
     set_backup_dir,
     update_task_report,
 )
@@ -618,8 +620,10 @@ def download_excel(
     index: int = -1,
     cto: str = "",
     forms: str = "",
+    archive: int = 0,
 ):
     """index 를 주면 해당 카드 한 건만, 없으면 카테고리 전체를 내려준다.
+    archive=1 이면 만든 파일을 견적서 보관함(quote_archive/)에도 저장한다(화면은 카드별 다운로드에 붙인다).
 
     forms 를 주면(예: "3" 또는 "1,3") 견적요약 없이 해당 폼 시트만 담는다. 화면은 서식마다 따로 호출해
     파일을 하나씩 받는다. 카드 한 건 + 서식 하나면 시트 이름은 "견   적   서" 가 된다.
@@ -772,16 +776,112 @@ def download_excel(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     ascii_name = f"quote_{cat}{f'_{index}' if index >= 0 else ''}{form_tag}_{result.quote_date}.xlsx"
-    utf_name = quote(f"{kr_label}_{result.quote_date}.xlsx")
+    display_name = f"{kr_label}_{result.quote_date}.xlsx"
+    utf_name = quote(display_name)
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{utf_name}'
+        ),
+    }
+    if archive:
+        first = result.quotes[0] if result.quotes else None
+        info = load_quote_info()
+        entry = quote_archive.add_entry(
+            buf.getvalue(),
+            filename=display_name,
+            meta={
+                "kind": "card" if index >= 0 else "list",
+                "category": cat,
+                "model": (first.model if (first and index >= 0) else result.series) or "",
+                "tab_label": (first.tab_label or first.tier) if (first and index >= 0) else "",
+                "quotes": len(result.quotes),
+                "forms": selected_forms,
+                "margin": None if is_apple else margin_pct,
+                "total": first.total if (first and index >= 0) else None,
+                "customer": (info.get("customer_name") or "").strip(),
+                "quote_date": result.quote_date,
+            },
+        )
+        headers["X-Archive-Id"] = entry["id"]
     return Response(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 견적서 보관함 API (quote_archive/)
+# ---------------------------------------------------------------------------
+@app.get("/api/quotes/archive")
+def api_quote_archive_list():
+    return {"entries": quote_archive.list_entries(), **quote_archive.archive_stats()}
+
+
+@app.get("/api/quotes/archive/{entry_id}/download")
+def api_quote_archive_download(entry_id: str):
+    entry = quote_archive.get_entry(entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="보관된 견적서를 찾을 수 없습니다.")
+    path = quote_archive.entry_path(entry)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="보관 파일이 삭제되었거나 옮겨졌습니다.")
+    return Response(
+        content=path.read_bytes(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": (
-                f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{utf_name}'
+                f'attachment; filename="archive_{entry_id}.xlsx"; '
+                f"filename*=UTF-8''{quote(entry['filename'])}"
             ),
         },
     )
+
+
+@app.put("/api/quotes/archive/{entry_id}")
+def api_quote_archive_update(entry_id: str, payload: dict = Body(...)):
+    entry = quote_archive.update_note(entry_id, str(payload.get("note") or ""))
+    if not entry:
+        raise HTTPException(status_code=404, detail="보관된 견적서를 찾을 수 없습니다.")
+    return {"ok": True, "entry": entry}
+
+
+@app.delete("/api/quotes/archive/{entry_id}")
+def api_quote_archive_delete(entry_id: str):
+    if not quote_archive.delete_entry(entry_id):
+        raise HTTPException(status_code=404, detail="보관된 견적서를 찾을 수 없습니다.")
+    return {"ok": True}
+
+
+@app.post("/api/quotes/archive/backup")
+def api_quote_archive_backup(payload: dict = Body(default={})):
+    """보관함 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장. 폴더가 없으면 428."""
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요."})
+    try:
+        result = quote_archive.backup_archive(folder)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"백업 파일을 쓰지 못했습니다: {e}") from e
+    return {"ok": True, **result}
+
+
+@app.post("/api/quotes/archive/open-dir")
+def api_quote_archive_open_dir(payload: dict = Body(default={})):
+    """보관 폴더(quote_archive/)를 서버 PC 화면의 탐색기로 연다. 항목 id 를 주면 그 파일을 선택한 상태로."""
+    quote_archive.ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    target = str(quote_archive.ARCHIVE_DIR)
+    entry = quote_archive.get_entry(str(payload.get("id") or ""))
+    if entry and quote_archive.entry_path(entry).is_file():
+        target = str(quote_archive.entry_path(entry))
+    try:
+        if not open_in_explorer(target):
+            raise HTTPException(status_code=404, detail=f"경로를 찾을 수 없습니다: {target}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"탐색기를 열지 못했습니다: {e}") from e
+    return {"ok": True, "opened": target}
 
 
 # ---------------------------------------------------------------------------
@@ -822,18 +922,36 @@ def api_task_report_backup_choose_dir(payload: dict = Body(default={})):
 
 
 @app.post("/api/task-reports/backup")
-def api_task_report_backup(data: dict = Body(...)):
-    """현재 작성 중인 내역서를 백업 폴더에 Excel + JSON 으로 저장. 폴더가 없으면 428."""
+def api_task_report_backup(payload: dict = Body(default={})):
+    """저장된 작업내역서 전체를 백업 폴더에 ZIP 한 파일로 저장. 폴더가 없으면 428."""
     folder = get_backup_dir()
     if not folder:
         raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요."})
     try:
-        result = backup_task_report(data, folder)
+        result = backup_all_task_reports(folder)
     except FileNotFoundError as e:
         raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"백업 파일을 쓰지 못했습니다: {e}") from e
     return {"ok": True, **result}
+
+
+@app.post("/api/task-reports/backup/open-dir")
+def api_task_report_backup_open_dir(payload: dict = Body(default={})):
+    """백업 폴더(또는 방금 만든 ZIP 을 선택한 상태)를 서버 PC 화면의 탐색기로 연다."""
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더가 지정되어 있지 않습니다."})
+    target = str(payload.get("path") or "")
+    # 백업 폴더 안의 파일만 선택해 연다(다른 경로는 폴더만 연다).
+    if not target or not Path(target).resolve().parent == Path(folder).resolve():
+        target = folder
+    try:
+        if not open_in_explorer(target):
+            raise HTTPException(status_code=404, detail=f"경로를 찾을 수 없습니다: {target}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"탐색기를 열지 못했습니다: {e}") from e
+    return {"ok": True, "opened": target}
 
 
 @app.get("/api/task-reports/{report_id}")

@@ -9,3 +9,4 @@ __pycache__/
 quote_info.json
 task_reports.json
 app_settings.json
+quote_archive/

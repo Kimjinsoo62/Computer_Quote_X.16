@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import subprocess
 import uuid
+import zipfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -325,20 +327,67 @@ $owner.Close()
     return out.splitlines()[-1].strip() if out else ""
 
 
-def backup_task_report(data: dict[str, Any], folder: str) -> dict[str, Any]:
-    """현재 내역서를 folder 에 작업내역서_{고객}_{접수번호}.xlsx / .json 으로 저장한다(같은 이름은 덮어쓴다)."""
+def _report_stem(report: dict[str, Any]) -> str:
+    cust = safe_filename_part(report.get("customer_name") or "고객")
+    doc_no = safe_filename_part(report.get("doc_no") or report.get("id") or "")
+    return f"작업내역서_{cust}_{doc_no}" if doc_no else f"작업내역서_{cust}"
+
+
+def backup_all_task_reports(folder: str) -> dict[str, Any]:
+    """저장된 작업내역서 전체를 folder 에 ZIP 한 파일로 모은다.
+
+    ZIP 안: task_reports.json(원본 DB 그대로, 복구용) + 내역서마다 Excel 한 장.
+    파일 이름은 작업내역서_백업_YYYYMMDD_HHMMSS.zip 이라 백업할 때마다 새 파일이 쌓인다.
+    """
     target = Path(folder)
     if not target.is_dir():
         raise FileNotFoundError(f"백업 폴더를 찾을 수 없습니다: {folder}")
-    report = dict(data)
-    if "total_cost" not in report:
-        report["total_cost"] = sum(int(t.get("cost", 0) or 0) for t in report.get("tasks", []))
-    cust = safe_filename_part(report.get("customer_name") or "고객")
-    doc_no = safe_filename_part(report.get("doc_no") or datetime.now().strftime("%Y%m%d"))
-    stem = f"작업내역서_{cust}_{doc_no}"
-    xlsx_path = target / f"{stem}.xlsx"
-    json_path = target / f"{stem}.json"
-    xlsx_path.write_bytes(build_task_report_excel(report).getvalue())
-    report["backed_up_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"dir": str(target), "files": [xlsx_path.name, json_path.name]}
+    reports = load_task_reports()
+    stamp = datetime.now()
+    stem = f"작업내역서_백업_{stamp.strftime('%Y%m%d_%H%M%S')}"
+    zip_path = target / f"{stem}.zip"
+    seq = 2
+    while zip_path.exists():  # 같은 초에 두 번 눌러도 앞 파일을 덮어쓰지 않는다
+        zip_path = target / f"{stem}_{seq}.zip"
+        seq += 1
+    used: set[str] = set()
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(
+            "task_reports.json",
+            json.dumps(reports, ensure_ascii=False, indent=2),
+        )
+        for rep in reports:
+            stem = _report_stem(rep)
+            name = stem
+            if name in used:  # 같은 고객·접수번호가 둘이면 id 로 구분
+                name = f"{stem}_{rep.get('id', '')}"
+            used.add(name)
+            zf.writestr(f"excel/{name}.xlsx", build_task_report_excel(rep).getvalue())
+        zf.writestr(
+            "README.txt",
+            "컴퓨존 견적 자동화 - 작업내역서 백업\n"
+            f"백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"내역서 수: {len(reports)}건\n\n"
+            "task_reports.json : 프로그램이 저장한 원본 데이터(복구할 때 프로그램 폴더의 같은 이름 파일에 덮어쓰기)\n"
+            "excel/            : 내역서마다 Excel 한 장\n",
+        )
+    return {
+        "dir": str(target),
+        "file": zip_path.name,
+        "path": str(zip_path),
+        "count": len(reports),
+        "size": zip_path.stat().st_size,
+    }
+
+
+def open_in_explorer(path: str) -> bool:
+    """서버 PC 화면에서 탐색기를 연다. 파일이면 그 파일을 선택한 상태로, 폴더면 폴더를 연다."""
+    p = Path(path)
+    if p.is_file():
+        # 리스트로 넘기면 "/select,경로" 전체가 따옴표로 묶여 탐색기가 무시한다 → 문자열로 넘긴다.
+        subprocess.Popen(f'explorer /select,"{p}"')
+        return True
+    if p.is_dir():
+        os.startfile(str(p))  # type: ignore[attr-defined]
+        return True
+    return False

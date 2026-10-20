@@ -229,6 +229,7 @@ async function downloadWithBusy(url, options = {}, fallbackName = "download.xlsx
     const star = cd.match(/filename\*=UTF-8''([^;]+)/i);
     const plain = cd.match(/filename="([^"]+)"/i);
     const name = star ? decodeURIComponent(star[1]) : plain ? plain[1] : fallbackName;
+    if (res.headers.get("X-Archive-Id")) loadQuoteArchive();
     const blob = await res.blob();
     const href = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -908,7 +909,8 @@ initExcelFormsUI();
 
 /** 전체(index=-1) 또는 카드 한 건(index>=0)의 Excel. 서식을 골랐으면 서식마다 파일을 하나씩 차례로 받는다. */
 async function downloadExcelFiles(index = -1) {
-  const base = `/api/download/excel?${excelQueryParams(index)}`;
+  // 카드 한 건(최종 선택) 다운로드는 견적서 보관함에도 저장한다.
+  const base = `/api/download/excel?${excelQueryParams(index)}${index >= 0 ? "&archive=1" : ""}`;
   if (!excelForms.length) {
     await downloadWithBusy(base, {}, "견적서.xlsx", "견적서 Excel 생성 중…");
     return;
@@ -991,7 +993,7 @@ async function downloadFormFromGallery(n) {
   if (!EXCEL_FORM_LABELS[n]) return;
   closeFormGallery();
   const index = formGalleryIndex;
-  const base = `/api/download/excel?${excelQueryParams(index)}`;
+  const base = `/api/download/excel?${excelQueryParams(index)}${index >= 0 ? "&archive=1" : ""}`;
   await downloadWithBusy(
     `${base}&forms=${n}`,
     {},
@@ -1008,6 +1010,186 @@ $("#excelFormsPreview")?.addEventListener("click", () => {
   toggleExcelFormsPop(false);
   openFormGallery(-1);
 });
+
+// ---------- 견적서 보관함 (카드별로 내려받은 최종 견적서 저장 · 관리 · 백업) ----------
+let qaEntries = [];
+
+function qaFormsLabel(e) {
+  const forms = Array.isArray(e.forms) ? e.forms : [];
+  const formText = forms.length ? forms.map((n) => `폼${n}`).join("·") : "전체";
+  const marginText = e.margin === null || e.margin === undefined ? "" : (e.margin === 0 ? " · 원가" : ` · ${e.margin}%`);
+  return formText + marginText;
+}
+
+function qaFmtSize(bytes) {
+  const kb = Math.max(1, Math.round((bytes || 0) / 1024));
+  return kb >= 1024 ? `${(kb / 1024).toFixed(1)}MB` : `${kb}KB`;
+}
+
+function renderQuoteArchive() {
+  const tbody = $("#qaTbody");
+  if (!tbody) return;
+  const q = ($("#qaSearch")?.value || "").trim().toLowerCase();
+  const rows = qaEntries.filter((e) => {
+    if (!q) return true;
+    return [e.customer, e.model, e.filename, e.note, e.tab_label].some((v) => String(v || "").toLowerCase().includes(q));
+  });
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:14px;">${qaEntries.length ? "검색 결과가 없습니다." : "보관된 견적서가 없습니다. 카드의 📥 엑셀 견적서를 내려받으면 여기에 쌓입니다."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((e) => `
+    <tr class="${e.missing ? "is-missing" : ""}" data-id="${escapeHtml(e.id)}">
+      <td>${escapeHtml(e.saved_at || "")}</td>
+      <td>${escapeHtml(e.customer || "-")}</td>
+      <td>${escapeHtml(e.tab_label ? `${e.tab_label} · ` : "")}${escapeHtml(e.model || "")}${e.kind === "list" ? ` <span class="qa-stats">(목록 ${e.quotes || 0}건)</span>` : ""}</td>
+      <td>${escapeHtml(qaFormsLabel(e))}</td>
+      <td class="qa-num">${e.total ? fmt(e.total) : "-"}</td>
+      <td class="qa-file" title="${escapeHtml(e.filename || "")}">${escapeHtml(e.filename || "")}<br /><span>${qaFmtSize(e.size)}${e.missing ? " · 파일 없음" : ""}</span></td>
+      <td><input type="text" class="tr-inp qa-note" value="${escapeHtml(e.note || "")}" placeholder="메모" data-id="${escapeHtml(e.id)}" /></td>
+      <td>
+        <div class="qa-actions">
+          <button type="button" class="btn btn-sm btn-primary qa-dl" data-id="${escapeHtml(e.id)}" ${e.missing ? "disabled" : ""} title="보관된 파일을 다시 내려받습니다">📥 받기</button>
+          <button type="button" class="btn btn-sm btn-outline qa-open" data-id="${escapeHtml(e.id)}" ${e.missing ? "disabled" : ""} title="서버 PC 탐색기에서 이 파일을 선택해 보여 줍니다">📂</button>
+          <button type="button" class="btn btn-sm btn-outline qa-del" data-id="${escapeHtml(e.id)}" title="보관함에서 삭제">✕</button>
+        </div>
+      </td>
+    </tr>`).join("");
+}
+
+async function loadQuoteArchive() {
+  try {
+    const res = await fetch("/api/quotes/archive", { cache: "no-store" });
+    const data = await res.json();
+    qaEntries = data.entries || [];
+    const stats = $("#qaStats");
+    if (stats) stats.textContent = `${data.count || 0}건 · ${qaFmtSize(data.size)} · 보관 폴더: ${data.dir || ""}`;
+    const badge = $("#quoteArchiveCount");
+    if (badge) {
+      badge.textContent = String(data.count || 0);
+      badge.classList.toggle("hidden", !(data.count > 0));
+    }
+  } catch (_) {
+    qaEntries = [];
+  }
+  renderQuoteArchive();
+}
+
+function openQuoteArchive() {
+  show($("#quoteArchiveModal"));
+  loadQuoteArchive();
+  loadTrBackupDir();
+}
+
+function closeQuoteArchive() {
+  hide($("#quoteArchiveModal"));
+}
+
+async function qaDownload(id) {
+  const e = qaEntries.find((x) => x.id === id);
+  await downloadWithBusy(`/api/quotes/archive/${encodeURIComponent(id)}/download`, {}, e?.filename || "견적서.xlsx", "보관된 견적서 내려받는 중…");
+}
+
+async function qaDelete(id) {
+  const e = qaEntries.find((x) => x.id === id);
+  if (!confirm(`보관함에서 삭제할까요?\n${e?.filename || id}\n(보관 파일도 함께 지워집니다)`)) return;
+  try {
+    const res = await fetch(`/api/quotes/archive/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("삭제에 실패했습니다.");
+  } catch (err) {
+    alert(err.message);
+  }
+  loadQuoteArchive();
+}
+
+async function qaSaveNote(id, note) {
+  try {
+    await fetch(`/api/quotes/archive/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    });
+    const e = qaEntries.find((x) => x.id === id);
+    if (e) e.note = note;
+  } catch (_) {}
+}
+
+async function qaOpenDir(id = "") {
+  let res;
+  try {
+    res = await postJsonRaw("/api/quotes/archive/open-dir", id ? { id } : {});
+  } catch (_) {
+    alert("서버에 연결할 수 없습니다.");
+    return;
+  }
+  if (!res.ok) alert(res.data?.detail?.message || res.data?.detail || "폴더를 열지 못했습니다.");
+}
+
+async function qaBackup() {
+  const btn = $("#qaBtnBackup");
+  if (btn) btn.disabled = true;
+  try {
+    if (!trBackupDir) {
+      const dir = await chooseTrBackupDir();
+      if (!dir) return;
+    }
+    showBusy("보관함을 ZIP 으로 묶는 중…");
+    let res;
+    try {
+      res = await postJsonRaw("/api/quotes/archive/backup", {});
+    } finally {
+      hideBusy();
+    }
+    if (res.status === 428) {
+      trBackupDir = "";
+      syncTrBackupDirUI();
+      const dir = await chooseTrBackupDir();
+      if (!dir) return;
+      showBusy("보관함을 ZIP 으로 묶는 중…");
+      try {
+        res = await postJsonRaw("/api/quotes/archive/backup", {});
+      } finally {
+        hideBusy();
+      }
+    }
+    if (!res.ok || !res.data.ok) {
+      const d = res.data?.detail;
+      throw new Error((d && (d.message || d)) || "백업에 실패했습니다.");
+    }
+    const openIt = confirm(
+      `✔ 백업 완료 — 견적서 ${res.data.count}건\n\n파일: ${res.data.path}\n크기: ${qaFmtSize(res.data.size)}\n\n백업 폴더를 열까요? (서버 PC 화면의 탐색기에 열립니다)`
+    );
+    if (openIt) await openTrBackupDir(res.data.path);
+  } catch (e) {
+    alert("백업 오류: " + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+$("#btnQuoteArchive")?.addEventListener("click", openQuoteArchive);
+$("#quoteArchiveClose")?.addEventListener("click", closeQuoteArchive);
+$("#quoteArchiveModal")?.addEventListener("click", (e) => {
+  if (e.target === $("#quoteArchiveModal")) closeQuoteArchive();
+});
+$("#qaSearch")?.addEventListener("input", renderQuoteArchive);
+$("#qaBtnRefresh")?.addEventListener("click", loadQuoteArchive);
+$("#qaBtnOpenDir")?.addEventListener("click", () => qaOpenDir());
+$("#qaBtnBackup")?.addEventListener("click", qaBackup);
+$("#qaTbody")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-id]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.classList.contains("qa-dl")) qaDownload(id);
+  else if (btn.classList.contains("qa-open")) qaOpenDir(id);
+  else if (btn.classList.contains("qa-del")) qaDelete(id);
+});
+$("#qaTbody")?.addEventListener("change", (e) => {
+  const inp = e.target.closest("input.qa-note");
+  if (inp) qaSaveNote(inp.dataset.id, inp.value.trim());
+});
+// 시작 시 보관 건수 배지
+loadQuoteArchive();
 
 /** 모니터·무선키보드 공통 표시: "{이름} (포함됨|제외됨)" */
 function extraStatusText(included) {
@@ -1395,6 +1577,8 @@ document.addEventListener("keydown", (e) => {
   if (excelPop && !excelPop.classList.contains("hidden")) toggleExcelFormsPop(false);
   const galleryModal = $("#formGalleryModal");
   if (galleryModal && !galleryModal.classList.contains("hidden")) closeFormGallery();
+  const archiveModal = $("#quoteArchiveModal");
+  if (archiveModal && !archiveModal.classList.contains("hidden")) closeQuoteArchive();
 });
 
 $("#quoteInfoSave")?.addEventListener("click", async () => {
@@ -3249,8 +3433,30 @@ function syncTrBackupDirUI() {
   const backupBtn = $("#trBtnBackup");
   if (backupBtn) {
     backupBtn.title = trBackupDir
-      ? `현재 내역서를 백업 폴더에 Excel + JSON 으로 저장합니다\n${trBackupDir}`
-      : "현재 내역서를 백업 폴더에 Excel + JSON 으로 저장합니다. 폴더가 없으면 먼저 고릅니다";
+      ? `저장된 작업내역서 전체를 ZIP 한 파일로 백업합니다\n백업 폴더: ${trBackupDir}`
+      : "저장된 작업내역서 전체를 ZIP 한 파일로 백업합니다. 폴더가 없으면 먼저 고릅니다";
+  }
+  const openBtn = $("#trBtnBackupOpen");
+  if (openBtn) {
+    openBtn.title = trBackupDir
+      ? `백업 폴더를 서버 PC 화면의 탐색기로 엽니다\n${trBackupDir}`
+      : "백업 폴더가 아직 없습니다. 💽 백업 또는 📁 로 먼저 지정하세요";
+    openBtn.disabled = !trBackupDir;
+  }
+}
+
+/** 백업 폴더(또는 ZIP 파일 선택 상태)를 서버 PC 탐색기로 연다. */
+async function openTrBackupDir(path = "") {
+  let res;
+  try {
+    res = await postJsonRaw("/api/task-reports/backup/open-dir", path ? { path } : {});
+  } catch (_) {
+    alert("서버에 연결할 수 없습니다.");
+    return;
+  }
+  if (!res.ok) {
+    const d = res.data?.detail;
+    alert((d && (d.message || d)) || "폴더를 열지 못했습니다.");
   }
 }
 
@@ -3306,12 +3512,6 @@ async function chooseTrBackupDir() {
 }
 
 async function backupTrReport() {
-  const data = getTrFormData();
-  if (!data.customer_name) {
-    alert("고객명을 입력해 주세요.");
-    $("#trCustName")?.focus();
-    return;
-  }
   const btn = $("#trBtnBackup");
   if (btn) btn.disabled = true;
   try {
@@ -3319,10 +3519,10 @@ async function backupTrReport() {
       const dir = await chooseTrBackupDir();
       if (!dir) return;
     }
-    showBusy("백업 파일 생성 중…");
+    showBusy("저장된 작업내역서를 ZIP 으로 묶는 중…");
     let res;
     try {
-      res = await postJsonRaw("/api/task-reports/backup", data);
+      res = await postJsonRaw("/api/task-reports/backup", {});
     } finally {
       hideBusy();
     }
@@ -3332,9 +3532,9 @@ async function backupTrReport() {
       syncTrBackupDirUI();
       const dir = await chooseTrBackupDir();
       if (!dir) return;
-      showBusy("백업 파일 생성 중…");
+      showBusy("저장된 작업내역서를 ZIP 으로 묶는 중…");
       try {
-        res = await postJsonRaw("/api/task-reports/backup", data);
+        res = await postJsonRaw("/api/task-reports/backup", {});
       } finally {
         hideBusy();
       }
@@ -3343,7 +3543,11 @@ async function backupTrReport() {
       const d = res.data?.detail;
       throw new Error((d && (d.message || d)) || "백업에 실패했습니다.");
     }
-    alert(`✔ 백업 완료\n폴더: ${res.data.dir}\n${(res.data.files || []).join("\n")}`);
+    const kb = Math.max(1, Math.round((res.data.size || 0) / 1024));
+    const openIt = confirm(
+      `✔ 백업 완료 — 저장된 내역서 ${res.data.count}건\n\n파일: ${res.data.path}\n크기: ${kb}KB\n\n백업 폴더를 열까요? (서버 PC 화면의 탐색기에 열립니다)`
+    );
+    if (openIt) await openTrBackupDir(res.data.path);
   } catch (e) {
     alert("백업 오류: " + e.message);
   } finally {
@@ -3388,6 +3592,7 @@ $("#trBtnNew")?.addEventListener("click", () => {
 $("#trBtnAddTaskRow")?.addEventListener("click", addTrTaskRow);
 $("#trBtnSave")?.addEventListener("click", saveTrForm);
 $("#trBtnBackup")?.addEventListener("click", backupTrReport);
+$("#trBtnBackupOpen")?.addEventListener("click", () => openTrBackupDir());
 $("#trBtnBackupDir")?.addEventListener("click", async () => {
   const dir = await chooseTrBackupDir();
   if (dir) alert(`백업 폴더: ${dir}`);

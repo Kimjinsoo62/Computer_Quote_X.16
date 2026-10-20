@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261020c" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261020e" />
 </head>
 <body>
   <nav class="nav">
@@ -76,6 +76,9 @@
               <button type="button" id="excelFormsClose" class="btn btn-primary btn-sm">닫기</button>
             </div>
           </div>
+          <button type="button" id="btnQuoteArchive" class="btn btn-outline btn-sm" title="카드별로 내려받은 최종 견적서가 자동으로 보관됩니다. 목록 · 다시 받기 · 메모 · 삭제 · ZIP 백업">
+            <span class="btn-icon">🗃️</span> 보관함 <span id="quoteArchiveCount" class="archive-count hidden">0</span>
+          </button>
           <button id="btnQuoteInfo" class="btn btn-outline btn-sm blink-warning" title="견적처·공급자 정보를 관리합니다">
             <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">견적 정보</span>
           </button>
@@ -467,6 +470,44 @@
 
 
   <!-- 다나와 비슷한 PC 모달 -->
+  <div id="quoteArchiveModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal quote-archive-modal" role="dialog" aria-labelledby="quoteArchiveTitle">
+      <div class="modal-header">
+        <h3 id="quoteArchiveTitle">🗃️ 견적서 보관함</h3>
+        <button type="button" class="modal-close btn-modal-close" id="quoteArchiveClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <div class="qa-toolbar">
+          <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="고객 · 모델 · 파일명 · 메모 검색" />
+          <span id="qaStats" class="qa-stats"></span>
+          <div class="qa-toolbar-right">
+            <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
+            <button type="button" id="qaBtnBackup" class="btn btn-outline btn-sm" title="보관함 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
+            <button type="button" id="qaBtnRefresh" class="btn btn-outline btn-sm">🔄 새로고침</button>
+          </div>
+        </div>
+        <p class="qa-hint">카드별 <strong>📥 엑셀 견적서</strong>와 <strong>🖼️ 서식 미리보기</strong>로 내려받은 파일이 자동으로 여기에 보관됩니다. 상단 전체 다운로드는 보관하지 않습니다.</p>
+        <div class="tr-list-table-wrap qa-table-wrap">
+          <table class="tr-list-table qa-table">
+            <thead>
+              <tr>
+                <th style="width: 118px;">저장 시각</th>
+                <th>고객</th>
+                <th>모델 / 구분</th>
+                <th style="width: 110px;">서식 · 마진</th>
+                <th style="width: 90px;">금액</th>
+                <th>파일명</th>
+                <th style="width: 160px;">메모</th>
+                <th style="width: 190px;">관리</th>
+              </tr>
+            </thead>
+            <tbody id="qaTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="formGalleryModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal form-gallery-modal" role="dialog" aria-labelledby="formGalleryTitle">
       <div class="modal-header">
@@ -517,7 +558,8 @@
             </div>
             <div class="tr-toolbar-right">
               <button type="button" id="trBtnBackupDir" class="btn btn-outline btn-sm" title="백업 폴더를 바꿉니다 (폴더 선택 창은 서버 PC 화면에 뜹니다)">📁</button>
-              <button type="button" id="trBtnBackup" class="btn btn-outline btn-sm" title="현재 내역서를 백업 폴더에 Excel + JSON 으로 저장합니다. 폴더가 없으면 먼저 고릅니다">💽 백업</button>
+              <button type="button" id="trBtnBackupOpen" class="btn btn-outline btn-sm" title="백업 폴더를 서버 PC 화면의 탐색기로 엽니다">📂</button>
+              <button type="button" id="trBtnBackup" class="btn btn-outline btn-sm" title="저장된 작업내역서 전체를 백업 폴더에 ZIP 한 파일로 저장합니다. 폴더가 없으면 먼저 고릅니다">💽 백업</button>
               <button type="button" id="trBtnSave" class="btn btn-primary btn-sm">💾 저장하기</button>
               <button type="button" id="trBtnPrint" class="btn btn-accent btn-sm">🖨️ 종이 인쇄 / PDF 출력</button>
               <button type="button" id="trBtnExcel" class="btn btn-outline btn-sm">📥 Excel 다운로드</button>
@@ -765,6 +807,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261020c"></script>
+  <script src="/static/js/app.js?v=20261020e"></script>
 </body>
 </html>
