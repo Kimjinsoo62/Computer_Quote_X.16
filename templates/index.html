@@ -47,8 +47,8 @@
       <div class="hero-topbar-left">
         <p class="hero-date">견적 기준일: <strong id="quoteDate">{{ today }}</strong></p>
         <div class="hero-topbar-actions">
-          <a id="btnDownloadExcel" class="btn btn-outline btn-sm" href="/api/download/excel">
-            <span class="btn-icon">📥</span> Excel 다운로드
+          <a id="btnDownloadExcel" class="btn btn-outline btn-sm" href="/api/download/excel" title="현재 목록 전체를 한 파일로 받습니다 (견적요약 비교표 + 카드마다 폼1~8). 서식을 골라 두었으면 서식마다 파일 하나씩. 최종 견적서 1건은 카드의 [엑셀 견적서]를 쓰세요">
+            <span class="btn-icon">📥</span> 전체 비교 Excel
           </a>
           <button type="button" id="btnExcelForms" class="btn btn-outline btn-sm excel-forms-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="excelFormsPop"
                   title="Excel에 담을 견적서 서식(폼1~폼8)을 고릅니다. 여러 개를 고르면 서식마다 파일이 따로 내려옵니다. 이 기기(브라우저)에만 저장됩니다">
