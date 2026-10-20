@@ -14,7 +14,10 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import MergedCell
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles.colors import Color
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
 from openpyxl.worksheet.properties import PageSetupProperties
@@ -564,6 +567,37 @@ def build_excel(
     fit = Alignment(horizontal="left", vertical="center", shrink_to_fit=True, indent=1)
     fit_center = Alignment(horizontal="center", vertical="center", shrink_to_fit=True)
 
+    # 공급자 상호에 거는 제품 페이지(컴퓨존/Apple) 하이퍼링크. 상호 글자만 파란 밑줄(링크 모양)로 두고
+    # 같은 칸의 나머지 글자(대표자·연락처 등)는 원래 글꼴을 유지해 폼 모양을 바꾸지 않는다.
+    LINK_RGB = "0563C1"
+    link_font = Font(name=FONT_NAME, size=10, color=LINK_RGB, underline="single")
+
+    def _url_tooltip(url: str) -> str:
+        return "Apple 공식몰 제품 페이지 열기" if "apple.com" in url else "컴퓨존 제품 페이지 열기"
+
+    def _link_cell(cell, url: str, font: Font | None = None) -> None:
+        """셀에 제품 페이지 링크를 건다. url 이 비면(수집 실패 등) 아무것도 바꾸지 않는다."""
+        if not url:
+            return
+        cell.hyperlink = Hyperlink(ref=cell.coordinate, target=url, tooltip=_url_tooltip(url))
+        if font is not None:
+            cell.font = font
+
+    def _name_link_text(prefix: str, name: str, suffix: str, url: str, *, size: float = 10, bold: bool = False):
+        """'접두 + 상호 + 접미' 한 칸짜리 문구에서 상호 부분만 링크 모양으로 만든 서식 있는 텍스트.
+
+        url 이 없으면 보통 문자열을 돌려줘 기존 모양 그대로 둔다. 접두·접미는 셀 글꼴을 그대로 따른다.
+        """
+        if not url or not name:
+            return f"{prefix}{name}{suffix}"
+        run = TextBlock(
+            InlineFont(rFont=FONT_NAME, sz=size, b=bold, u="single", color=Color(rgb="FF" + LINK_RGB)),
+            name,
+        )
+        # TextBlock 은 문자열과 == 비교가 안 되므로 빈 접두·접미는 따로 걸러 넣는다.
+        pieces = ([prefix] if prefix else []) + [run] + ([suffix] if suffix else [])
+        return CellRichText(pieces)
+
     # ---------------- 견적요약 시트 ----------------
     ws_sum = wb.create_sheet("견적요약", 0)
     _apply_page_setup(ws_sum, one_page=False)
@@ -733,6 +767,11 @@ def build_excel(
         cust_name = info["customer_name"]
         cust_mgr = info["customer_manager"]
         cust_phone = (info.get("customer_phone") or "").strip()
+        cust_email = (info.get("customer_email") or "").strip()
+        # 견적처 연락처 칸은 행을 늘리지 않고 '전화 / 이메일' 로 한 칸에 넣는다(칸은 shrink_to_fit 이라 줄바꿈 없음).
+        cust_contact = " / ".join(x for x in (cust_phone, cust_email) if x)
+        # 영문 요약형 폼(3·4·5)의 'To:' 한 줄용: 담당자 / 전화 / 이메일
+        cust_line = " / ".join(x for x in (cust_mgr, cust_phone, cust_email) if x)
         sup_addr = (info.get("supplier_address") or "").strip()
         sup_biz_no = (info.get("supplier_business_number") or "").strip()
         sup_name = info["supplier_name"]
@@ -758,7 +797,7 @@ def build_excel(
         for rn, lk, lv, rk, rv in [
             (3, "견 적 처", cust_name, "공 급 자", sup_name),
             (4, "담 당 자", cust_mgr, "담 당 자", sup_mgr),
-            (5, "연 락 처", cust_phone, "연 락 처", sup_phone),
+            (5, "연 락 처", cust_contact, "연 락 처", sup_phone),
             (6, "견 적 일", date_str, "이 메 일", sup_email),
         ]:
             ws1[f"A{rn}"] = lk
@@ -773,6 +812,7 @@ def build_excel(
             # 값은 좌우 모두 왼쪽 정렬로 통일한다(한쪽만 가운데면 행마다 글자 위치가 어긋난다).
             for col in ("B", "C", "F"):
                 _set_cell(ws1[f"{col}{rn}"], font=normal, border=border, alignment=fit)
+        _link_cell(ws1["F3"], q.url, font=link_font)  # 공급자 상호 → 제품 페이지
 
         ws1["A7"] = "합계금액 (부가세포함)"
         ws1["D7"] = q.total
@@ -804,6 +844,7 @@ def build_excel(
         ws2["D1"] = sup_name
         ws2.merge_cells("D1:F1")
         _set_cell(ws2["D1"], font=Font(name=FONT_NAME, size=14, bold=True), alignment=right)
+        _link_cell(ws2["D1"], q.url, font=Font(name=FONT_NAME, size=14, bold=True, color=LINK_RGB, underline="single"))
         ws2["D2"] = f"Tel: {sup_phone} / 담당: {sup_mgr}"
         ws2.merge_cells("D2:F2")
         _set_cell(ws2["D2"], font=normal, alignment=right)
@@ -816,7 +857,11 @@ def build_excel(
         ws2.merge_cells("A3:C3")
         _set_cell(ws2["A3"], font=bold, alignment=left)
         ws2["A4"] = cust_name
-        ws2["A5"] = f"Attn: {cust_mgr}" + (f"  /  Tel: {cust_phone}" if cust_phone else "")
+        ws2["A5"] = (
+            f"Attn: {cust_mgr}"
+            + (f" / Tel: {cust_phone}" if cust_phone else "")
+            + (f" / E-mail: {cust_email}" if cust_email else "")
+        )
         ws2["E4"] = "DATE:"
         ws2["F4"] = date_str
         ws2.merge_cells("A4:C4")
@@ -898,13 +943,14 @@ def build_excel(
             for cc in range(1, 7):
                 ws3.cell(row=rr, column=cc).fill = PatternFill("solid", fgColor="FDF2E9")
                 
-        ws3["A3"] = f"To: {cust_name} ({cust_mgr})"
+        ws3["A3"] = f"To: {cust_name} ({cust_line})"
         ws3.merge_cells("A3:C3")
         _set_cell(ws3["A3"], font=bold, alignment=fit)
         
-        ws3["A4"] = f"From: {sup_name} ({sup_mgr} / {sup_phone})"
+        ws3["A4"] = _name_link_text("From: ", sup_name, f" ({sup_mgr} / {sup_phone})", q.url)
         ws3.merge_cells("A4:C4")
         _set_cell(ws3["A4"], font=normal, alignment=fit)
+        _link_cell(ws3["A4"], q.url)
         if sup_email:
             ws3["A5"] = f"E-mail: {sup_email}"
             ws3.merge_cells("A5:C5")
@@ -974,16 +1020,18 @@ def build_excel(
         _set_cell(ws4["A3"], font=normal, alignment=right)
         
         _draw_box(ws4, 4, 1, 5, 6, outer=Side(style="medium", color="27AE60"))
-        ws4["A4"] = f" 수신 (To) : {cust_name} - {cust_mgr} 귀하"
-        ws4["A5"] = (
-            f" 발신 (From): {sup_name} - {sup_mgr} ({sup_phone}"
-            + (f" / {sup_email}" if sup_email else "")
-            + ")"
+        ws4["A4"] = f" 수신 (To) : {cust_name} - {cust_mgr} 귀하" + (f" ({cust_contact})" if cust_contact else "")
+        ws4["A5"] = _name_link_text(
+            " 발신 (From): ",
+            sup_name,
+            f" - {sup_mgr} ({sup_phone}" + (f" / {sup_email}" if sup_email else "") + ")",
+            q.url,
         )
         ws4.merge_cells("A4:C4")
         ws4.merge_cells("A5:C5")
         _set_cell(ws4["A4"], font=bold, alignment=fit)
         _set_cell(ws4["A5"], font=normal, alignment=fit)
+        _link_cell(ws4["A5"], q.url)
         ws4.row_dimensions[4].height = INFO_ROW_HEIGHT
         ws4.row_dimensions[5].height = INFO_ROW_HEIGHT
         
@@ -1044,9 +1092,9 @@ def build_excel(
         ws5["A1"].font = Font(name=FONT_NAME, size=22, bold=True, color="34495E")
         ws5["A1"].alignment = center
         
-        ws5["A4"] = f"To: {cust_name} ({cust_mgr})"
+        ws5["A4"] = f"To: {cust_name} ({cust_line})"
         ws5.merge_cells("A4:C4")
-        _set_cell(ws5["A4"], font=bold, alignment=left)
+        _set_cell(ws5["A4"], font=bold, alignment=fit)
         
         ws5["E4"] = f"Date: {date_str}"
         ws5.merge_cells("E4:F4")
@@ -1099,11 +1147,14 @@ def build_excel(
         
         r += 2
         ws5.merge_cells(f"A{r}:F{r}")
-        ws5[f"A{r}"] = (
-            f"{sup_name} / 담당: {sup_mgr} / Tel: {sup_phone}"
-            + (f" / E-mail: {sup_email}" if sup_email else "")
+        ws5[f"A{r}"] = _name_link_text(
+            "",
+            sup_name,
+            f" / 담당: {sup_mgr} / Tel: {sup_phone}" + (f" / E-mail: {sup_email}" if sup_email else ""),
+            q.url,
         )
         _set_cell(ws5[f"A{r}"], font=normal, alignment=center)
+        _link_cell(ws5[f"A{r}"], q.url)
 
         # =====================================================================
         # [폼 6] 조립PC 실무형 (Custom Built PC) - 조립컴퓨터_견적서_양식
@@ -1133,7 +1184,7 @@ def build_excel(
             ("견적 일자", date_str, "상 호 명", sup_name),
             ("고 객 명", cust_name, "대 표 자", sup_mgr),
             ("담 당 자", cust_mgr, "연 락 처", sup_phone),
-            ("연 락 처", cust_phone, "이 메 일", sup_email),
+            ("연 락 처", cust_contact, "이 메 일", sup_email),
             ("용    도", "□ 게이밍   □ 사무/인터넷   □ 영상편집", "매장주소", sup_addr),
         ]
         for rn, (lk, lv, rk, rv) in enumerate(info6, 3):
@@ -1152,6 +1203,7 @@ def build_excel(
                     _set_cell(c, font=bold, alignment=fit_center)
                 else:
                     _set_cell(c, font=normal, alignment=fit)
+        _link_cell(ws6["E3"], q.url, font=link_font)  # 상호명 → 제품 페이지
 
         # 2. 조립 부품 세부 견적 내역
         ws6["A8"] = "2. 조립 부품 세부 견적 내역"
@@ -1253,16 +1305,18 @@ def build_excel(
         ws7["A4"] = f"견적일 : {date_str}"
         ws7["A5"] = f"수  신 : {cust_name} ({cust_mgr})"
         ws7["A6"] = f"연락처 : {cust_phone}" if cust_phone else None
+        ws7["A7"] = f"이메일 : {cust_email}" if cust_email else None  # 7행은 원래 비어 있던 줄
         ws7["A8"] = "아래와 같이 견적하여 드립니다."
-        for rn in (4, 5, 6, 8):
+        for rn in (4, 5, 6, 7, 8):
             ws7.merge_cells(f"A{rn}:C{rn}")
         _set_cell(ws7["A4"], font=bold, alignment=fit)
         _set_cell(ws7["A5"], font=Font(name=FONT_NAME, size=11, bold=True), alignment=fit)
         _set_cell(ws7["A6"], font=normal, alignment=fit)
+        _set_cell(ws7["A7"], font=normal, alignment=fit)
         _set_cell(ws7["A8"], font=normal, alignment=fit)
 
         sup_rows7 = [
-            ("상    호", f"{sup_name} (대표: {sup_mgr})"),
+            ("상    호", _name_link_text("", sup_name, f" (대표: {sup_mgr})", q.url)),
             ("등록번호", sup_biz_no),
             ("연 락 처", sup_phone),
             ("이 메 일", sup_email),
@@ -1281,6 +1335,7 @@ def build_excel(
                     _set_cell(c, font=bold, alignment=fit_center)
                 else:
                     _set_cell(c, font=normal, alignment=fit)
+        _link_cell(ws7["E4"], q.url)  # 상호 → 제품 페이지
 
         # 메인 요약표
         ws7.row_dimensions[10].height = 22.0
@@ -1403,13 +1458,13 @@ def build_excel(
         cust_rows8 = [
             ("상 호", cust_name),
             ("담 당", f"{cust_mgr} 귀하" if cust_mgr else ""),
-            ("연락처", cust_phone),
+            ("연락처", cust_contact),
             ("내 용", q.model or "컴퓨터 견적 외"),
             ("일 자", date_str),
         ]
         sup_rows8 = [
             ("등록번호", sup_biz_no),
-            ("상    호", f"{sup_name} (대표: {sup_mgr})" if sup_mgr else sup_name),
+            ("상    호", _name_link_text("", sup_name, f" (대표: {sup_mgr})" if sup_mgr else "", q.url)),
             ("사 업 장", sup_addr),
             ("연 락 처", sup_phone),
             ("이 메 일", sup_email),
@@ -1430,6 +1485,7 @@ def build_excel(
                     _set_cell(c, font=bold, alignment=fit_center)
                 else:
                     _set_cell(c, font=normal, alignment=fit)
+        _link_cell(ws8["F4"], q.url)  # 상호 → 제품 페이지
 
         # 우측 공급자 박스 라벨 (D3:D7 병합)
         ws8.merge_cells("D3:D7")

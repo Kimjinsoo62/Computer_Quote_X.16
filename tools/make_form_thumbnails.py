@@ -56,7 +56,8 @@ def sample_result() -> TodayQuotesResult:
         tab_label="고급형",
         description="서식 미리보기용 샘플 견적",
         product_no=0,
-        url="",
+        # 공급자 상호에 걸리는 제품 페이지 링크(파란 밑줄)가 썸네일에도 보이도록 샘플 URL 을 넣는다
+        url="https://www.compuzone.co.kr/",
         quote_date="2026-01-01",
         parts=parts,
         parts_subtotal=total,
