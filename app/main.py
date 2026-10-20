@@ -21,7 +21,7 @@ from app.config import (
     PRICE_SEARCH_LIMIT,
     QUOTE_DISCLAIMER,
 )
-from app.excel_export import build_excel
+from app.excel_export import FORM_LABELS, build_excel
 from app.image_lookup import find_representative_image
 from app.apple_scraper import fetch_apple_cto_live, fetch_apple_cto_options
 from app import coupang_search
@@ -132,6 +132,27 @@ def _margin_filename_label(margin: int, is_apple: bool) -> str:
     if margin == 0:
         return "_원가견적"
     return f"_마진{margin}"
+
+
+# 카드 한 건을 서식 하나로 뽑을 때의 시트 이름(공백 3칸 포함, 폼1 제목과 같다).
+SINGLE_SHEET_TITLE = "견   적   서"
+
+
+def _parse_forms(forms: str) -> list[int]:
+    """'1,3' → [1, 3]. 비어 있으면 [] (전체). 1~8 밖의 값은 400."""
+    if not (forms or "").strip():
+        return []
+    picked: list[int] = []
+    for token in forms.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if not token.isdigit() or int(token) not in FORM_LABELS:
+            raise HTTPException(status_code=400, detail=f"서식 번호가 올바르지 않습니다: {token}")
+        n = int(token)
+        if n not in picked:
+            picked.append(n)
+    return picked
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -592,8 +613,14 @@ def download_excel(
     price_type: str = "assembled",
     index: int = -1,
     cto: str = "",
+    forms: str = "",
 ):
-    """index 를 주면 해당 카드 한 건만, 없으면 카테고리 전체를 내려준다."""
+    """index 를 주면 해당 카드 한 건만, 없으면 카테고리 전체를 내려준다.
+
+    forms 를 주면(예: "3" 또는 "1,3") 견적요약 없이 해당 폼 시트만 담는다. 화면은 서식마다 따로 호출해
+    파일을 하나씩 받는다. 카드 한 건 + 서식 하나면 시트 이름은 "견   적   서" 가 된다.
+    """
+    selected_forms = _parse_forms(forms)
     include_monitor = bool(monitor)
     include_keyboard = bool(keyboard)
     include_ram32 = bool(ram32)
@@ -725,8 +752,22 @@ def download_excel(
             kr_label = f"{'_'.join(name_parts)}_{kr_label}"
 
     kind_label = "" if is_apple else margin_kind_label(margin_pct)
-    buf = build_excel(result, hide_unit_prices=hide_prices, quote_kind_label=kind_label)
-    ascii_name = f"quote_{cat}{f'_{index}' if index >= 0 else ''}_{result.quote_date}.xlsx"
+    form_tag = ""
+    if selected_forms:
+        kr_label += "_" + "_".join(f"폼{n}{FORM_LABELS[n]}" for n in selected_forms)
+        form_tag = "_form" + "-".join(str(n) for n in selected_forms)
+    single_title = SINGLE_SHEET_TITLE if (index >= 0 and len(selected_forms) == 1) else ""
+    try:
+        buf = build_excel(
+            result,
+            hide_unit_prices=hide_prices,
+            quote_kind_label=kind_label,
+            forms=selected_forms or None,
+            single_sheet_title=single_title,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    ascii_name = f"quote_{cat}{f'_{index}' if index >= 0 else ''}{form_tag}_{result.quote_date}.xlsx"
     utf_name = quote(f"{kr_label}_{result.quote_date}.xlsx")
     return Response(
         content=buf.getvalue(),

@@ -66,7 +66,7 @@ Mac 계열(`MAC_TIER_PREFIXES`)은 공식몰 구성하기 API로 **실시간 CTO
 
 ### Excel
 
-`excel_export.build_excel()`은 `견적요약` 시트 1장 + **견적(카드)마다** 폼1~8 시트 8장을 만든다. 폼 시트는 A4 세로 1페이지 강제(`_apply_page_setup`, 견적요약만 예외), 총 열 너비는 `MAX_TOTAL_COL_WIDTH = 88`을 `_assert_print_width()`가 검사한다. 열을 추가하면 다른 열 너비를 줄여 88 안에 맞춘다. 행 높이는 `_auto_fit_row_heights()`가 글자 폭 추정으로 계산한다.
+`excel_export.build_excel()`은 `견적요약` 시트 1장 + **견적(카드)마다** 폼1~8 시트 8장을 만든다. `forms=[1,3]`을 주면 전부 만든 뒤 `_keep_selected_forms()`가 견적요약과 선택 외 폼 시트를 지운다(폼 생성 코드는 한 함수에 순서대로 있어 쪼개지 않는다). 시트 하나만 남는 카드별 추출은 `main.SINGLE_SHEET_TITLE`("견   적   서", 공백 3칸)로 이름을 바꾼다. 화면은 서식마다 `forms=N`으로 따로 호출해 파일을 하나씩 받고, 선택은 브라우저 localStorage `excelForms`에만 저장한다(종료 시 캐시 삭제에서 보존). 폼 시트는 A4 세로 1페이지 강제(`_apply_page_setup`, 견적요약만 예외), 총 열 너비는 `MAX_TOTAL_COL_WIDTH = 88`을 `_assert_print_width()`가 검사한다. 열을 추가하면 다른 열 너비를 줄여 88 안에 맞춘다. 행 높이는 `_auto_fit_row_heights()`가 글자 폭 추정으로 계산한다.
 
 ## 반드시 지켜야 할 불변 조건
 

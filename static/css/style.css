@@ -1699,3 +1699,28 @@ html.calc-html body {
   font-size: 1rem; color: var(--text);
 }
 .spinner.spinner-sm { width: 14px; height: 14px; border-width: 2px; margin: 0; flex: none; }
+
+/* Excel 견적서 서식 선택(폼1~8). .hero 가 overflow:hidden 이라 팝오버는 fixed 로 띄우고 JS 가 위치를 잡는다. */
+.excel-forms-btn .excel-forms-caret { font-size: 0.9em; opacity: 0.8; }
+.excel-forms-btn.has-forms { border-color: var(--accent); color: var(--accent); }
+.excel-forms-pop {
+  position: fixed; z-index: 180; min-width: 340px; max-width: 420px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: var(--shadow); padding: 6px 8px; font-size: 1rem;
+}
+.excel-forms-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
+.excel-forms-hint { color: var(--muted); font-size: 0.95rem; }
+.excel-forms-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 6px;
+}
+.excel-forms-grid label {
+  display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 4px;
+  cursor: pointer; white-space: nowrap; user-select: none;
+}
+.excel-forms-grid label:hover { background: var(--card2); }
+.excel-forms-grid input { accent-color: var(--primary); margin: 0; width: 12px; height: 12px; }
+.excel-forms-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--border);
+}
+.excel-forms-foot .excel-forms-hint { flex: 1; text-align: center; }

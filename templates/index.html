@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261011g" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261020a" />
 </head>
 <body>
   <nav class="nav">
@@ -50,6 +50,31 @@
           <a id="btnDownloadExcel" class="btn btn-outline btn-sm" href="/api/download/excel">
             <span class="btn-icon">📥</span> Excel 다운로드
           </a>
+          <button type="button" id="btnExcelForms" class="btn btn-outline btn-sm excel-forms-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="excelFormsPop"
+                  title="Excel에 담을 견적서 서식(폼1~폼8)을 고릅니다. 여러 개를 고르면 서식마다 파일이 따로 내려옵니다. 이 기기(브라우저)에만 저장됩니다">
+            <span class="btn-icon">🗂️</span> <span id="excelFormsLabel">서식: 전체</span> <span class="excel-forms-caret">▾</span>
+          </button>
+          <div id="excelFormsPop" class="excel-forms-pop hidden" role="dialog" aria-label="Excel 견적서 서식 선택" aria-hidden="true">
+            <div class="excel-forms-head">
+              <strong>Excel 견적서 서식</strong>
+              <span class="excel-forms-hint">여러 개 선택 시 서식마다 파일 1개 · 견적요약 시트 제외</span>
+            </div>
+            <div class="excel-forms-grid">
+              <label><input type="checkbox" data-form="1" /> 폼1 표준</label>
+              <label><input type="checkbox" data-form="2" /> 폼2 인보이스</label>
+              <label><input type="checkbox" data-form="3" /> 폼3 보고서</label>
+              <label><input type="checkbox" data-form="4" /> 폼4 명세서</label>
+              <label><input type="checkbox" data-form="5" /> 폼5 리테일</label>
+              <label><input type="checkbox" data-form="6" /> 폼6 조립PC</label>
+              <label><input type="checkbox" data-form="7" /> 폼7 데스크탑</label>
+              <label><input type="checkbox" data-form="8" /> 폼8 클래식</label>
+            </div>
+            <div class="excel-forms-foot">
+              <button type="button" id="excelFormsAll" class="btn btn-outline btn-sm" title="선택을 모두 지우고 지금처럼 견적요약 + 폼1~8을 한 파일로 받습니다">전체(기본)</button>
+              <span id="excelFormsStatus" class="excel-forms-hint"></span>
+              <button type="button" id="excelFormsClose" class="btn btn-primary btn-sm">닫기</button>
+            </div>
+          </div>
           <button id="btnQuoteInfo" class="btn btn-outline btn-sm blink-warning" title="견적처·공급자 정보를 관리합니다">
             <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">견적 정보</span>
           </button>
@@ -723,6 +748,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261011g"></script>
+  <script src="/static/js/app.js?v=20261020a"></script>
 </body>
 </html>

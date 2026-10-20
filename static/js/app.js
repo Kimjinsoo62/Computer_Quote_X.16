@@ -238,8 +238,10 @@ async function downloadWithBusy(url, options = {}, fallbackName = "download.xlsx
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
+    return true;
   } catch (e) {
     alert("다운로드 오류: " + e.message);
+    return false;
   } finally {
     hideBusy();
   }
@@ -787,7 +789,130 @@ function ctoUpgradesForExcel(index = -1) {
 
 /** 카드 한 건만 견적서로 내려받는다. 상단 버튼(전체)은 그대로 둔다. */
 function downloadOneExcel(index) {
-  downloadWithBusy(`/api/download/excel?${excelQueryParams(index)}`, {}, "견적서.xlsx", "견적서 Excel 생성 중…");
+  downloadExcelFiles(index);
+}
+
+// ---------- Excel 견적서 서식 선택 (폼1~8) ----------
+// 선택은 이 기기의 브라우저(localStorage)에만 저장된다. 비어 있으면 "전체" = 견적요약 + 폼1~8 한 파일.
+// 서식을 고르면 견적요약 없이 서식마다 파일을 하나씩 내려받는다(서버 forms= 를 서식별로 따로 호출).
+const EXCEL_FORMS_KEY = "excelForms";
+const EXCEL_FORM_LABELS = { 1: "표준", 2: "인보이스", 3: "보고서", 4: "명세서", 5: "리테일", 6: "조립PC", 7: "데스크탑", 8: "클래식" };
+
+function loadExcelForms() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(EXCEL_FORMS_KEY) || "[]");
+    if (!Array.isArray(arr)) return [];
+    return [...new Set(arr.map(Number).filter((n) => EXCEL_FORM_LABELS[n]))].sort((a, b) => a - b);
+  } catch (_) {
+    return [];
+  }
+}
+let excelForms = loadExcelForms();
+
+function saveExcelForms() {
+  try {
+    if (excelForms.length) localStorage.setItem(EXCEL_FORMS_KEY, JSON.stringify(excelForms));
+    else localStorage.removeItem(EXCEL_FORMS_KEY);
+  } catch (_) {}
+}
+
+function excelFormsButtonText() {
+  if (!excelForms.length) return "서식: 전체";
+  if (excelForms.length <= 3) return "서식: " + excelForms.map((n) => `폼${n}`).join("·");
+  return `서식: 폼 ${excelForms.length}종`;
+}
+
+function syncExcelFormsUI() {
+  const label = $("#excelFormsLabel");
+  if (label) label.textContent = excelFormsButtonText();
+  $("#btnExcelForms")?.classList.toggle("has-forms", excelForms.length > 0);
+  document.querySelectorAll("#excelFormsPop input[data-form]").forEach((cb) => {
+    cb.checked = excelForms.includes(Number(cb.dataset.form));
+  });
+  const status = $("#excelFormsStatus");
+  if (status) {
+    status.textContent = excelForms.length
+      ? `선택 ${excelForms.length}개 → 파일 ${excelForms.length}개 (견적요약 제외)`
+      : "전체: 견적요약 + 폼1~8 한 파일";
+  }
+}
+
+function positionExcelFormsPop() {
+  const btn = $("#btnExcelForms");
+  const pop = $("#excelFormsPop");
+  if (!btn || !pop) return;
+  const r = btn.getBoundingClientRect();
+  const width = pop.offsetWidth || 340;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(r.bottom + 4)}px`;
+}
+
+function toggleExcelFormsPop(open) {
+  const pop = $("#excelFormsPop");
+  const btn = $("#btnExcelForms");
+  if (!pop) return;
+  const willOpen = open === undefined ? pop.classList.contains("hidden") : !!open;
+  if (willOpen) {
+    syncExcelFormsUI();
+    show(pop);
+    positionExcelFormsPop();
+  } else {
+    hide(pop);
+  }
+  btn?.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+function initExcelFormsUI() {
+  const btn = $("#btnExcelForms");
+  const pop = $("#excelFormsPop");
+  if (!btn || !pop) return;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleExcelFormsPop();
+  });
+  pop.addEventListener("click", (e) => e.stopPropagation());
+  pop.addEventListener("change", (e) => {
+    const cb = e.target.closest("input[data-form]");
+    if (!cb) return;
+    const n = Number(cb.dataset.form);
+    excelForms = cb.checked ? [...new Set([...excelForms, n])].sort((a, b) => a - b) : excelForms.filter((x) => x !== n);
+    saveExcelForms();
+    syncExcelFormsUI();
+  });
+  $("#excelFormsAll")?.addEventListener("click", () => {
+    excelForms = [];
+    saveExcelForms();
+    syncExcelFormsUI();
+  });
+  $("#excelFormsClose")?.addEventListener("click", () => toggleExcelFormsPop(false));
+  document.addEventListener("click", () => {
+    if (!pop.classList.contains("hidden")) toggleExcelFormsPop(false);
+  });
+  window.addEventListener("resize", () => {
+    if (!pop.classList.contains("hidden")) positionExcelFormsPop();
+  });
+  syncExcelFormsUI();
+}
+initExcelFormsUI();
+
+/** 전체(index=-1) 또는 카드 한 건(index>=0)의 Excel. 서식을 골랐으면 서식마다 파일을 하나씩 차례로 받는다. */
+async function downloadExcelFiles(index = -1) {
+  const base = `/api/download/excel?${excelQueryParams(index)}`;
+  if (!excelForms.length) {
+    await downloadWithBusy(base, {}, "견적서.xlsx", "견적서 Excel 생성 중…");
+    return;
+  }
+  for (let i = 0; i < excelForms.length; i++) {
+    const n = excelForms[i];
+    const ok = await downloadWithBusy(
+      `${base}&forms=${n}`,
+      {},
+      `견적서_폼${n}.xlsx`,
+      `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중 (${i + 1}/${excelForms.length})…`
+    );
+    if (!ok) break; // 서버가 죽었으면 남은 서식마다 오류창을 띄우지 않는다
+  }
 }
 
 /** 모니터·무선키보드 공통 표시: "{이름} (포함됨|제외됨)" */
@@ -1172,6 +1297,8 @@ document.addEventListener("keydown", (e) => {
   if (trModal && !trModal.classList.contains("hidden")) closeTrModal();
   if (netModal && !netModal.classList.contains("hidden")) hide(netModal);
   if (danawaModal && !danawaModal.classList.contains("hidden")) hide(danawaModal);
+  const excelPop = $("#excelFormsPop");
+  if (excelPop && !excelPop.classList.contains("hidden")) toggleExcelFormsPop(false);
 });
 
 $("#quoteInfoSave")?.addEventListener("click", async () => {
@@ -2351,8 +2478,16 @@ async function clearClientCaches() {
   try {
     sessionStorage.clear();
   } catch (_) {}
+  // Excel 서식 선택은 캐시가 아니라 이 기기의 설정이므로 종료 때 지우지 않는다.
+  let keepForms = null;
+  try {
+    keepForms = localStorage.getItem(EXCEL_FORMS_KEY);
+  } catch (_) {}
   try {
     localStorage.clear();
+  } catch (_) {}
+  try {
+    if (keepForms) localStorage.setItem(EXCEL_FORMS_KEY, keepForms);
   } catch (_) {}
   try {
     if (typeof caches !== "undefined") {
@@ -2502,8 +2637,8 @@ $("#btnUpdateApp")?.addEventListener("click", updateApp);
 
 $("#btnDownloadExcel")?.addEventListener("click", (e) => {
   e.preventDefault();
-  // href 는 CTO 적용 전 값일 수 있으므로 누를 때 다시 만든다.
-  downloadWithBusy(`/api/download/excel?${excelQueryParams()}`, {}, "견적서.xlsx", "견적서 Excel 생성 중…");
+  // href 는 CTO 적용 전 값일 수 있으므로 누를 때 다시 만든다. 서식 선택이 있으면 서식별 파일로 받는다.
+  downloadExcelFiles();
 });
 
 // ==========================================================================

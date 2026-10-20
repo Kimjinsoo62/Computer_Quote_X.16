@@ -8,6 +8,7 @@
   - 폰트: 맑은 고딕 (본문 10pt, 제목 24pt bold)
 """
 import math
+import re
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -399,13 +400,54 @@ SUMMARY_COL_LIMITS = {
 }
 
 
+# 폼 번호 → 시트 이름 라벨. main.py 의 파일명과 화면 서식 선택 메뉴가 같은 표를 쓴다.
+FORM_LABELS = {
+    1: "표준",
+    2: "인보이스",
+    3: "보고서",
+    4: "명세서",
+    5: "리테일",
+    6: "조립PC",
+    7: "데스크탑",
+    8: "클래식",
+}
+# 상세 시트 이름 "표준형 폼3(보고서)" 또는 중복 접미사가 붙은 "표준형 폼3(보고서)1" 에서 폼 번호를 읽는다.
+_FORM_NO_RE = re.compile(r"폼([1-8])\(")
+
+
+def _form_no(sheet_title: str) -> int | None:
+    m = _FORM_NO_RE.search(sheet_title or "")
+    return int(m.group(1)) if m else None
+
+
+def _keep_selected_forms(wb, ws_sum, forms: list[int], single_sheet_title: str) -> None:
+    """선택한 폼 시트만 남긴다. 견적요약은 뺀다.
+
+    시트 하나만 남고 single_sheet_title 이 있으면 그 이름으로 바꾼다(카드 한 건 추출용 "견   적   서").
+    """
+    keep = {int(n) for n in forms}
+    for ws in list(wb.worksheets):
+        if ws is ws_sum or _form_no(ws.title) not in keep:
+            wb.remove(ws)
+    if not wb.worksheets:
+        raise ValueError("선택한 서식에 해당하는 견적서 시트가 없습니다.")
+    if single_sheet_title and len(wb.worksheets) == 1:
+        wb.worksheets[0].title = single_sheet_title[:31]
+
+
 def build_excel(
     result: TodayQuotesResult | None = None,
     *,
     hide_unit_prices: bool = False,
     quote_kind_label: str = "",
+    forms: list[int] | None = None,
+    single_sheet_title: str = "",
 ) -> BytesIO:
-    """hide_unit_prices=True 면 품목별 단가·금액을 비우고 합계만 남긴다."""
+    """hide_unit_prices=True 면 품목별 단가·금액을 비우고 합계만 남긴다.
+
+    forms 를 주면(예: [1, 3]) 견적요약을 빼고 해당 폼 시트만 남긴다. 비우면 지금처럼 전체를 만든다.
+    single_sheet_title 은 시트가 하나만 남을 때 그 시트의 이름이다.
+    """
     if result is None:
         result = fetch_today_quotes()
 
@@ -1396,6 +1438,10 @@ def build_excel(
             _set_cell(ws8[f"A{r8}"], font=Font(name=FONT_NAME, size=9), alignment=left)
             ws8.row_dimensions[r8].height = 18.0
             r8 += 1
+
+    # 서식 선택: 선택한 폼 시트만 남긴다(계좌·행 높이 처리 전에 지워 남은 시트만 손댄다).
+    if forms:
+        _keep_selected_forms(wb, ws_sum, forms, single_sheet_title)
 
     # 견적 정보의 입금 계좌를 각 견적서 시트 맨 아래에 붙인다(계좌번호가 있을 때만).
     bank_line = bank_account_line(info)
