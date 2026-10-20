@@ -192,7 +192,12 @@ def _draw_box(
     outer: Side | None = None,
     inner: Side | None = None,
 ) -> None:
-    """영역 외곽/내부 선으로 사각형 박스를 그린다."""
+    """영역 외곽/내부 선으로 사각형 박스를 그린다.
+
+    병합(merge_cells)을 모두 끝낸 뒤에 호출한다. openpyxl 은 병합 시 왼쪽 위 셀 외의 셀을 새로 만들어
+    테두리를 지우고 왼쪽 위 셀의 테두리(안쪽 선)를 가장자리에 복사하므로, 먼저 그리면 박스 오른쪽·아래 선이
+    안쪽 선으로 바뀌어 폼3·폼4 상단 박스가 깨진다.
+    """
     outer = outer or Side(style="medium", color="333333")
     inner = inner or Side(style="thin", color="999999")
     for rr in range(r1, r2 + 1):
@@ -203,6 +208,18 @@ def _draw_box(
                 top=outer if rr == r1 else inner,
                 bottom=outer if rr == r2 else inner,
             )
+
+
+def _border_range(ws, ref: str, border: Border) -> None:
+    """병합 범위(예: "A7:C7") 안의 모든 셀에 같은 테두리를 건다. 병합한 뒤에 호출한다.
+
+    엑셀은 병합 셀의 테두리를 범위 안 셀 하나하나의 테두리로 그린다. openpyxl 은 merge_cells() 시점에만
+    왼쪽 위 셀의 테두리를 가장자리 셀에 복사하므로, 병합한 뒤 왼쪽 위 셀에만 테두리를 주면
+    오른쪽·아래 선이 빠진다(합계 행 아래 선이 첫 칸에서 끊기는 증상).
+    """
+    for row in ws[ref]:
+        for cell in row:
+            cell.border = border
 
 
 def _apply_page_setup(ws, one_page: bool = True) -> None:
@@ -223,29 +240,63 @@ def _apply_page_setup(ws, one_page: bool = True) -> None:
     ws.print_options.horizontalCentered = True
 
 
-# 행 높이 추정용 글자 폭(열 너비 단위). 엑셀 실제 줄바꿈 위치에 맞춰 보정한 값이다.
-# 한글을 2칸, 공백·괄호를 1칸으로 세면 한 줄짜리 품명도 두 줄로 잡혀 행이 불필요하게 커지고
-# 그만큼 견적서가 두 장으로 밀려난다.
-_NARROW_CHARS = set("()[]/.,:;|'`!il1-")
-_WIDE_ASCII = set("mwMW@%&")
-# 열 너비 중 실제로 글자가 들어가는 비율(셀 안쪽 여백 포함). 엑셀 출력물에서 잰 값.
-WRAP_CAPACITY_RATIO = 0.86
+# 행 높이 추정용 글자 폭(열 너비 단위, 맑은 고딕 10pt). Excel 의 행 자동 맞춤으로 품명·구분 문자열 40여 개가
+# "한 줄에 들어가는 최소 열 너비"를 재고 글자 종류별로 최소제곱 맞춤한 값이다(오차 ±2%).
+# 예전 값(한글 1.8 · 대문자 1.15 에 여유 비율 0.86)은 실제보다 10~25% 커서 한 줄짜리 구분·품명도 두 줄로
+# 계산돼 행 높이가 들쭉날쭉해지고 견적서가 두 장으로 밀렸다.
+_WIDE_LETTERS = set("MW")
+_WIDE_LOWER = set("mw")
+_NARROW_LETTERS = set("Iijl")
+_DOT_CHARS = set(".,:;'`!·")
+_BRACKET_CHARS = set("()[]{}|")
+_SLASH_CHARS = set("-/\\")
+# 폭이 유난히 다른 기호(URL 의 @ & % = ? 등). 잰 값 그대로 둔다.
+_SYMBOL_WIDTHS = {
+    "@": 1.66, "&": 1.33, "%": 1.41, "×": 1.17, "₩": 1.25,
+    "=": 1.16, "+": 1.16, "~": 1.16, "<": 1.16, ">": 1.16, "#": 1.0,
+    "?": 0.75, "_": 0.75, "*": 0.66, '"': 0.66, "°": 0.66,
+}
+# 추정 오차 여유(3%). 모자라게 잡으면 마지막 줄이 잘려 보이므로 넉넉한 쪽으로만 둔다.
+WRAP_CAPACITY_RATIO = 0.97
+# 굵은 글꼴은 같은 글자가 약 6% 넓다.
+BOLD_WIDTH_FACTOR = 1.06
 
 
 def _char_width(ch: str) -> float:
-    if ord(ch) > 127:
-        return 1.8 if ("\uac00" <= ch <= "\ud7a3" or "\u3130" <= ch <= "\u318f") else 1.0
+    if "\uac00" <= ch <= "\ud7a3" or "\u3130" <= ch <= "\u318f":
+        return 1.68
     if ch == " ":
+        return 0.55
+    if ch in _SYMBOL_WIDTHS:
+        return _SYMBOL_WIDTHS[ch]
+    if ch in _DOT_CHARS:
+        return 0.33
+    if ch in _BRACKET_CHARS:
         return 0.5
-    if ch in _NARROW_CHARS:
-        return 0.6
-    if ch.isupper() or ch in _WIDE_ASCII:
-        return 1.15
-    return 1.0
+    if ch in _SLASH_CHARS:
+        return 0.66
+    if ch in _NARROW_LETTERS:
+        return 0.43
+    if ch in _WIDE_LETTERS:
+        return 1.54
+    if ch in _WIDE_LOWER:
+        return 1.45
+    if ord(ch) > 127:
+        # 전각 기호(【 】 ■ ▶ 등)는 한글과 같은 폭, 그 외 기호는 영문보다 조금 넓게 본다
+        return 1.68 if ord(ch) >= 0x2E80 else 1.2
+    if ch.isdigit():
+        return 0.99
+    if ch.isupper():
+        return 1.02
+    return 0.91
 
 
 def _wrap_tokens(segment: str) -> list[str]:
-    """엑셀 줄바꿈 단위: 영문·숫자 낱말은 통째로, 한글 등은 글자 단위, 공백은 따로."""
+    """엑셀 줄바꿈 단위: 영문·숫자 낱말은 통째로, 한글 등은 글자 단위, 공백은 따로.
+
+    엑셀은 하이픈(-) 뒤에서도 줄을 바꾸므로 하이픈까지를 한 낱말로 끊는다. 공백 없는 긴 URL 이
+    'buy-mac/macbook-pro' 처럼 하이픈마다 끊겨 글자 단위로 채울 때보다 한 줄 더 나오는 경우를 맞춘다.
+    """
     tokens: list[str] = []
     word = ""
     for ch in segment:
@@ -254,6 +305,9 @@ def _wrap_tokens(segment: str) -> list[str]:
                 tokens.append(word)
                 word = ""
             tokens.append(ch)
+        elif ch == "-":
+            tokens.append(word + ch)
+            word = ""
         else:
             word += ch
     if word:
@@ -317,6 +371,8 @@ def _auto_fit_row_heights(ws) -> None:
         size = (cell.font.size if cell.font and cell.font.size else 10.0)
         scale = max(size / 10.0, 0.8)
         usable = max(width * WRAP_CAPACITY_RATIO, 1.0) / scale
+        if cell.font and cell.font.bold:
+            usable /= BOLD_WIDTH_FACTOR  # 굵은 글꼴은 폭만 넓어지고 줄 높이는 같다
         lines = min(_lines_needed(cell.value, usable), MAX_WRAP_LINES)
         return lines * LINE_HEIGHT * scale + ROW_PADDING
 
@@ -709,7 +765,7 @@ def build_excel(
             amt_val = _maybe_price(part.amount) if has_amount else None
             values = [
                 (1, part.no, center, None),
-                (2, part.category, center, None),
+                (2, part.category, fit_center, None),  # 구분은 짧은 고정 문구라 줄바꿈 대신 축소(행 높이 고정)
                 (3, part.name, left, None),
                 (4, part.qty if part.qty > 0 else None, center, None),
                 (5, unit_val, right, "#,##0"),
@@ -735,8 +791,9 @@ def build_excel(
         if t_fill:
             ws[f"A{r}"].fill = t_fill
             ws[f"F{r}"].fill = t_fill
-        _set_cell(ws[f"A{r}"], font=bold_fnt, border=tbl_border, alignment=center)
+        _set_cell(ws[f"A{r}"], font=bold_fnt, alignment=center)
         _set_cell(ws[f"F{r}"], font=bold_fnt, border=tbl_border, alignment=right, number_format="#,##0")
+        _border_range(ws, f"A{r}:E{r}", tbl_border)  # 병합 칸 전체에 테두리(아래 선이 A 칸에서 끊기지 않게)
 
         r += 2
         ws.merge_cells(f"A{r}:F{r}")
@@ -820,9 +877,11 @@ def build_excel(
         ws1.merge_cells("D7:F7")
         for ref in ("A7", "D7"):
             ws1[ref].fill = PatternFill("solid", fgColor="FFF2CC")
-        _set_cell(ws1["A7"], font=Font(name=FONT_NAME, size=12, bold=True), border=border, alignment=center)
-        _set_cell(ws1["D7"], font=Font(name=FONT_NAME, size=14, bold=True), border=border, alignment=right, number_format="#,##0")
-        
+        _set_cell(ws1["A7"], font=Font(name=FONT_NAME, size=12, bold=True), alignment=center)
+        _set_cell(ws1["D7"], font=Font(name=FONT_NAME, size=14, bold=True), alignment=right, number_format="#,##0")
+        _border_range(ws1, "A7:C7", border)
+        _border_range(ws1, "D7:F7", border)
+
         ws1.row_dimensions[7].height = TOTAL_ROW_HEIGHT
 
         _write_validity_note(ws1, 8)  # 표 헤더(10행) 직전 빈 행
@@ -892,7 +951,7 @@ def build_excel(
             ws2.cell(row=r, column=6, value=_maybe_price(p.amount)).border = inv_border
             
             _set_cell(ws2.cell(row=r, column=1), font=normal, alignment=center)
-            _set_cell(ws2.cell(row=r, column=2), font=normal, alignment=center)
+            _set_cell(ws2.cell(row=r, column=2), font=normal, alignment=fit_center)
             _set_cell(ws2.cell(row=r, column=3), font=normal, alignment=left)
             _set_cell(ws2.cell(row=r, column=4), font=normal, alignment=center)
             _set_cell(ws2.cell(row=r, column=5), font=normal, alignment=right, number_format="#,##0")
@@ -937,12 +996,6 @@ def build_excel(
         ws3["A1"].font = Font(name="Malgun Gothic", size=20, bold=True, color="E67E22")
         ws3["A1"].alignment = left
         
-        # 큰 박스에 요약 정보
-        _draw_box(ws3, 3, 1, 5, 6, outer=Side(style="medium", color="E67E22"), inner=Side(style="thin", color="FFFFFF"))
-        for rr in range(3, 6):
-            for cc in range(1, 7):
-                ws3.cell(row=rr, column=cc).fill = PatternFill("solid", fgColor="FDF2E9")
-                
         ws3["A3"] = f"To: {cust_name} ({cust_line})"
         ws3.merge_cells("A3:C3")
         _set_cell(ws3["A3"], font=bold, alignment=fit)
@@ -963,7 +1016,13 @@ def build_excel(
         ws3["D4"] = q.total
         ws3.merge_cells("D4:F5")
         _set_cell(ws3["D4"], font=Font(name=FONT_NAME, size=22, bold=True, color="E67E22"), alignment=right, number_format="₩ #,##0")
-        
+
+        # 요약 정보 박스. 병합을 모두 끝낸 뒤 그려야 오른쪽·아래 선이 남는다(_draw_box 설명 참고).
+        _draw_box(ws3, 3, 1, 5, 6, outer=Side(style="medium", color="E67E22"), inner=Side(style="thin", color="FFFFFF"))
+        for rr in range(3, 6):
+            for cc in range(1, 7):
+                ws3.cell(row=rr, column=cc).fill = PatternFill("solid", fgColor="FDF2E9")
+
         _write_validity_note(ws3, 6)  # 표 헤더(7행) 직전 빈 행
 
         r = 7
@@ -1019,7 +1078,6 @@ def build_excel(
         ws4.merge_cells("A3:F3")
         _set_cell(ws4["A3"], font=normal, alignment=right)
         
-        _draw_box(ws4, 4, 1, 5, 6, outer=Side(style="medium", color="27AE60"))
         ws4["A4"] = f" 수신 (To) : {cust_name} - {cust_mgr} 귀하" + (f" ({cust_contact})" if cust_contact else "")
         ws4["A5"] = _name_link_text(
             " 발신 (From): ",
@@ -1052,7 +1110,9 @@ def build_excel(
             alignment=center,
             number_format='#,##0" 원"',
         )
-        
+        # 수신/발신 박스. 병합을 모두 끝낸 뒤 그려야 오른쪽 선이 굵은 초록으로 남는다(_draw_box 설명 참고).
+        _draw_box(ws4, 4, 1, 5, 6, outer=Side(style="medium", color="27AE60"))
+
         _write_validity_note(ws4, 6)  # 표 헤더(7행) 직전 빈 행
 
         r = 7
@@ -1073,7 +1133,7 @@ def build_excel(
             ws4.cell(row=r, column=6, value=_maybe_price(p.amount)).border = dash_border
             
             _set_cell(ws4.cell(row=r, column=1), font=normal, alignment=center)
-            _set_cell(ws4.cell(row=r, column=2), font=bold, alignment=center)
+            _set_cell(ws4.cell(row=r, column=2), font=bold, alignment=fit_center)
             _set_cell(ws4.cell(row=r, column=3), font=normal, alignment=left)
             _set_cell(ws4.cell(row=r, column=4), font=normal, alignment=center)
             _set_cell(ws4.cell(row=r, column=5), font=normal, alignment=right, number_format="#,##0")
@@ -1231,7 +1291,7 @@ def build_excel(
             ws6.cell(row=r6, column=6, value=as_text)
             ws6.cell(row=r6, column=7, value=remark_text)
 
-            _set_cell(ws6.cell(row=r6, column=1), font=normal, border=border, alignment=center)
+            _set_cell(ws6.cell(row=r6, column=1), font=normal, border=border, alignment=fit_center)
             _set_cell(ws6.cell(row=r6, column=2), font=normal, border=border, alignment=left)
             _set_cell(ws6.cell(row=r6, column=3), font=normal, border=border, alignment=center)
             _set_cell(ws6.cell(row=r6, column=4), font=normal, border=border, alignment=right, number_format="#,##0")
@@ -1356,7 +1416,7 @@ def build_excel(
         ws7.cell(row=11, column=6, value=q.total)
 
         _set_cell(ws7.cell(row=11, column=1), font=normal, border=border, alignment=center)
-        _set_cell(ws7.cell(row=11, column=2), font=bold, border=border, alignment=center)
+        _set_cell(ws7.cell(row=11, column=2), font=bold, border=border, alignment=fit_center)
         _set_cell(ws7.cell(row=11, column=3), font=normal, border=border, alignment=left)
         _set_cell(ws7.cell(row=11, column=4), font=normal, border=border, alignment=center)
         _set_cell(ws7.cell(row=11, column=5), font=normal, border=border, alignment=right, number_format="#,##0")
@@ -1406,7 +1466,7 @@ def build_excel(
             ws7.cell(row=r7, column=6, value=_spec_remark(p.category, p.name))
 
             _set_cell(ws7.cell(row=r7, column=1), font=normal, border=border, alignment=center)
-            _set_cell(ws7.cell(row=r7, column=2), font=bold, border=border, alignment=center)
+            _set_cell(ws7.cell(row=r7, column=2), font=bold, border=border, alignment=fit_center)
             _set_cell(ws7.cell(row=r7, column=3), font=normal, border=border, alignment=left)
             _set_cell(ws7.cell(row=r7, column=4), font=normal, border=border, alignment=center)
             _set_cell(ws7.cell(row=r7, column=5), font=normal, border=border, alignment=right, number_format="#,##0")
@@ -1529,7 +1589,7 @@ def build_excel(
             ws8.cell(row=r8, column=6, value=_maybe_price(p.amount))
 
             _set_cell(ws8.cell(row=r8, column=1), font=normal, border=border, alignment=center)
-            _set_cell(ws8.cell(row=r8, column=2), font=bold, border=border, alignment=center)
+            _set_cell(ws8.cell(row=r8, column=2), font=bold, border=border, alignment=fit_center)
             _set_cell(ws8.cell(row=r8, column=3), font=normal, border=border, alignment=left)
             _set_cell(ws8.cell(row=r8, column=4), font=normal, border=border, alignment=center)
             _set_cell(ws8.cell(row=r8, column=5), font=normal, border=border, alignment=right, number_format="#,##0")
