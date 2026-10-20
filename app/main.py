@@ -786,8 +786,17 @@ def download_excel(
     if archive:
         first = result.quotes[0] if result.quotes else None
         info = load_quote_info()
+        # 보관본은 서식 목록(썸네일) 시트 없이 저장한다. 서식을 골랐으면 애초에 그 시트가 없어 그대로 쓴다.
+        archive_bytes = buf.getvalue()
+        if not selected_forms:
+            archive_bytes = build_excel(
+                result,
+                hide_unit_prices=hide_prices,
+                quote_kind_label=kind_label,
+                gallery=False,
+            ).getvalue()
         entry = quote_archive.add_entry(
-            buf.getvalue(),
+            archive_bytes,
             filename=display_name,
             meta={
                 "kind": "card" if index >= 0 else "list",
