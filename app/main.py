@@ -62,7 +62,7 @@ from app.task_report import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-app = FastAPI(title="AI PC & Apple Store 견적 추출기", version="X.23")
+app = FastAPI(title="AI PC & Apple Store 견적 추출기", version="X.24")
 
 app.add_middleware(
     CORSMiddleware,
