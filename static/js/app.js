@@ -548,11 +548,8 @@ function summaryCardHtml(q, i) {
         <button type="button" class="btn btn-sm btn-joongna" ${usedSearchButtonAttrs(q)} onclick="openUsedMarketDirect(this, 'joongna', event)">
           🟢 중고나라
         </button>
-        <button type="button" class="btn btn-sm btn-excel-one" data-index="${i}" title="이 항목만 견적서 Excel 로 내려받습니다">
+        <button type="button" class="btn btn-sm btn-excel-one" data-index="${i}" title="폼1~8 썸네일을 보고 하나를 골라 이 항목만 그 서식으로 받습니다">
           📥 엑셀 견적서
-        </button>
-        <button type="button" class="btn btn-sm btn-outline btn-form-gallery" data-index="${i}" title="폼1~8 썸네일을 보고 하나를 골라 이 항목만 그 서식으로 받습니다">
-          🖼️ 서식 미리보기 · 하나만 골라 받기
         </button>
       </div>
     </div>`;
@@ -579,14 +576,8 @@ function bindSummaryCardEvents(container) {
     });
   });
 
+  // 📥 엑셀 견적서 = 서식 미리보기 창(폼1~8 중 하나를 골라 받기)
   container.querySelectorAll(".btn-excel-one").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      downloadOneExcel(parseInt(btn.dataset.index, 10));
-    });
-  });
-
-  container.querySelectorAll(".btn-form-gallery").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       openFormGallery(parseInt(btn.dataset.index, 10));
@@ -801,11 +792,6 @@ function ctoUpgradesForExcel(index) {
   return Object.keys(map).length ? JSON.stringify(map) : "";
 }
 
-/** 카드 한 건만 견적서로 내려받는다. */
-function downloadOneExcel(index) {
-  downloadExcelFiles(index);
-}
-
 // ---------- Excel 견적서 서식 선택 (폼1~8) — 설정관리 → 서식폼 탭 ----------
 // 선택은 이 기기의 브라우저(localStorage)에만 저장된다. 비어 있으면 "전체" = 견적요약 + 폼1~8 한 파일.
 // 서식을 고르면 견적요약 없이 서식마다 파일을 하나씩 내려받는다(서버 forms= 를 서식별로 따로 호출).
@@ -852,8 +838,8 @@ function syncExcelFormsUI() {
   const status = $("#excelFormsStatus");
   if (status) {
     status.textContent = excelForms.length
-      ? `선택 ${excelForms.length}개 → 카드마다 파일 ${excelForms.length}개 (견적요약 제외)`
-      : "선택 없음 → 견적요약 + 폼1~8 한 파일";
+      ? `자주 쓰는 서식 ${excelForms.length}개 표시됨`
+      : "표시한 서식 없음";
   }
 }
 
@@ -901,24 +887,6 @@ $("#excelFormsAll")?.addEventListener("click", () => {
 });
 $("#btnExcelForms")?.addEventListener("click", () => openSettings("forms"));
 
-/** 카드 한 건(index)의 Excel. 서식을 골랐으면 서식마다 파일을 하나씩 차례로 받는다. 받은 파일은 견적서 보관함에도 저장된다. */
-async function downloadExcelFiles(index) {
-  const base = `/api/download/excel?${excelQueryParams(index)}&archive=1`;
-  if (!excelForms.length) {
-    await downloadWithBusy(base, {}, "견적서.xlsx", "견적서 Excel 생성 중…");
-    return;
-  }
-  for (let i = 0; i < excelForms.length; i++) {
-    const n = excelForms[i];
-    const ok = await downloadWithBusy(
-      `${base}&forms=${n}`,
-      {},
-      `견적서_폼${n}.xlsx`,
-      `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중 (${i + 1}/${excelForms.length})…`
-    );
-    if (!ok) break; // 서버가 죽었으면 남은 서식마다 오류창을 띄우지 않는다
-  }
-}
 
 // ---------- 서식 미리보기 갤러리 (카드 한 건: 폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
 // 썸네일은 static/img/forms/formN.png (샘플 견적으로 만든 디자인 미리보기, 실제 금액 아님).

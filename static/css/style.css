@@ -1754,8 +1754,6 @@ html.calc-html body {
 .qa-table tr.is-missing td { opacity: 0.55; }
 .qa-actions { display: flex; gap: 3px; flex-wrap: nowrap; }
 .qa-actions .btn { padding: 2px 6px; }
-/* 카드 맨 아래 한 줄짜리 미리보기 버튼 */
-.card-actions .btn-form-gallery { grid-column: 1 / -1; }
 
 /* ⚙️ 설정관리: 견적정보·거래처 / 서식폼 / 견적보관함 / 작업내역서 탭 */
 .settings-modal { max-width: 1500px; }
