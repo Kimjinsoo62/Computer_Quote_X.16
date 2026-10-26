@@ -1020,18 +1020,24 @@ function renderQuoteArchive() {
     return [e.customer, e.model, e.filename, e.note, e.tab_label].some((v) => String(v || "").toLowerCase().includes(q));
   });
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:14px;">${qaEntries.length ? "검색 결과가 없습니다." : "보관된 견적서가 없습니다. 카드의 📥 엑셀 견적서를 내려받으면 여기에 쌓입니다."}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:14px;">${qaEntries.length ? "검색 결과가 없습니다." : "보관된 견적서가 없습니다. 카드의 📥 엑셀 견적서를 내려받으면 여기에 쌓입니다."}</td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map((e) => `
-    <tr class="${e.missing ? "is-missing" : ""}" data-id="${escapeHtml(e.id)}">
-      <td>${escapeHtml(e.saved_at || "")}</td>
-      <td>${escapeHtml(e.customer || "-")}</td>
-      <td>${escapeHtml(e.tab_label ? `${e.tab_label} · ` : "")}${escapeHtml(e.model || "")}</td>
-      <td>${escapeHtml(qaFormsLabel(e))}</td>
+  // 표에는 거래처명 · 모델/구분 · 금액만 보이고, 저장 시각 · 서식 · 파일명은 행 툴팁으로 확인한다
+  tbody.innerHTML = rows.map((e) => {
+    const modelText = (e.tab_label ? `${e.tab_label} · ` : "") + (e.model || "");
+    const tip = [
+      e.saved_at && `저장: ${e.saved_at}`,
+      `서식: ${qaFormsLabel(e)}`,
+      e.filename && `파일: ${e.filename} (${qaFmtSize(e.size)})`,
+      e.note && `메모: ${e.note}`,
+      e.missing && "※ 보관 파일 없음",
+    ].filter(Boolean).join("\n");
+    return `
+    <tr class="${e.missing ? "is-missing" : ""}" data-id="${escapeHtml(e.id)}" title="${escapeHtml(tip)}">
+      <td class="qa-ellip">${escapeHtml(e.customer || "-")}</td>
+      <td class="qa-ellip">${escapeHtml(modelText)}</td>
       <td class="qa-num">${e.total ? fmt(e.total) : "-"}</td>
-      <td class="qa-file" title="${escapeHtml(e.filename || "")}">${escapeHtml(e.filename || "")}<br /><span>${qaFmtSize(e.size)}${e.missing ? " · 파일 없음" : ""}</span></td>
-      <td><input type="text" class="tr-inp qa-note" value="${escapeHtml(e.note || "")}" placeholder="메모" data-id="${escapeHtml(e.id)}" /></td>
       <td>
         <div class="qa-actions">
           <button type="button" class="btn btn-sm btn-primary qa-dl" data-id="${escapeHtml(e.id)}" ${e.missing ? "disabled" : ""} title="보관된 파일을 다시 내려받습니다">📥 받기</button>
@@ -1039,7 +1045,8 @@ function renderQuoteArchive() {
           <button type="button" class="btn btn-sm btn-outline qa-del" data-id="${escapeHtml(e.id)}" title="보관함에서 삭제">✕</button>
         </div>
       </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 }
 
 async function loadQuoteArchive() {
@@ -1067,7 +1074,8 @@ async function qaDownload(id) {
 
 async function qaDelete(id) {
   const e = qaEntries.find((x) => x.id === id);
-  if (!confirm(`보관함에서 삭제할까요?\n${e?.filename || id}\n(보관 파일도 함께 지워집니다)`)) return;
+  const label = e ? `${e.customer || "-"} · ${e.model || ""}${e.total ? ` · ${fmt(e.total)}` : ""}` : id;
+  if (!confirm(`보관함에서 삭제할까요?\n${label}\n(보관 파일도 함께 지워집니다)`)) return;
   try {
     const res = await fetch(`/api/quotes/archive/${encodeURIComponent(id)}`, { method: "DELETE" });
     if (!res.ok) throw new Error("삭제에 실패했습니다.");
@@ -1075,18 +1083,6 @@ async function qaDelete(id) {
     alert(err.message);
   }
   loadQuoteArchive();
-}
-
-async function qaSaveNote(id, note) {
-  try {
-    await fetch(`/api/quotes/archive/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note }),
-    });
-    const e = qaEntries.find((x) => x.id === id);
-    if (e) e.note = note;
-  } catch (_) {}
 }
 
 async function qaOpenDir(id = "") {
@@ -1153,10 +1149,6 @@ $("#qaTbody")?.addEventListener("click", (e) => {
   if (btn.classList.contains("qa-dl")) qaDownload(id);
   else if (btn.classList.contains("qa-open")) qaOpenDir(id);
   else if (btn.classList.contains("qa-del")) qaDelete(id);
-});
-$("#qaTbody")?.addEventListener("change", (e) => {
-  const inp = e.target.closest("input.qa-note");
-  if (inp) qaSaveNote(inp.dataset.id, inp.value.trim());
 });
 // 시작 시 보관 건수 배지
 loadQuoteArchive();

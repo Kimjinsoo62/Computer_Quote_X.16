@@ -374,7 +374,7 @@
         <!-- 3. 견적보관함 -->
         <section class="settings-panel hidden" data-panel="archive">
           <div class="qa-toolbar">
-            <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="고객 · 모델 · 파일명 · 메모 검색" />
+            <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="거래처명 · 모델 검색" />
             <span id="qaStats" class="qa-stats"></span>
             <div class="qa-toolbar-right">
               <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
@@ -387,14 +387,10 @@
             <table class="tr-list-table qa-table">
               <thead>
                 <tr>
-                  <th style="width: 118px;">저장 시각</th>
-                  <th>고객</th>
+                  <th style="width: 30%;">거래처명</th>
                   <th>모델 / 구분</th>
-                  <th style="width: 110px;">서식 · 마진</th>
-                  <th style="width: 90px;">금액</th>
-                  <th>파일명</th>
-                  <th style="width: 160px;">메모</th>
-                  <th style="width: 190px;">관리</th>
+                  <th style="width: 110px;">금액</th>
+                  <th style="width: 150px;">관리</th>
                 </tr>
               </thead>
               <tbody id="qaTbody"></tbody>
