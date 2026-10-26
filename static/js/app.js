@@ -632,12 +632,6 @@ function renderEstimateForm(q) {
     <div class="estimate-header">
       <h2>견&nbsp;&nbsp;적&nbsp;&nbsp;서</h2>
       <p>${storeHeaderLabel}</p>
-      ${apple ? "" : `
-      <div class="card-actions" style="justify-content: center; margin-top: 6px;">
-        <a href="${q.url}" target="_blank" rel="noopener" class="btn btn-sm btn-buy">
-          🛍️ 컴퓨존 상품상세 ↗
-        </a>
-      </div>`}
     </div>
     <div class="estimate-meta">
       <div class="meta-row"><span class="meta-label">견적일</span><span class="meta-value">${quoteInfo?.quote_date || q.quote_date}</span></div>
