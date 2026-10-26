@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261026a" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261027a" />
 </head>
 <body>
   <nav class="nav">
@@ -809,11 +809,14 @@
     </div>
   </div>
 
-  <div id="busyBox" class="busy-box hidden" role="status" aria-live="polite" aria-hidden="true">
-    <div class="spinner spinner-sm"></div>
-    <span id="busyText">처리 중…</span>
+  <!-- 처리 중 팝업: 화면 가운데 진행 동그라미 + 메시지 (Excel 생성 · 검색 · 링크 준비 등) -->
+  <div id="busyBox" class="busy-overlay hidden" role="status" aria-live="polite" aria-hidden="true">
+    <div class="busy-box">
+      <div class="spinner busy-spinner"></div>
+      <span id="busyText">처리 중…</span>
+    </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261026a"></script>
+  <script src="/static/js/app.js?v=20261027a"></script>
 </body>
 </html>

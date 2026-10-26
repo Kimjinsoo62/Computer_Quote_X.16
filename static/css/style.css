@@ -1702,16 +1702,20 @@ html.calc-html body {
   margin-bottom: 4px;
 }
 
-/* Small processing status box (bottom-right) */
-.busy-box {
-  position: fixed; right: 12px; bottom: 12px; z-index: 3000;
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border-radius: 6px;
-  background: var(--card2); border: 1px solid var(--primary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  font-size: 1rem; color: var(--text);
+/* 처리 중 팝업: 화면을 어둡게 덮고 가운데에 진행 동그라미 + 메시지 (모달보다 위) */
+.busy-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.45); cursor: progress;
 }
-.spinner.spinner-sm { width: 14px; height: 14px; border-width: 2px; margin: 0; flex: none; }
+.busy-box {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  min-width: 260px; max-width: 480px; padding: 22px 28px; border-radius: 10px;
+  background: var(--card2); border: 1px solid var(--primary);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  font-size: 1.05rem; font-weight: 600; color: var(--text); text-align: center;
+}
+.spinner.busy-spinner { width: 44px; height: 44px; border-width: 4px; margin: 0; }
 
 
 /* 견적서 서식 미리보기 갤러리 (폼1~8 썸네일, 클릭하면 그 서식만 담긴 파일) */

@@ -199,7 +199,7 @@ function hide(el) {
   el.setAttribute("aria-hidden", "true");
 }
 
-// 우측 하단 작은 처리 상태 창 (Excel 생성·CTO 옵션·시세 검색·업데이트 대기 등)
+// 화면 가운데 처리 중 팝업 (Excel 생성·CTO 옵션·시세 검색·링크 준비·업데이트 대기 등)
 let busyDepth = 0;
 function showBusy(text) {
   busyDepth += 1;
@@ -455,12 +455,15 @@ async function openCoupangSpecSearch(index, event) {
   const q = quoteData?.quotes?.[index];
   if (!q) return;
   let url = "";
+  showBusy("쿠팡 검색어 준비 중…");
   try {
     const res = await fetch(`/api/coupang/link?${quoteSpecParams(q).toString()}`);
     const data = await res.json().catch(() => ({}));
     if (res.ok) url = data.search_url || "";
   } catch (_) {
     /* 검색어를 못 만들면 모델명으로 검색한다 */
+  } finally {
+    hideBusy();
   }
   if (url) window.open(url, "_blank", "noopener");
   else openCoupangSearch(q.model);
