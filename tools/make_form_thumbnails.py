@@ -2,7 +2,7 @@
 """폼1~8 견적서 서식 썸네일(static/img/forms/formN.png)과 크게 보기 그림(formN_large.png)을 다시 만든다.
 
 서식 디자인(excel_export.py)을 고쳤을 때만 실행한다. 실행 PC에 Excel 이 있어야 한다.
-샘플 견적 한 건으로 전체 Excel 을 만든 뒤 Excel(COM)로 각 폼 시트를 그림으로 내보낸다.
+샘플 견적 한 건(excel_export.sample_result)으로 전체 Excel 을 만든 뒤 Excel(COM)로 각 폼 시트를 그림으로 내보낸다.
 목록용은 폭 480px, 미리보기 창에서 한 장을 크게 볼 때 쓰는 _large 는 글자를 읽을 수 있게 폭 1200px.
 견적처·공급자 정보는 quote_info.json 이 아니라 기본값(가짜 데이터)을 쓴다 → 저장소에 올라가는 썸네일에 실제 고객 정보가 들어가지 않는다.
 
@@ -22,8 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from PIL import Image  # noqa: E402
 
-from app.excel_export import FORM_LABELS, build_excel  # noqa: E402
-from app.quote_engine import Quote, QuotePart, TodayQuotesResult  # noqa: E402
+from app.excel_export import FORM_LABELS, build_excel, sample_result  # noqa: E402
 from app.quote_info import DEFAULT_INFO  # noqa: E402
 
 OUT_DIR = ROOT / "static" / "img" / "forms"
@@ -31,51 +30,6 @@ THUMB_WIDTH = 480
 LARGE_WIDTH = 1200
 # 시트 그림(메타파일 = 벡터)을 이 배율로 키운 차트에 붙여 내보낸다 → _large 도 글자가 또렷하다
 EXPORT_SCALE = 2.5
-
-SAMPLE_PARTS = [
-    ("CPU", "AMD 라이젠7 9800X3D (그래니트 릿지)", 1, 650000),
-    ("메인보드", "ASUS TUF Gaming B650M-PLUS", 1, 230000),
-    ("메모리", "DDR5 32GB (16GB×2) 5600MHz", 1, 150000),
-    ("그래픽카드", "RTX 5070 SUPER 12GB", 1, 980000),
-    ("SSD", "NVMe M.2 1TB", 1, 130000),
-    ("케이스", "미들타워 강화유리 케이스", 1, 80000),
-    ("파워", "850W 80PLUS GOLD 풀모듈러", 1, 140000),
-    ("쿨러/특수냉각", "360mm 수랭 쿨러", 1, 120000),
-    ("조립비", "조립 · 케이블 정리 · 테스트", 1, 30000),
-    ("모니터", "LG PC 모니터 27U411A 68cm(27인치)", 1, 180000),
-    ("키보드마우스", "무선키보드마우스", 1, 30000),
-]
-
-
-def sample_result() -> TodayQuotesResult:
-    parts = [
-        QuotePart(no=i, category=c, name=n, qty=q, unit_price=p, amount=p * q)
-        for i, (c, n, q, p) in enumerate(SAMPLE_PARTS, 1)
-    ]
-    total = sum(p.amount for p in parts)
-    quote = Quote(
-        tier="고급형",
-        tier_key="sample",
-        model="샘플 게이밍 PC (9800X3D / RTX 5070 SUPER)",
-        tab_label="고급형",
-        description="서식 미리보기용 샘플 견적",
-        product_no=0,
-        # 공급자 상호에 걸리는 제품 페이지 링크(파란 밑줄)가 썸네일에도 보이도록 샘플 URL 을 넣는다
-        url="https://www.compuzone.co.kr/",
-        quote_date="2026-01-01",
-        parts=parts,
-        parts_subtotal=total,
-        total=total,
-    )
-    return TodayQuotesResult(
-        quote_date="2026-01-01",
-        event_url="",
-        event_title="서식 미리보기",
-        series="샘플",
-        quotes=[quote],
-        logic_steps=[],
-    )
-
 
 PS_SCRIPT = r"""
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8

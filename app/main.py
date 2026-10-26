@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-import base64
+import copy
 import json
 import smtplib
 import socket
+import threading
+import time
 from dataclasses import asdict, replace
 from datetime import date
 import urllib.error
@@ -23,7 +25,7 @@ from app.config import (
     PRICE_SEARCH_LIMIT,
     QUOTE_DISCLAIMER,
 )
-from app.excel_export import FORM_LABELS, build_excel
+from app.excel_export import FORM_LABELS, build_excel, sample_result
 from app.image_lookup import find_representative_image
 from app.apple_scraper import fetch_apple_cto_live, fetch_apple_cto_options
 from app import coupang_search
@@ -77,6 +79,56 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+
+@app.on_event("startup")
+def _prewarm_pdf_export() -> None:
+    # 견적서 미리보기(Excel → PDF)용 Excel 을 미리 띄워 예열한다(백그라운드, Excel 없으면 아무것도 안 함)
+    pdf_export.prewarm(
+        lambda: build_excel(sample_result(), forms=sorted(FORM_LABELS), gallery=False).getvalue()
+    )
+
+
+# ---------------------------------------------------------------------------
+# 견적 수집 결과 공유: 화면 목록 API 가 수집한 결과를 Excel · PDF · 메일 요청이 그대로 쓴다.
+# 엑셀 견적서 창은 썸네일 · 크게 보기 · 다운로드 · 이메일마다 /api/download/excel 을 부르는데,
+# 매번 컴퓨존을 다시 수집하면 요청마다 약 3초가 들고, 그사이 가격이 바뀌면 카드와 견적서가 달라진다.
+# ---------------------------------------------------------------------------
+SHARED_RESULT_TTL_SEC = 10 * 60
+_shared_results: dict[str, tuple[float, object]] = {}
+_shared_lock = threading.Lock()
+_shared_key_locks: dict[str, threading.Lock] = {}
+
+
+def _shared_fetch(fresh: bool, fn, *args, **kwargs):
+    """fresh=True(화면 목록): 항상 새로 수집해 저장한다. fresh=False(Excel · PDF): 같은 조건으로
+    SHARED_RESULT_TTL_SEC 안에 수집한 결과가 있으면 그것을 쓴다. force_refresh 는 조건에서 뺀다.
+    엑셀 견적서 창은 폼1~8 썸네일을 동시에 요청하므로, fresh=False 수집은 조건별 잠금으로 한 번만 한다.
+    화면 목록(fresh=True)은 잠금 없이 예전처럼 바로 수집한다."""
+    key_kwargs = {k: v for k, v in kwargs.items() if k != "force_refresh"}
+    key = json.dumps([fn.__name__, args, key_kwargs], ensure_ascii=False, sort_keys=True, default=str)
+
+    def _fetch_and_store():
+        result = fn(*args, **kwargs)
+        now = time.time()
+        with _shared_lock:
+            for k in [k for k, (at, _) in _shared_results.items() if now - at >= SHARED_RESULT_TTL_SEC]:
+                _shared_results.pop(k, None)
+            _shared_results[key] = (now, result)
+        return result
+
+    if fresh:
+        return copy.deepcopy(_fetch_and_store())
+    with _shared_lock:
+        key_lock = _shared_key_locks.setdefault(key, threading.Lock())
+    with key_lock:
+        with _shared_lock:
+            hit = _shared_results.get(key)
+        if hit and time.time() - hit[0] < SHARED_RESULT_TTL_SEC:
+            return copy.deepcopy(hit[1])
+        return copy.deepcopy(_fetch_and_store())
+
+
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
@@ -304,7 +356,7 @@ def api_shutdown():
 
 @app.get("/api/today")
 def api_today(monitor: int = 0, keyboard: int = 0, ram32: int = 0, setup: int = 0):
-    result = fetch_today_quotes(
+    result = _shared_fetch(True, fetch_today_quotes,
         include_monitor=bool(monitor),
         include_keyboard=bool(keyboard),
         include_ram32=bool(ram32),
@@ -318,7 +370,7 @@ def api_today_tier(
     tier_key: str, monitor: int = 0, keyboard: int = 0, ram32: int = 0, setup: int = 0
 ):
     try:
-        result = fetch_today_quotes(
+        result = _shared_fetch(True, fetch_today_quotes,
             tier_key=tier_key,
             include_monitor=bool(monitor),
             include_keyboard=bool(keyboard),
@@ -393,7 +445,7 @@ def api_category(cat_key: str, monitor: int = 0, keyboard: int = 0, setup: int =
         }
     if cat_key not in ASSEMBLED_CATEGORIES:
         raise HTTPException(status_code=404, detail=f"Unknown category: {cat_key}")
-    result = fetch_assembled_quotes(
+    result = _shared_fetch(True, fetch_assembled_quotes,
         cat_key,
         include_monitor=bool(monitor),
         include_keyboard=bool(keyboard),
@@ -419,7 +471,7 @@ def api_game_pc_recommend(payload: dict = Body(...)):
     keyboard = bool(payload.get("keyboard", 0))
     setup = bool(payload.get("setup", 0))
     try:
-        result = fetch_game_pc_quotes(
+        result = _shared_fetch(True, fetch_game_pc_quotes,
             game_ids=[str(g) for g in games],
             resolution=str(resolution),
             include_monitor=monitor,
@@ -454,13 +506,13 @@ def api_price_search(payload: dict = Body(...)):
     setup = bool(payload.get("setup", 0))
     try:
         if target_type == "notebook":
-            result, meta = fetch_notebook_quotes_by_price(
+            result, meta = _shared_fetch(True, fetch_notebook_quotes_by_price,
                 min_price,
                 max_price,
                 limit=PRICE_SEARCH_LIMIT,
             )
         else:
-            result, meta = fetch_assembled_quotes_by_price(
+            result, meta = _shared_fetch(True, fetch_assembled_quotes_by_price,
                 min_price,
                 max_price,
                 include_monitor=monitor,
@@ -482,7 +534,7 @@ def api_price_search(payload: dict = Body(...)):
 @app.get("/api/apple/{cat_key}")
 def api_apple(cat_key: str, monitor: int = 0, keyboard: int = 0, setup: int = 0, refresh: int = 0):
     try:
-        result = fetch_apple_quotes(
+        result = _shared_fetch(True, fetch_apple_quotes,
             cat_key,
             include_monitor=bool(monitor),
             include_setup=bool(setup),
@@ -501,7 +553,7 @@ def api_apple_refresh(cat_key: str = "all"):
     """Apple 공식몰 실시간 크롤링 강제 갱신: 기존 캐시 및 이전 데이터를 완전 삭제하고 공홈 실시간 데이터로 100% 교체"""
     from app.apple_scraper import clear_apple_catalog_cache
     clear_apple_catalog_cache(cat_key if cat_key != "all" else None)
-    result = fetch_apple_quotes(cat_key, force_refresh=True)
+    result = _shared_fetch(True, fetch_apple_quotes, cat_key, force_refresh=True)
     return {
         "success": True,
         "message": "Apple 공식몰 최신 데이터로 완전 갱신 완료",
@@ -620,37 +672,6 @@ def _apply_cto_upgrades(result, cto_json: str):
 FORM_THUMB_WIDTH = 560  # 서식 목록 칸(약 280px)의 2배: 고해상도 화면에서도 또렷하게
 
 
-def _form_thumbnails(result, hide_prices: bool, kind_label: str, pdf_key) -> dict[str, str]:
-    """카드 한 건의 폼1~8 실제 견적서 썸네일 {"1": "data:image/png;base64,…", …}.
-
-    Excel 을 한 번만 띄워 8쪽 PDF 를 만들고 쪽별로 나눠 서식별 PDF 캐시에도 넣는다.
-    """
-    all_forms = sorted(FORM_LABELS)
-    thumbs_key = pdf_key(["thumbs"])
-    cached = pdf_export.cache_get(thumbs_key)
-    if cached is not None:
-        return json.loads(cached)
-    try:
-        pages = pdf_export.split_pages(
-            pdf_export.xlsx_to_pdf(
-                build_excel(
-                    result, hide_unit_prices=hide_prices, quote_kind_label=kind_label, forms=all_forms
-                ).getvalue()
-            )
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    if len(pages) != len(all_forms):
-        raise HTTPException(status_code=500, detail=f"PDF 쪽 수({len(pages)})가 서식 수와 다릅니다.")
-    out = {}
-    for n, page in zip(all_forms, pages):
-        pdf_export.cache_put(pdf_key([n]), page)
-        png = pdf_export.render_png(page, FORM_THUMB_WIDTH)
-        out[str(n)] = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
-    pdf_export.cache_put(thumbs_key, json.dumps(out).encode("utf-8"))
-    return out
-
-
 @app.get("/api/download/excel")
 def download_excel(
     request: Request,
@@ -673,15 +694,15 @@ def download_excel(
     archive: int = 0,
     email: int = 0,
     pdf: int = 0,
-    thumbs: int = 0,
+    thumb: int = 0,
 ):
     """카드 한 건(index)의 견적서를 내려준다. 목록 전체 비교 파일(전체 비교 Excel)은 없앴다(index 필수).
     archive=1 이면 만든 파일을 견적서 보관함(quote_archive/)에도 저장한다.
     email=1 이면 파일 대신, 같은 Excel 을 메일 초안으로 보관하고 발송 창에 채울 받는 사람(견적처 이메일) ·
     참조 · 제목 · 본문을 JSON 으로 돌려준다(발송은 /api/mail/send).
     pdf=1 이면 같은 견적서를 Excel(COM)로 PDF 로 바꿔 화면에 바로 보여 준다(서식 미리보기용, 보관하지 않음).
-    thumbs=1 이면 폼1~8 을 한 번에 PDF 로 바꿔(Excel 한 번) 서식 목록 썸네일 PNG 8장을 JSON 으로 돌려준다.
-    쪽별 PDF 는 서식별 pdf=1 캐시에 넣어 두므로, 썸네일을 본 뒤 크게 보기는 바로 뜬다.
+    thumb=1 이면(forms 는 하나) 같은 PDF 를 서식 목록 썸네일 PNG 로 돌려준다. 화면은 폼1~8 을 동시에 요청하고
+    서버는 Excel 워커 여러 개로 나눠 변환한다. PDF 는 pdf=1 과 같은 캐시를 쓰므로 썸네일을 본 뒤 크게 보기는 바로 뜬다.
     파일명은 "{거래처명}_{구분}_{모델}_..." 로 시작해 보관함·탐색기에서 거래처별로 정렬된다.
 
     forms 를 주면(예: "3" 또는 "1,3") 견적요약 없이 해당 폼 시트만 담는다. 화면은 서식마다 따로 호출해
@@ -704,7 +725,7 @@ def download_excel(
     if margin_pct not in (CONSUMER_MARGIN_PERCENT, 25, 20, 15, 10, 0):
         margin_pct = CONSUMER_MARGIN_PERCENT
     if cat == "ai":
-        result = fetch_today_quotes(
+        result = _shared_fetch(False, fetch_today_quotes,
             include_monitor=include_monitor,
             include_keyboard=include_keyboard,
             include_ram32=include_ram32,
@@ -712,7 +733,7 @@ def download_excel(
         )
         kr_label = "오늘의견적"
     elif cat in ASSEMBLED_CATEGORIES:
-        result = fetch_assembled_quotes(
+        result = _shared_fetch(False, fetch_assembled_quotes,
             cat,
             include_monitor=include_monitor,
             include_keyboard=include_keyboard,
@@ -723,7 +744,7 @@ def download_excel(
         game_ids = [g for g in games.split("|") if g.strip()]
         title_list = [t for t in titles.split("|") if t.strip()]
         try:
-            result = fetch_game_pc_quotes(
+            result = _shared_fetch(False, fetch_game_pc_quotes,
                 game_ids=game_ids,
                 resolution=resolution,
                 include_monitor=include_monitor,
@@ -739,13 +760,13 @@ def download_excel(
     elif cat in ("price", "price-search"):
         try:
             if is_notebook:
-                result, _meta = fetch_notebook_quotes_by_price(
+                result, _meta = _shared_fetch(False, fetch_notebook_quotes_by_price,
                     min_price,
                     max_price,
                     limit=PRICE_SEARCH_LIMIT,
                 )
             else:
-                result, _meta = fetch_assembled_quotes_by_price(
+                result, _meta = _shared_fetch(False, fetch_assembled_quotes_by_price,
                     min_price,
                     max_price,
                     include_monitor=include_monitor,
@@ -762,7 +783,7 @@ def download_excel(
     elif cat.startswith("apple_") or cat == "apple":
         apple_sub = cat.replace("apple_", "") if cat != "apple" else "macbook"
         try:
-            result = fetch_apple_quotes(
+            result = _shared_fetch(False, fetch_apple_quotes,
                 apple_sub,
                 include_monitor=include_monitor,
                 include_setup=include_setup,
@@ -830,7 +851,7 @@ def download_excel(
     # 같은 카드 · 같은 서식 · 같은 견적정보면 PDF 를 다시 만들지 않는다(썸네일 → 크게 보기 → 메일 PDF 첨부 재사용)
     base_key = [
         sorted(
-            (k, v) for k, v in request.query_params.items() if k not in ("archive", "email", "pdf", "thumbs", "forms")
+            (k, v) for k, v in request.query_params.items() if k not in ("archive", "email", "pdf", "thumb", "forms")
         ),
         info,
         # 수집 가격 · 구성이 바뀌면 다른 키 → 예전 PDF 를 보여 주거나 첨부하지 않는다.
@@ -841,8 +862,6 @@ def download_excel(
     def _pdf_key(form_list) -> str:
         return json.dumps([*base_key, list(form_list)], ensure_ascii=False, sort_keys=True, default=str)
 
-    if thumbs:
-        return {"thumbs": _form_thumbnails(result, hide_prices, kind_label, _pdf_key)}
     try:
         buf = build_excel(
             result,
@@ -862,6 +881,18 @@ def download_excel(
         ),
     }
     pdf_key = _pdf_key(selected_forms)
+    if thumb:
+        if len(selected_forms) != 1:
+            raise HTTPException(status_code=400, detail="썸네일은 서식 하나(forms=N)만 요청할 수 있습니다.")
+        try:
+            png = pdf_export.cached(
+                pdf_key + "|png",
+                lambda: pdf_export.render_png(pdf_export.cached_pdf(pdf_key, buf.getvalue), FORM_THUMB_WIDTH),
+            )
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        # 주소가 같아도 견적이 바뀌면 그림이 달라지므로 브라우저 캐시에 두지 않는다
+        return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
     if pdf:
         try:
             pdf_bytes = pdf_export.cached_pdf(pdf_key, buf.getvalue)

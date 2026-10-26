@@ -25,6 +25,10 @@ powershell -NoProfile -Command ^
 powershell -NoProfile -Command ^
   "$n=0; foreach ($p in 8090,8091) { Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { if ($_ -gt 0) { Write-Host ('   - Port ' + $p + ' : PID ' + $_ + ' terminated'); Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; $n++ } } }; Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'uvicorn' -and $_.CommandLine -match 'app\.main:app' } | ForEach-Object { Write-Host ('   - uvicorn PID ' + $_.ProcessId + ' terminated'); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; if ($n -eq 0) { Write-Host '   - All processes stopped cleanly' }"
 
+REM Hidden Excel used for quote previews (only PIDs written by app/pdf_export.py; user Excel is untouched)
+powershell -NoProfile -Command ^
+  "$f='.excel_worker.pid'; if (Test-Path $f) { Get-Content $f | ForEach-Object { $p = Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue; if ($p -and $p.ProcessName -match '^(EXCEL|powershell)$') { Write-Host ('   - Preview Excel worker PID ' + $p.Id + ' terminated'); Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }; Remove-Item $f -Force -ErrorAction SilentlyContinue }"
+
 echo.
 echo [4/4] Cleaning cache (__pycache__, *.pyc)...
 set "PY="

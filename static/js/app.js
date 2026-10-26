@@ -793,8 +793,9 @@ function ctoUpgradesForExcel(index) {
 const EXCEL_FORM_LABELS = { 1: "표준", 2: "인보이스", 3: "보고서", 4: "명세서", 5: "리테일", 6: "조립PC", 7: "데스크탑", 8: "클래식" };
 
 // ---------- 서식 미리보기 갤러리 (카드 한 건: 폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
-// 창을 열면 서버가 이 카드의 폼1~8 실제 견적서를 PDF 로 만들어(thumbs=1, Excel COM 한 번) 썸네일을 돌려준다.
-// 한 장을 누르면 같은 PDF(pdf=1, 서버 캐시)를 크게 보여 준다. Excel 이 없으면 static/img/forms/formN.png 샘플로 대신한다.
+// 창을 열면 폼1~8 썸네일(thumb=1&forms=N)을 동시에 요청한다. 서버는 상주 Excel 여러 개로 나눠 PDF → PNG 를 만들고,
+// 다 된 것부터 칸이 채워진다. 한 장을 누르면 같은 PDF(pdf=1, 서버 캐시)를 크게 보여 준다.
+// Excel 이 없으면 static/img/forms/formN.png 샘플로 대신한다.
 const FORM_GALLERY_DESC = {
   1: "B2B 표준 견적서 · 공급자/수급자 직인란",
   2: "영문 모던 INVOICE 스타일",
@@ -809,13 +810,14 @@ let formGalleryIndex = 0;
 let formPdfUrls = {}; // 폼 번호 → 실제 견적서 PDF blob URL (갤러리를 다시 열면 비운다)
 let formDetailSeq = 0;
 let formGallerySession = 0;
-let formThumbsPromise = null; // 썸네일을 만드는 동안 크게 보기는 이것을 기다렸다가 서버 캐시를 쓴다
-let formThumbsState = "loading"; // loading | ok | error
+let formThumbUrls = {}; // 폼 번호 → 실제 견적서 썸네일 blob URL
+let formThumbsDone = 0;
 let formThumbsError = "";
 
 function resetFormPdfUrls() {
-  Object.values(formPdfUrls).forEach((u) => URL.revokeObjectURL(u));
+  [...Object.values(formPdfUrls), ...Object.values(formThumbUrls)].forEach((u) => URL.revokeObjectURL(u));
   formPdfUrls = {};
+  formThumbUrls = {};
 }
 
 function openFormGallery(index) {
@@ -857,55 +859,59 @@ function openFormGallery(index) {
   loadFormThumbs();
 }
 
-/** 이 카드의 폼1~8 실제 견적서 썸네일을 받아 목록 그림을 바꾼다. 실패하면 디자인 샘플 그림을 보여 준다. */
+/** 이 카드의 폼1~8 실제 견적서 썸네일을 동시에 요청해 다 된 칸부터 바꾼다. 실패한 칸은 디자인 샘플 그림을 보여 준다. */
 function loadFormThumbs() {
   const session = ++formGallerySession;
   const started = Date.now();
-  formThumbsState = "loading";
+  formThumbsDone = 0;
   formThumbsError = "";
   updateFormGridHint(0);
+  const forms = Object.keys(EXCEL_FORM_LABELS).map(Number);
   const tick = setInterval(() => {
-    if (session !== formGallerySession || formThumbsState !== "loading") return clearInterval(tick);
+    if (session !== formGallerySession || formThumbsDone >= forms.length) return clearInterval(tick);
     updateFormGridHint(Math.round((Date.now() - started) / 1000));
   }, 1000);
-  formThumbsPromise = (async () => {
+  forms.forEach(async (n) => {
+    let src = `/static/img/forms/form${n}.png`;
+    let label = "디자인 샘플";
     try {
-      const res = await fetch(`/api/download/excel?${excelQueryParams(formGalleryIndex)}&thumbs=1`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || `썸네일 생성 실패 (${res.status})`);
+      const res = await fetch(`/api/download/excel?${excelQueryParams(formGalleryIndex)}&forms=${n}&thumb=1`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `썸네일 생성 실패 (${res.status})`);
+      }
+      const blob = await res.blob();
       if (session !== formGallerySession) return;
-      formThumbsState = "ok";
-      setFormGridImages((n) => data.thumbs?.[n] || `/static/img/forms/form${n}.png`, "실제 견적서");
+      src = formThumbUrls[n] = URL.createObjectURL(blob);
+      label = "실제 견적서";
     } catch (e) {
       if (session !== formGallerySession) return;
-      formThumbsState = "error";
       formThumbsError = e.message;
-      setFormGridImages((n) => `/static/img/forms/form${n}.png`, "디자인 샘플");
-    } finally {
-      clearInterval(tick);
-      if (session === formGallerySession) updateFormGridHint();
     }
-  })();
+    setFormGridImage(n, src, label);
+    formThumbsDone += 1;
+    updateFormGridHint(Math.round((Date.now() - started) / 1000));
+  });
 }
 
-function setFormGridImages(srcOf, label) {
-  $("#formGalleryGrid")?.querySelectorAll(".form-gallery-item").forEach((item) => {
-    const n = Number(item.dataset.form);
-    const img = document.createElement("img");
-    img.className = "form-gallery-thumb";
-    img.src = srcOf(n);
-    img.alt = `폼${n} ${EXCEL_FORM_LABELS[n]} ${label}`;
-    item.querySelector(".form-gallery-thumb")?.replaceWith(img);
-  });
+function setFormGridImage(n, src, label) {
+  const item = $("#formGalleryGrid")?.querySelector(`.form-gallery-item[data-form="${n}"]`);
+  if (!item) return;
+  const img = document.createElement("img");
+  img.className = "form-gallery-thumb";
+  img.src = src;
+  img.alt = `폼${n} ${EXCEL_FORM_LABELS[n]} ${label}`;
+  item.querySelector(".form-gallery-thumb")?.replaceWith(img);
 }
 
 function updateFormGridHint(elapsed = 0) {
   const hint = $("#formGalleryHint");
   if (!hint || $("#formGalleryGrid")?.classList.contains("hidden")) return;
-  if (formThumbsState === "loading") {
-    hint.textContent = `⏳ 이 카드의 실제 견적서 8장을 만드는 중… ${elapsed}초 (Excel → PDF, 20~30초 걸립니다). 먼저 서식을 눌러도 됩니다.`;
-  } else if (formThumbsState === "error") {
-    hint.textContent = `⚠️ 실제 견적서 썸네일을 만들지 못해 디자인 샘플 그림을 보여 줍니다(${formThumbsError}). 📥 다운로드 · ✉️ 이메일은 그대로 쓸 수 있습니다.`;
+  const total = Object.keys(EXCEL_FORM_LABELS).length;
+  if (formThumbsDone < total) {
+    hint.textContent = `⏳ 이 카드의 실제 견적서 만드는 중… ${formThumbsDone}/${total}장 · ${elapsed}초 (Excel → PDF). 먼저 서식을 눌러도 됩니다.`;
+  } else if (formThumbsError) {
+    hint.textContent = `⚠️ 일부 서식은 실제 견적서를 만들지 못해 디자인 샘플 그림을 보여 줍니다(${formThumbsError}). 📥 다운로드 · ✉️ 이메일은 그대로 쓸 수 있습니다.`;
   } else {
     hint.textContent = "이 카드의 실제 견적서입니다(현재 마진 · 견적정보 · 옵션 반영). 서식을 누르면 크게 보여 주고, 거기서 📥 다운로드(Excel) 또는 ✉️ 이메일(Excel · PDF 첨부)을 고릅니다.";
   }
@@ -937,7 +943,7 @@ function showFormDetail(n) {
         <button type="button" class="btn btn-sm btn-outline fg-email" title="견적서(Excel · PDF 선택)를 첨부한 메일 작성 창을 엽니다 — 받는 사람: ${escapeHtml(customerEmail || "견적처 이메일 미입력(직접 입력)")}">✉️ 이메일</button>
       </div>
     </div>
-    <div class="fg-detail-view"><div class="fg-detail-msg">⏳ 실제 견적서를 만드는 중… (Excel → PDF, 처음 한 번은 10초 안팎)</div></div>`;
+    <div class="fg-detail-view"><div class="fg-detail-msg">⏳ 실제 견적서를 만드는 중… (Excel → PDF)</div></div>`;
   detail.querySelector(".fg-back").addEventListener("click", showFormGrid);
   detail.querySelectorAll(".fg-tab").forEach((b) => b.addEventListener("click", () => showFormDetail(Number(b.dataset.form))));
   detail.querySelector(".fg-download").addEventListener("click", () => downloadFormFromGallery(n));
@@ -954,8 +960,6 @@ async function loadFormPdf(n, view) {
   if (!url) {
     showBusy(`폼${n} ${EXCEL_FORM_LABELS[n]} 실제 견적서 만드는 중…`);
     try {
-      // 썸네일을 만드는 중이면 끝날 때까지 기다린다 → 서버 캐시에서 바로 받는다(Excel 을 두 번 띄우지 않음)
-      if (formThumbsPromise) await formThumbsPromise;
       const res = await fetch(galleryFileUrl(n, { pdf: true }));
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

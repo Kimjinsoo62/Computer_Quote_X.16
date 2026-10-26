@@ -10,6 +10,7 @@ quote_info.json
 task_reports.json
 app_settings.json
 quote_archive/
+.excel_worker.pid
 customers.json
 
 # 오프라인 설치 패키지 바이너리 (download.bat으로 다시 받음)

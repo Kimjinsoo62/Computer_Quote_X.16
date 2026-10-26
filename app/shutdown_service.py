@@ -166,6 +166,13 @@ def close_app_browsers() -> int:
 
 
 def perform_shutdown_cleanup() -> dict[str, Any]:
+    # 견적서 미리보기용 숨은 Excel 을 먼저 닫는다(os._exit 는 atexit 를 건너뛴다)
+    try:
+        from app.pdf_export import stop_worker
+
+        stop_worker()
+    except Exception:  # noqa: BLE001 - 종료는 계속 진행한다
+        pass
     keep = protected_pids()
     cache_removed = clear_python_cache()
     browsers = close_app_browsers()

@@ -23,7 +23,7 @@ from openpyxl.worksheet.hyperlink import Hyperlink
 from openpyxl.worksheet.properties import PageSetupProperties
 
 from app.config import QUOTE_DISCLAIMER
-from app.quote_engine import TodayQuotesResult, fetch_today_quotes
+from app.quote_engine import Quote, QuotePart, TodayQuotesResult, fetch_today_quotes
 from app.quote_info import bank_account_line, load_quote_info
 
 # 견적서마다 사용자가 개별 항목을 추가할 수 있는 빈 행 수
@@ -1661,3 +1661,52 @@ def build_excel(
     wb.save(buf)
     buf.seek(0)
     return buf
+
+
+# ---------------------------------------------------------------------------
+# 샘플 견적 (실제 수집 데이터 아님)
+# ---------------------------------------------------------------------------
+SAMPLE_PARTS = [
+    ("CPU", "AMD 라이젠7 9800X3D (그래니트 릿지)", 1, 650000),
+    ("메인보드", "ASUS TUF Gaming B650M-PLUS", 1, 230000),
+    ("메모리", "DDR5 32GB (16GB×2) 5600MHz", 1, 150000),
+    ("그래픽카드", "RTX 5070 SUPER 12GB", 1, 980000),
+    ("SSD", "NVMe M.2 1TB", 1, 130000),
+    ("케이스", "미들타워 강화유리 케이스", 1, 80000),
+    ("파워", "850W 80PLUS GOLD 풀모듈러", 1, 140000),
+    ("쿨러/특수냉각", "360mm 수랭 쿨러", 1, 120000),
+    ("조립비", "조립 · 케이블 정리 · 테스트", 1, 30000),
+    ("모니터", "LG PC 모니터 27U411A 68cm(27인치)", 1, 180000),
+    ("키보드마우스", "무선키보드마우스", 1, 30000),
+]
+
+
+def sample_result() -> TodayQuotesResult:
+    """서식 썸네일(tools/make_form_thumbnails.py) · PDF 변환 예열(pdf_export.prewarm)용 샘플 견적 한 건."""
+    parts = [
+        QuotePart(no=i, category=c, name=n, qty=q, unit_price=p, amount=p * q)
+        for i, (c, n, q, p) in enumerate(SAMPLE_PARTS, 1)
+    ]
+    total = sum(p.amount for p in parts)
+    quote = Quote(
+        tier="고급형",
+        tier_key="sample",
+        model="샘플 게이밍 PC (9800X3D / RTX 5070 SUPER)",
+        tab_label="고급형",
+        description="서식 미리보기용 샘플 견적",
+        product_no=0,
+        # 공급자 상호에 걸리는 제품 페이지 링크(파란 밑줄)가 썸네일에도 보이도록 샘플 URL 을 넣는다
+        url="https://www.compuzone.co.kr/",
+        quote_date="2026-01-01",
+        parts=parts,
+        parts_subtotal=total,
+        total=total,
+    )
+    return TodayQuotesResult(
+        quote_date="2026-01-01",
+        event_url="",
+        event_title="서식 미리보기",
+        series="샘플",
+        quotes=[quote],
+        logic_steps=[],
+    )
