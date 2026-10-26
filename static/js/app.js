@@ -335,12 +335,11 @@ async function openUsedMarketDirect(source, market, event) {
 
 window.openUsedMarketDirect = openUsedMarketDirect;
 
-// ---------- 다나와 · 쿠팡 비슷한 PC 찾기 (CPU · 그래픽카드 · RAM · SSD 기준) ----------
+// ---------- 다나와 비슷한 PC 찾기 (CPU · 그래픽카드 · RAM · SSD 기준) · 쿠팡 검색 ----------
 // 완제품 PC 에는 모니터·키보드·세팅비가 없으므로 본체 금액끼리 비교한다.
 const SIMILAR_NON_BODY = ["모니터", "키보드마우스", "초기 세팅비", "기술지원"];
 const SIMILAR_STORES = {
   danawa: { label: "다나와", icon: "🔍", api: "/api/danawa/similar", unit: "다나와 최저가" },
-  coupang: { label: "쿠팡", icon: "🛒", api: "/api/coupang/similar", unit: "쿠팡 판매가" },
 };
 const danawaModal = $("#danawaModal");
 
@@ -375,8 +374,7 @@ function renderSimilarModal(store, q, data) {
       ${base.notebook ? "" : '<span class="dn-note">(모니터·키보드·세팅비 제외)</span>'}
     </div>
     <div class="dn-base-query">${conf.label} 검색어: ${escapeHtml(data.query || "")}
-      <a href="${escapeHtml(data.search_url || "#")}" target="_blank" rel="noopener">${conf.label}에서 더 보기 ↗</a></div>
-    ${data.disclosure ? `<div class="dn-disclosure">${escapeHtml(data.disclosure)}</div>` : ""}`;
+      <a href="${escapeHtml(data.search_url || "#")}" target="_blank" rel="noopener">${conf.label}에서 더 보기 ↗</a></div>`;
 
   const items = data.items || [];
   if (!items.length) {
@@ -396,7 +394,6 @@ function renderSimilarModal(store, q, data) {
             <td class="dn-thumb">${it.image ? `<img src="${escapeHtml(it.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}</td>
             <td class="dn-name">
               <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a>
-              ${it.rocket ? '<span class="dn-rocket">로켓배송</span>' : ""}
               <div class="dn-spec">${escapeHtml(it.spec || "")}</div>
             </td>
             <td class="dn-match">${similarChip("CPU", it.match?.cpu)}${similarChip("GPU", it.match?.gpu)}${similarChip("RAM", it.match?.ram)}${similarChip("SSD", it.match?.ssd)}</td>
@@ -417,29 +414,13 @@ async function openSimilarCompare(store, index, event) {
   const conf = SIMILAR_STORES[store];
   const q = quoteData?.quotes?.[index];
   if (!conf || !q) return;
-  const part = (cat) => (q.parts || []).find((p) => p.category === cat);
-  const mem = part("메모리");
-  const ssd = part("SSD");
-  const params = new URLSearchParams({
-    cpu: quotePartName(q, "CPU") || "",
-    gpu: quotePartName(q, "그래픽카드") || "",
-    ram: mem?.name || "",
-    ram_qty: String(mem?.qty || 1),
-    ssd: ssd?.name || "",
-    ssd_qty: String(ssd?.qty || 1),
-    model: q.model || "",
-    price: String(quoteBodyPrice(q)),
-  });
+  const params = quoteSpecParams(q);
+  params.set("price", String(quoteBodyPrice(q)));
   showBusy(`${conf.label}에서 사양이 비슷한 PC 찾는 중…`);
   try {
     const res = await fetch(`${conf.api}?${params.toString()}`);
     const data = await res.json().catch(() => ({}));
     const detail = data.detail;
-    if (res.status === 503 && detail?.search_url) {
-      // 쿠팡 파트너스 키가 없는 PC: 사양 검색어로 쿠팡 검색 페이지를 연다
-      window.open(detail.search_url, "_blank", "noopener");
-      return;
-    }
     if (!res.ok) throw new Error((detail && (detail.message || detail)) || `${conf.label} 검색에 실패했습니다.`);
     renderSimilarModal(store, q, data);
   } catch (e) {
@@ -449,7 +430,44 @@ async function openSimilarCompare(store, index, event) {
   }
 }
 
+/** 견적의 CPU · 그래픽카드 · RAM · SSD 품명(노트북은 모델명)을 비교 · 검색 API 파라미터로 */
+function quoteSpecParams(q) {
+  const part = (cat) => (q.parts || []).find((p) => p.category === cat);
+  const mem = part("메모리");
+  const ssd = part("SSD");
+  return new URLSearchParams({
+    cpu: quotePartName(q, "CPU") || "",
+    gpu: quotePartName(q, "그래픽카드") || "",
+    ram: mem?.name || "",
+    ram_qty: String(mem?.qty || 1),
+    ssd: ssd?.name || "",
+    ssd_qty: String(ssd?.qty || 1),
+    model: q.model || "",
+  });
+}
+
+/** 🛒 쿠팡: CPU · 그래픽카드 검색어로 쿠팡 일반 검색 페이지를 연다(파트너스 API 는 쓰지 않는다). */
+async function openCoupangSpecSearch(index, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const q = quoteData?.quotes?.[index];
+  if (!q) return;
+  let url = "";
+  try {
+    const res = await fetch(`/api/coupang/link?${quoteSpecParams(q).toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) url = data.search_url || "";
+  } catch (_) {
+    /* 검색어를 못 만들면 모델명으로 검색한다 */
+  }
+  if (url) window.open(url, "_blank", "noopener");
+  else openCoupangSearch(q.model);
+}
+
 window.openSimilarCompare = openSimilarCompare;
+window.openCoupangSpecSearch = openCoupangSpecSearch;
 $("#danawaClose")?.addEventListener("click", () => hide(danawaModal));
 danawaModal?.addEventListener("click", (e) => {
   if (e.target === danawaModal) hide(danawaModal);
@@ -521,8 +539,8 @@ function summaryCardHtml(q, i) {
         <button type="button" class="btn btn-sm btn-coupang btn-coupang-search" data-keyword="${coupangKeyword}" onclick="openCoupangSearch(decodeURIComponent(this.dataset.keyword), event)">
           🛒 쿠팡검색 ↗
         </button>` : `
-        <button type="button" class="btn btn-sm btn-coupang" title="컴퓨존 사양(CPU · 그래픽카드 · RAM · SSD)과 가장 비슷한 쿠팡 PC를 찾습니다" onclick="openSimilarCompare('coupang', ${i}, event)">
-          🛒 쿠팡
+        <button type="button" class="btn btn-sm btn-coupang" title="CPU · 그래픽카드 검색어로 쿠팡 검색 페이지를 엽니다" onclick="openCoupangSpecSearch(${i}, event)">
+          🛒 쿠팡 ↗
         </button>`}
         <button type="button" class="btn btn-sm btn-bunjang" ${usedSearchButtonAttrs(q)} onclick="openUsedMarketDirect(this, 'bunjang', event)">
           ⚡ 번개장터

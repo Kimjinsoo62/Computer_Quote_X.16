@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 캐시 삭제만 | `.venv\Scripts\python.exe -c "from app.shutdown_service import clear_python_cache; clear_python_cache()"` |
 | 서식 썸네일 재생성 | `.venv\Scripts\python.exe tools\make_form_thumbnails.py` — 폼1~8 디자인을 고쳤을 때만. Excel(COM)이 필요하고 잠깐 Excel 창이 뜬다. 샘플 견적 + 기본(가짜) 견적처 정보로 `static/img/forms/formN.png`(480px)를 만든다 |
 
-런타임 데이터 파일은 모두 `.gitignore`에 있다: `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(쿠팡 파트너스 API 키 — 절대 커밋 금지), `quote_archive/`(견적서 보관함: 카드별 다운로드(`archive=1`)의 xlsx 사본 + `index.json`, `app/quote_archive.py`. 파일명은 `{거래처명}_{구분}_{모델}_…_{id}.xlsx`. 보관본은 `gallery=False`로 다시 만들어 서식 목록 시트를 뺀다), `customers.json`(거래처 목록, `app/customer_book.py`. [설정관리 → 견적정보] 탭의 생성·검색·삭제. 상호명 기준 upsert), `app_settings.json`(작업내역서·보관함 공용 백업 폴더 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
+런타임 데이터 파일은 모두 `.gitignore`에 있다: `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(예전 쿠팡 파트너스 API 키. 지금은 코드가 읽지 않는다 — `coupang_search.py`는 일반 쿠팡 검색 주소만 만든다. 남아 있어도 절대 커밋 금지), `quote_archive/`(견적서 보관함: 카드별 다운로드(`archive=1`)의 xlsx 사본 + `index.json`, `app/quote_archive.py`. 파일명은 `{거래처명}_{구분}_{모델}_…_{id}.xlsx`. 보관본은 `gallery=False`로 다시 만들어 서식 목록 시트를 뺀다), `customers.json`(거래처 목록, `app/customer_book.py`. [설정관리 → 견적정보] 탭의 생성·검색·삭제. 상호명 기준 upsert), `app_settings.json`(작업내역서·보관함 공용 백업 폴더 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
 
 ## 아키텍처
 

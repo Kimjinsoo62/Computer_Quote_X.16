@@ -24,8 +24,7 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 FETCH_TIMEOUT_SEC = 15
-# 다나와가 일부 요청을 새 검색 화면(search.danawa.com/?query=)으로 보내는데, 그 화면은 상품 목록이
-# 스크립트로 그려져 읽을 수 없다. 기존 화면이 나올 때까지 몇 번 다시 요청한다.
+# 상품 목록이 비어 오는 경우가 있어 몇 번 다시 요청한다.
 FETCH_RETRIES = 3
 CACHE_TTL_SEC = 10 * 60
 MAX_ITEMS = 12
@@ -34,12 +33,13 @@ MIN_RESULTS_BEFORE_FALLBACK = 5
 _cache_lock = threading.Lock()
 _search_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
-_ITEM_START_RE = re.compile(r'<li[^>]*class="prod_item[^"]*"')
-_PCODE_RE = re.compile(r'id="productItem(\d+)"')
-_CATEGORY_RE = re.compile(r'id="productItem_categoryInfo_\d+"\s+value="([^"]*)"', re.S)
-_MIN_PRICE_RE = re.compile(r'id="min_price_\d+"\s+value="(\d*)"', re.S)
-_NAME_RE = re.compile(r'<p class="prod_name">\s*<a[^>]*>(.*?)</a>', re.S)
-_SPEC_RE = re.compile(r'<div class="spec_list">(.*?)</div>', re.S)
+# 2026-10 개편된 검색 화면: 상품마다 <li data-product-seq="상품코드"> 한 칸.
+# 상품명 → 사양 줄('9800X3D / RTX 5070 Ti / … / 닫기') → 상품분류 → 옵션별 가격('3,969,000원') 순서다.
+_ITEM_START_RE = re.compile(r'<li[^>]*data-product-seq="(\d+)"')
+_CATEGORY_RE = re.compile(r"<dt[^>]*>상품분류</dt>\s*<dd>(.*?)</dd>", re.S)
+_PRICE_RE = re.compile(r">\s*([\d,]+)원\s*<")
+_NAME_RE = re.compile(r'<p[^>]*>\s*<a[^>]*pcode=\d+[^>]*>(.*?)</a>\s*</p>', re.S)
+_SPEC_END_MARKERS = ("닫기", "상품분류")
 _IMG_RE = re.compile(r'<img[^>]+src="([^"]+)"')
 _TAG_RE = re.compile(r"<[^>]+>")
 _CHIP_TOKEN_RE = re.compile(r"(\d{3,5}[A-Z0-9]*)")
@@ -91,15 +91,22 @@ def _parse_spec(spec: str) -> dict[str, Any]:
 
     데스크탑: 'CPU / 그래픽 / 칩셋 / … / DDR5 / 32GB / M.2 / 1TB …'
     노트북:   '노트북 / 39.6cm(15.6인치) / 1.55kg / 인텔 / 코어i5-13세대 / i5-1335U (1.3GHz) / Iris Xe / 16GB / …'
+    노트북(2026-10 개편): '… 노트북 / … / [CPU] 인텔 / 코어 울트라5 / 125H (4.5GHz) / 11TOPS /
+                          [그래픽] 내장그래픽 / Arc / … / [구성] 8GB / 램 교체 : 가능 / 용량 : 256GB / …'
     """
     tokens = [t.strip() for t in spec.split(" / ") if t.strip()]
-    if tokens and tokens[0] == "노트북":
+    if tokens and tokens[0].endswith("노트북"):
         cpu_idx = next((i for i, t in enumerate(tokens) if "GHz" in t and cpu_key(t)), -1)
         if cpu_idx >= 0:
-            gpu = tokens[cpu_idx + 1] if cpu_idx + 1 < len(tokens) else ""
-            ram_tok = tokens[cpu_idx + 2] if cpu_idx + 2 < len(tokens) else ""
-            ram_m = _RAM_GB_RE.fullmatch(ram_tok)
             storage = next((t.split(":", 1)[1].strip() for t in tokens if t.startswith("용량")), "")
+            gpu_idx = next((i for i, t in enumerate(tokens) if t.startswith("[그래픽]")), -1)
+            ram_tok = next((t[len("[구성]"):].strip() for t in tokens if t.startswith("[구성]")), "")
+            if gpu_idx >= 0:
+                gpu = tokens[gpu_idx + 1] if gpu_idx + 1 < len(tokens) else ""
+            else:
+                gpu = tokens[cpu_idx + 1] if cpu_idx + 1 < len(tokens) else ""
+                ram_tok = tokens[cpu_idx + 2] if cpu_idx + 2 < len(tokens) else ""
+            ram_m = _RAM_GB_RE.fullmatch(ram_tok)
             return {"cpu": tokens[cpu_idx], "gpu": gpu, "ram_gb": int(ram_m.group(1)) if ram_m else 0, "storage": storage}
     cpu = tokens[0] if tokens else ""
     gpu = tokens[1] if len(tokens) > 1 else ""
@@ -138,37 +145,50 @@ def _fetch_search_html(query: str) -> str:
         with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_SEC) as res:
             body = res.read().decode("utf-8", "ignore")
             final_url = res.geturl()
-        if "dsearch.php" in final_url and _PCODE_RE.search(body):
+        if "danawa.com" in final_url and _ITEM_START_RE.search(body):
             return body
         last = body
     return last
 
 
+def _spec_text(block: str, name_end: int) -> str:
+    """상품명 뒤 사양 줄. 접힌 사양의 '닫기' 버튼(없으면 상품분류) 앞까지."""
+    rest = block[name_end:]
+    cut = min((i for i in (rest.find(m) for m in _SPEC_END_MARKERS) if i >= 0), default=len(rest))
+    text = _clean(re.sub(r"<(svg|script|style)[^>]*>.*?</\1>", " ", rest[:cut], flags=re.S))
+    return re.sub(r"\s*:\s*", " : ", text)
+
+
 def _parse_items(body: str, notebook: bool = False) -> list[dict[str, Any]]:
-    starts = [m.start() for m in _ITEM_START_RE.finditer(body)]
+    starts = list(_ITEM_START_RE.finditer(body))
     items: list[dict[str, Any]] = []
-    for i, start in enumerate(starts):
-        block = body[start: starts[i + 1] if i + 1 < len(starts) else start + 30000]
-        pcode = _PCODE_RE.search(block)
-        if not pcode:
-            continue  # 광고 등 상품 번호가 없는 칸
+    seen: set[str] = set()
+    for i, m in enumerate(starts):
+        pcode = m.group(1)
+        if pcode in seen:
+            continue
+        block = body[m.start(): starts[i + 1].start() if i + 1 < len(starts) else m.start() + 60000]
         category = _CATEGORY_RE.search(block)
-        if category and not _is_pc_category(category.group(1), notebook):
+        category_text = _clean(category.group(1)) if category else ""
+        if category_text and not _is_pc_category(category_text, notebook):
             continue
         name = _NAME_RE.search(block)
-        spec = _SPEC_RE.search(block)
-        price = _MIN_PRICE_RE.search(block)
+        if not name:
+            continue  # 광고 등 상품명이 없는 칸
+        seen.add(pcode)
+        spec_text = _spec_text(block, name.end())
+        # 옵션이 여럿이면 첫 줄(대표 구성) 가격. 상품분류 뒤에서 찾는다.
+        price = _PRICE_RE.search(block, category.end() if category else 0)
         image = _IMG_RE.search(block)
-        spec_text = _clean(spec.group(1)) if spec else ""
-        img = image.group(1) if image else ""
+        img = html.unescape(image.group(1)) if image else ""
         if img.startswith("//"):
             img = "https:" + img
         items.append({
-            "pcode": pcode.group(1),
-            "name": _clean(name.group(1)) if name else "",
-            "url": PRODUCT_URL.format(pcode=pcode.group(1)),
+            "pcode": pcode,
+            "name": _clean(name.group(1)),
+            "url": PRODUCT_URL.format(pcode=pcode),
             "image": img,
-            "price": int(price.group(1)) if price and price.group(1) else 0,
+            "price": int(price.group(1).replace(",", "")) if price else 0,
             "spec": spec_text,
             **_parse_spec(spec_text),
         })

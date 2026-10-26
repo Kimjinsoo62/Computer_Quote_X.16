@@ -253,8 +253,8 @@ def api_danawa_similar(
         raise HTTPException(status_code=502, detail=f"다나와 검색에 실패했습니다: {e}") from e
 
 
-@app.get("/api/coupang/similar")
-def api_coupang_similar(
+@app.get("/api/coupang/link")
+def api_coupang_link(
     cpu: str = "",
     gpu: str = "",
     ram: str = "",
@@ -262,22 +262,14 @@ def api_coupang_similar(
     ssd: str = "",
     ssd_qty: int = 1,
     model: str = "",
-    price: int = 0,
 ):
-    """컴퓨존 견적의 CPU · 그래픽카드 · RAM · SSD 기준으로 쿠팡(파트너스 검색 API)에서 비슷한 PC 목록.
-
-    파트너스 키가 없는 PC 는 503 과 함께 일반 쿠팡 검색 주소를 돌려준다(화면이 그 주소를 연다).
-    """
+    """컴퓨존 견적의 CPU · 그래픽카드로 만든 쿠팡 일반 검색 주소(파트너스 API 는 쓰지 않는다)."""
     try:
-        return coupang_search.find_similar(
-            cpu=cpu, gpu=gpu, ram=ram, ram_qty=ram_qty, ssd=ssd, ssd_qty=ssd_qty, model=model, price=price
+        return coupang_search.search_link(
+            cpu=cpu, gpu=gpu, ram=ram, ram_qty=ram_qty, ssd=ssd, ssd_qty=ssd_qty, model=model
         )
-    except coupang_search.NotConfigured as e:
-        raise HTTPException(status_code=503, detail={"message": str(e), "search_url": e.search_url}) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except (urllib.error.URLError, TimeoutError, OSError, RuntimeError) as e:
-        raise HTTPException(status_code=502, detail=f"쿠팡 검색에 실패했습니다: {e}") from e
 
 
 @app.get("/api/update/check")
