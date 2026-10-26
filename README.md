@@ -1,10 +1,15 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver X.38
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver X.39
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver X.38 주요 변경
+## 🆕 Ver X.39 주요 변경
+
+1. **🔍 서식 크게 보기** — 카드 [📥 엑셀 견적서] 미리보기에서 서식을 누르면 같은 자리에 한 장을 크게(`static/img/forms/formN_large.png`, 1200px) 보여 주고 [📥 다운로드 (Excel)] · [✉️ 이메일] · [⬅ 서식 목록]을 고릅니다. `tools/make_form_thumbnails.py`가 목록용 480px 와 크게 보기 1200px 를 함께 만듭니다(시트 그림을 2.5배로 내보낸 뒤 줄임).
+2. **✉️ 견적서 메일 보내기 (Gmail)** — `GET /api/download/excel?…&email=1`이 같은 Excel 을 서버 메모리 초안(1시간)으로 두고 받는 사람(견적처 이메일) · 참조(공급자 이메일) · 제목 · 본문을 돌려주며, 앱 안 발송 창의 [📤 보내기]가 `POST /api/mail/send`로 Gmail SMTP(smtp.gmail.com:465) 발송합니다. 보내는 계정은 `POST /api/mail/account`가 실제 로그인을 확인한 뒤 `app_settings.json`의 `mail_smtp`에 저장하고, 앱 비밀번호는 Windows DPAPI 로 암호화합니다(`app/mail_send.py`).
+
+## Ver X.38 주요 변경
 
 1. **📄 상세 견적서 제목 정리** — 상세 견적서 머리의 [🛍️ 컴퓨존 상품상세 ↗] 버튼을 없애고, `견 적 서` 제목(`.estimate-header h2`) 글자를 1.45rem → 2.9rem(2배)으로 키웠습니다. 상품 페이지는 카드의 [🛍️ 상품상세 ↗]로 엽니다.
 
