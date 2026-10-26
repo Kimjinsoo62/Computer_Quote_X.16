@@ -578,7 +578,6 @@ function bindSummaryCardEvents(container) {
 
 function renderEstimateForm(q) {
   const apple = isAppleQuote(q);
-  const coupangKeyword = encodeURIComponent(q.model);
   const shownTotal = displayTotal(q);
 
   const rows = displayParts(q)
@@ -621,28 +620,12 @@ function renderEstimateForm(q) {
     <div class="estimate-header">
       <h2>견&nbsp;&nbsp;적&nbsp;&nbsp;서</h2>
       <p>${storeHeaderLabel}</p>
+      ${apple ? "" : `
       <div class="card-actions" style="justify-content: center; margin-top: 6px;">
-        ${apple ? `
-        <a href="${q.url}" target="_blank" rel="noopener" class="btn btn-sm btn-buy">
-          🛍️ 애플스토어에서 구입하기 ↗
-        </a>
-        ${hasLiveCto(q) ? `
-        <button type="button" class="btn btn-sm btn-cto btn-open-cto-main" data-index="${activeTab}" data-tierkey="${q.tier_key}">
-          ⚙️ 옵션 업그레이드 (CTO 사양 수정)
-        </button>` : ""}` : `
         <a href="${q.url}" target="_blank" rel="noopener" class="btn btn-sm btn-buy">
           🛍️ 컴퓨존 상품상세 ↗
-        </a>`}
-        <button type="button" class="btn btn-sm btn-coupang btn-coupang-search" data-keyword="${coupangKeyword}" onclick="openCoupangSearch(decodeURIComponent(this.dataset.keyword), event)">
-          🛒 쿠팡에서 검색하기 ↗
-        </button>
-        <button type="button" class="btn btn-sm btn-bunjang" ${usedSearchButtonAttrs(q)} onclick="openUsedMarketDirect(this, 'bunjang', event)">
-          ⚡ 번개장터에서 검색 ↗
-        </button>
-        <button type="button" class="btn btn-sm btn-joongna" ${usedSearchButtonAttrs(q)} onclick="openUsedMarketDirect(this, 'joongna', event)">
-          🟢 중고나라에서 검색 ↗
-        </button>
-      </div>
+        </a>
+      </div>`}
     </div>
     <div class="estimate-meta">
       <div class="meta-row"><span class="meta-label">견적일</span><span class="meta-value">${quoteInfo?.quote_date || q.quote_date}</span></div>
@@ -757,10 +740,6 @@ function renderDetail(quotes) {
   if (!detailArea) return;
 
   detailArea.innerHTML = renderEstimateForm(q);
-
-  detailArea.querySelector(".btn-open-cto-main")?.addEventListener("click", () => {
-    openCtoModal(activeTab, q.tier_key);
-  });
   loadDetailImage(detailArea);
 }
 
