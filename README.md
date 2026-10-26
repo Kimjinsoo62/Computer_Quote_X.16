@@ -1,10 +1,14 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver X.33
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver X.34
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver X.33 주요 변경
+## 🆕 Ver X.34 주요 변경
+
+1. **💽 거래처 · 견적정보 백업** — [⚙️ 설정관리 → 📇 견적정보 · 거래처] 탭의 거래처 목록에 [📂 백업 폴더] · [💽 백업 (ZIP)] 버튼을 넣었습니다. `POST /api/customers/backup`이 `customers.json` + `quote_info.json` + `거래처목록.csv`(UTF-8 BOM, 엑셀용) + README를 `거래처_백업_YYYYMMDD_HHMMSS.zip`으로 작업내역서 · 보관함과 같은 백업 폴더에 저장합니다. 화면의 보관함 · 거래처 백업은 공용 함수(`backupZipToFolder`)를 씁니다.
+
+## Ver X.33 주요 변경
 
 1. **🗕 서버 명령창 최소화 시작** — `START.bat`이 의존성 확인(필요 시 install.bat) 뒤 자신을 최소화된 창(`AI PC Quote Server (8090)`)으로 다시 실행하고 처음 창은 닫습니다. 서버 창은 작업 표시줄에 남아 접속 주소 · 로그 · `stop.bat` 안내를 볼 수 있으며, [종료] · stop.bat · 업데이트 재시작 흐름은 그대로입니다.
 
