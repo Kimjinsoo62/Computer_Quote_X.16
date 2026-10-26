@@ -1781,6 +1781,11 @@ html.calc-html body {
 .cust-book-head { display: flex; align-items: baseline; justify-content: space-between; }
 .cust-book-tools { display: flex; gap: 4px; }
 .cust-book-tools .qa-search { flex: 1; max-width: none; }
+.set-search { display: flex; gap: 3px; align-items: center; flex: 1; max-width: 420px; }
+.set-search .qa-search { flex: 1; max-width: none; }
+.settings-panel .tr-list-search { display: flex; gap: 3px; align-items: center; max-width: 420px; }
+.settings-panel .tr-list-search .tr-inp { flex: 1; min-width: 0; }
+.set-search-go, .set-search-clear { white-space: nowrap; padding: 2px 8px; }
 .cust-table-wrap { flex: 1 1 auto; min-height: 120px; overflow-y: auto; }
 .cust-table tr.cust-row { cursor: pointer; }
 .cust-table tr.is-selected td { background: rgba(59, 130, 246, 0.18); }

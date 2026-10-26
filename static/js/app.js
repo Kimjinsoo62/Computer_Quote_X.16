@@ -3387,7 +3387,7 @@ async function loadTrReportsList() {
     } else {
       isTaskReportSaved = false;
     }
-    renderTrListTable(trReportsList);
+    renderTrListTable(filteredTrReports());
     const countEl = $("#trListCount");
     if (countEl) countEl.textContent = trReportsList.length;
     const statsEl = $("#trListStats");
@@ -3404,7 +3404,7 @@ function renderTrListTable(reports) {
   tbody.innerHTML = "";
 
   if (reports.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--muted);">저장된 작업 내역서가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--muted);">${trReportsList.length ? "검색 결과가 없습니다." : "저장된 작업 내역서가 없습니다."}</td></tr>`;
     return;
   }
 
@@ -3715,13 +3715,11 @@ Object.values(qiFields).forEach((sel) => {
 });
 
 // 검색 필터
-$("#trSearchInput")?.addEventListener("input", (e) => {
-  const q = e.target.value.toLowerCase().trim();
-  if (!q) {
-    renderTrListTable(trReportsList);
-    return;
-  }
-  const filtered = trReportsList.filter((rep) => {
+// 검색칸에 남은 검색어로 목록을 거른다 (새로고침 후에도 필터 유지)
+function filteredTrReports() {
+  const q = ($("#trSearchInput")?.value || "").toLowerCase().trim();
+  if (!q) return trReportsList;
+  return trReportsList.filter((rep) => {
     return (
       (rep.customer_name || "").toLowerCase().includes(q) ||
       (rep.customer_phone || "").toLowerCase().includes(q) ||
@@ -3729,7 +3727,24 @@ $("#trSearchInput")?.addEventListener("input", (e) => {
       (rep.device_model || "").toLowerCase().includes(q)
     );
   });
-  renderTrListTable(filtered);
+}
+$("#trSearchInput")?.addEventListener("input", () => renderTrListTable(filteredTrReports()));
+// 설정관리 목록 검색 버튼: 🔍 검색 / Enter 는 필터를 다시 적용, ✕ 는 검색어를 지우고 전체 목록으로
+function runSettingsSearch(inputId, clear = false) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (clear) inp.value = "";
+  inp.dispatchEvent(new Event("input"));
+  inp.closest(".settings-panel")?.querySelector(".tr-list-table-wrap")?.scrollTo({ top: 0 });
+  inp.focus();
+}
+document.querySelectorAll(".set-search-go").forEach((b) => b.addEventListener("click", () => runSettingsSearch(b.dataset.for)));
+document.querySelectorAll(".set-search-clear").forEach((b) => b.addEventListener("click", () => runSettingsSearch(b.dataset.for, true)));
+["custSearch", "qaSearch", "trSearchInput"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); runSettingsSearch(id); }
+    else if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.stopPropagation(); runSettingsSearch(id, true); }
+  });
 });
 // ---------- 독립 창 계산기 ----------
 const CALC_POPUP_NAME = "quoteCalcPopup";

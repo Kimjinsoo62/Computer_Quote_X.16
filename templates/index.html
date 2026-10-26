@@ -257,6 +257,7 @@
               </div>
               <div class="cust-book-tools">
                 <input type="text" id="custSearch" class="tr-inp qa-search" placeholder="상호 · 담당자 · 연락처 · 주소 검색" autocomplete="off" />
+                <button type="button" class="btn btn-primary btn-sm set-search-go" data-for="custSearch" title="입력한 단어로 목록을 걸러 봅니다 (Enter)">🔍 검색</button><button type="button" class="btn btn-outline btn-sm set-search-clear" data-for="custSearch" title="검색어를 지우고 전체 목록을 봅니다">✕</button>
                 <button type="button" id="custBtnNew" class="btn btn-outline btn-sm" title="견적처 칸을 비우고 새 거래처를 입력합니다">➕ 신규</button>
               </div>
               <div class="tr-list-table-wrap cust-table-wrap">
@@ -374,7 +375,10 @@
         <!-- 3. 견적보관함 -->
         <section class="settings-panel hidden" data-panel="archive">
           <div class="qa-toolbar">
-            <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="거래처명 · 모델 검색" />
+            <div class="set-search">
+              <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="거래처명 · 모델 검색" />
+              <button type="button" class="btn btn-primary btn-sm set-search-go" data-for="qaSearch" title="입력한 단어로 목록을 걸러 봅니다 (Enter)">🔍 검색</button><button type="button" class="btn btn-outline btn-sm set-search-clear" data-for="qaSearch" title="검색어를 지우고 전체 목록을 봅니다">✕</button>
+            </div>
             <span id="qaStats" class="qa-stats"></span>
             <div class="qa-toolbar-right">
               <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
@@ -403,6 +407,7 @@
           <div class="tr-list-toolbar">
             <div class="tr-list-search">
               <input type="text" id="trSearchInput" class="tr-inp" placeholder="고객명, 연락처, 접수번호 검색..." />
+              <button type="button" class="btn btn-primary btn-sm set-search-go" data-for="trSearchInput" title="입력한 단어로 목록을 걸러 봅니다 (Enter)">🔍 검색</button><button type="button" class="btn btn-outline btn-sm set-search-clear" data-for="trSearchInput" title="검색어를 지우고 전체 목록을 봅니다">✕</button>
             </div>
             <span id="trListStats" class="qa-stats"></span>
             <div class="qa-toolbar-right">
