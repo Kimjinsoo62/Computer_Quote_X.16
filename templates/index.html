@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261027b" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261027d" />
 </head>
 <body>
   <nav class="nav">
@@ -551,6 +551,49 @@
       <div class="modal-body">
         <p id="formGalleryHint" class="form-gallery-hint"></p>
         <div id="formGalleryGrid" class="form-gallery-grid"></div>
+        <div id="formGalleryDetail" class="form-gallery-detail hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 견적서 메일 발송 창 (Gmail 로 보냄, app/mail_send.py) -->
+  <div id="mailModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal mail-modal" role="dialog" aria-labelledby="mailTitle">
+      <div class="modal-header">
+        <h3 id="mailTitle">✉️ 견적서 메일 보내기</h3>
+        <button type="button" class="modal-close btn-modal-close" id="mailClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <div class="mail-account">
+          <div id="mailAccountView" class="mail-account-view">
+            보내는 계정: <strong id="mailFrom">-</strong>
+            <button type="button" id="mailAccountEdit" class="btn btn-outline btn-sm">계정 변경</button>
+          </div>
+          <div id="mailAccountForm" class="mail-account-form hidden">
+            <div class="mail-account-row">
+              <label>보내는 Gmail 주소 <input type="email" id="mailUser" placeholder="예: mycompany@gmail.com" autocomplete="off" /></label>
+              <label>앱 비밀번호 <input type="password" id="mailPass" placeholder="16자리 (띄어쓰기 상관없음)" autocomplete="new-password" /></label>
+              <button type="button" id="mailAccountSave" class="btn btn-primary btn-sm">💾 저장 (로그인 확인)</button>
+            </div>
+            <small>Gmail 일반 비밀번호는 쓸 수 없습니다. Google 계정에서 2단계 인증을 켠 뒤
+              <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">앱 비밀번호 만들기 ↗</a>에서 받은 16자리를 넣으세요.
+              비밀번호는 이 PC 에만 암호화해 저장됩니다(GitHub 에 올라가지 않음).</small>
+          </div>
+        </div>
+        <div class="mail-form">
+          <label for="mailTo">받는 사람</label><input type="text" id="mailTo" placeholder="견적처 이메일 (여러 명은 쉼표로)" />
+          <label for="mailCc">참조</label><input type="text" id="mailCc" placeholder="(선택)" />
+          <label for="mailSubject">제목</label><input type="text" id="mailSubject" />
+          <label>첨부</label><span id="mailAttach" class="mail-attach">-</span>
+          <label for="mailBody">본문</label><textarea id="mailBody" rows="13"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="qa-stats">받는 사람 · 제목 · 본문은 고쳐서 보낼 수 있습니다.</span>
+        <div class="modal-footer-right">
+          <button type="button" id="mailCancel" class="btn btn-outline btn-sm">취소</button>
+          <button type="button" id="mailSend" class="btn btn-primary btn-sm">📤 보내기</button>
+        </div>
       </div>
     </div>
   </div>
@@ -817,6 +860,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261027b"></script>
+  <script src="/static/js/app.js?v=20261027d"></script>
 </body>
 </html>

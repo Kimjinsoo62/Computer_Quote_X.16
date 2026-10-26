@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""폼1~8 견적서 서식 썸네일(static/img/forms/formN.png)을 다시 만든다.
+"""폼1~8 견적서 서식 썸네일(static/img/forms/formN.png)과 크게 보기 그림(formN_large.png)을 다시 만든다.
 
 서식 디자인(excel_export.py)을 고쳤을 때만 실행한다. 실행 PC에 Excel 이 있어야 한다.
-샘플 견적 한 건으로 전체 Excel 을 만든 뒤 Excel(COM)로 각 폼 시트를 그림으로 내보내고 폭 480px 로 줄인다.
+샘플 견적 한 건으로 전체 Excel 을 만든 뒤 Excel(COM)로 각 폼 시트를 그림으로 내보낸다.
+목록용은 폭 480px, 미리보기 창에서 한 장을 크게 볼 때 쓰는 _large 는 글자를 읽을 수 있게 폭 1200px.
 견적처·공급자 정보는 quote_info.json 이 아니라 기본값(가짜 데이터)을 쓴다 → 저장소에 올라가는 썸네일에 실제 고객 정보가 들어가지 않는다.
 
     .venv\\Scripts\\python.exe tools\\make_form_thumbnails.py
@@ -27,6 +28,9 @@ from app.quote_info import DEFAULT_INFO  # noqa: E402
 
 OUT_DIR = ROOT / "static" / "img" / "forms"
 THUMB_WIDTH = 480
+LARGE_WIDTH = 1200
+# 시트 그림(메타파일 = 벡터)을 이 배율로 키운 차트에 붙여 내보낸다 → _large 도 글자가 또렷하다
+EXPORT_SCALE = 2.5
 
 SAMPLE_PARTS = [
     ("CPU", "AMD 라이젠7 9800X3D (그래니트 릿지)", 1, 650000),
@@ -77,6 +81,7 @@ PS_SCRIPT = r"""
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $xlsx = '{XLSX}'
 $out = '{OUT}'
+$scale = {SCALE}
 $app = New-Object -ComObject Excel.Application
 # 창이 보이지 않으면 CopyPicture/Chart.Export 가 빈 그림을 내보낸다 → 잠깐 보이게 띄운다
 $app.Visible = $true
@@ -93,9 +98,16 @@ try {
     $rng = $ws.UsedRange
     # xlScreen=1, xlPicture=-4147 (메타파일: 확대해도 깨지지 않는다)
     $rng.CopyPicture(1, -4147) | Out-Null
-    $co = $ws.ChartObjects().Add(0, 0, $rng.Width, $rng.Height)
+    $co = $ws.ChartObjects().Add(0, 0, $rng.Width * $scale, $rng.Height * $scale)
     $co.Activate() | Out-Null
     $co.Chart.Paste() | Out-Null
+    # 붙인 그림을 차트 크기에 맞춰 키운다(벡터라 깨지지 않음)
+    if ($co.Chart.Shapes.Count -gt 0) {
+      $pic = $co.Chart.Shapes.Item($co.Chart.Shapes.Count)
+      $pic.LockAspectRatio = 0
+      $pic.Left = 0; $pic.Top = 0
+      $pic.Width = $co.Chart.ChartArea.Width; $pic.Height = $co.Chart.ChartArea.Height
+    }
     $co.Chart.Refresh() | Out-Null
     Start-Sleep -Milliseconds 300
     $co.Chart.Export("$out\form$n.png", "PNG") | Out-Null
@@ -118,7 +130,9 @@ def main() -> int:
         # 실제 quote_info.json 대신 기본값(가짜 데이터)으로 만든다.
         with mock.patch("app.excel_export.load_quote_info", return_value=dict(DEFAULT_INFO)):
             xlsx.write_bytes(build_excel(sample_result(), quote_kind_label="소비자견적", gallery=False).getvalue())
-        script = PS_SCRIPT.replace("{XLSX}", str(xlsx)).replace("{OUT}", str(tmp_dir))
+        script = (
+            PS_SCRIPT.replace("{XLSX}", str(xlsx)).replace("{OUT}", str(tmp_dir)).replace("{SCALE}", str(EXPORT_SCALE))
+        )
         encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
         completed = subprocess.run(
             ["powershell", "-NoProfile", "-STA", "-EncodedCommand", encoded],
@@ -135,13 +149,15 @@ def main() -> int:
             if not src.exists():
                 print(f"[누락] form{n}.png — Excel 이 시트를 내보내지 못했습니다.", file=sys.stderr)
                 continue
-            img = Image.open(src).convert("RGB")
-            ratio = THUMB_WIDTH / img.width
-            img = img.resize((THUMB_WIDTH, max(1, round(img.height * ratio))), Image.LANCZOS)
-            dst = OUT_DIR / f"form{n}.png"
-            img.save(dst, optimize=True)
+            src_img = Image.open(src).convert("RGB")
+            print(f"  내보낸 원본 form{n}: {src_img.width}x{src_img.height}")
+            for width, suffix in ((THUMB_WIDTH, ""), (LARGE_WIDTH, "_large")):
+                ratio = width / src_img.width
+                img = src_img.resize((width, max(1, round(src_img.height * ratio))), Image.LANCZOS)
+                dst = OUT_DIR / f"form{n}{suffix}.png"
+                img.save(dst, optimize=True)
+                print(f"{dst.relative_to(ROOT)} {img.width}x{img.height} {dst.stat().st_size // 1024}KB")
             made += 1
-            print(f"{dst.relative_to(ROOT)} {img.width}x{img.height} {dst.stat().st_size // 1024}KB")
         print(f"썸네일 {made}/{len(FORM_LABELS)}개 생성")
         return 0 if made == len(FORM_LABELS) else 1
 

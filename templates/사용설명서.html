@@ -642,9 +642,18 @@
         <tr>
           <td><strong>📥 엑셀 견적서</strong></td>
           <td>각 견적 카드 하단</td>
-          <td><strong>서식 미리보기 창</strong>이 열리고 폼1~폼8의 <strong>썸네일</strong>이 한 화면에 뜹니다. 하나를 누르면 그 제품 <strong>단 1건</strong>이 그 서식으로만 담긴 파일(시트 이름 <code>견   적   서</code>)이 바로 내려옵니다(고객 단일 발송용). 썸네일은 샘플 견적으로 만든 디자인 미리보기라 실제 금액은 들어 있지 않습니다.</td>
+          <td><strong>서식 미리보기 창</strong>이 열리고 폼1~폼8의 <strong>썸네일</strong>이 한 화면에 뜹니다. 하나를 누르면 그 서식이 같은 자리에 <strong>한 장으로 크게</strong>(글자를 읽을 수 있게, 세로는 스크롤) 보이고, 위쪽에서 고릅니다.
+            <ul>
+              <li><strong>📥 다운로드 (Excel)</strong>: 그 제품 <strong>단 1건</strong>이 그 서식으로만 담긴 파일(시트 이름 <code>견   적   서</code>)을 받습니다.</li>
+              <li><strong>✉️ 이메일</strong>: 같은 파일이 <strong>첨부된 메일 발송 창</strong>이 앱 안에 열립니다. 받는 사람은 설정의 <strong>견적처 이메일</strong>, 참조는 <strong>공급자 이메일</strong>(견적처와 같으면 비움), 제목 · 본문(인사 · 모델 · 견적 금액 · 견적일 · 서명)이 채워져 있고 모두 고칠 수 있습니다. <strong>📤 보내기</strong>를 누르면 저장해 둔 <strong>Gmail 계정</strong>으로 바로 보냅니다.</li>
+              <li><strong>⬅ 서식 목록</strong>: 8장 목록으로 돌아갑니다.</li>
+            </ul>
+            그림은 샘플 견적으로 만든 디자인 미리보기라 실제 금액은 들어 있지 않으며, 받는 파일 · 메일 첨부에는 이 카드의 실제 견적이 들어갑니다.</td>
         </tr>
       </table>
+      <div class="manual-tip">
+        <strong>✉️ 처음 한 번: 보내는 Gmail 계정 설정</strong>: 메일 발송 창 맨 위에서 <strong>보내는 Gmail 주소</strong>와 <strong>앱 비밀번호</strong>(16자리)를 넣고 <strong>💾 저장 (로그인 확인)</strong>을 누르면 Gmail 에 실제로 로그인해 본 뒤 저장합니다. Gmail 일반 비밀번호는 쓸 수 없으니, Google 계정에서 <strong>2단계 인증</strong>을 켠 뒤 <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">앱 비밀번호 만들기</a>에서 받으세요. 비밀번호는 서버 PC 의 <code>app_settings.json</code>에 Windows 암호화(DPAPI)로 저장되어 이 PC · 이 Windows 사용자만 풀 수 있고, GitHub 에는 올라가지 않습니다. 계정을 바꾸려면 발송 창의 <strong>계정 변경</strong>을 누르세요. 메일은 서버 PC 에서 보내므로 같은 네트워크의 다른 PC 에서 눌러도 같은 계정으로 나갑니다. 보낸 메일은 Gmail 의 <strong>보낸편지함</strong>에 남습니다.
+      </div>
       <div class="manual-tip">
         <strong>🗃️ 견적서 보관함</strong>: 카드별 <strong>📥 엑셀 견적서</strong>로 내려받은 최종 견적서는 프로그램 폴더의 <code>quote_archive/</code>에 자동으로 한 부 더 저장됩니다. 보관 파일 이름은 <strong>거래처명</strong>(견적처 상호)으로 시작해 탐색기에서 거래처별로 모여 보입니다(예: <code>영일오엔씨_입문형_아이웍스X-0216_…_2026-10-26_20261026-153012-120.xlsx</code>, 끝의 숫자는 저장 시각). 보관본에는 용량을 줄이기 위해 썸네일이 든 <strong>서식 목록</strong> 시트가 들어가지 않으며, 그 외 내용은 내려받은 파일과 같습니다. <strong>⚙️ 설정관리 → 🗃️ 견적보관함</strong> 탭(숫자는 보관 건수)을 열면 <strong>거래처명 · 모델/구분 · 금액</strong>이 목록으로 보이고(저장 시각 · 서식 · 마진 · 파일명은 행에 마우스를 올리면 툴팁으로 표시), 검색 · <strong>📥 받기</strong>(다시 내려받기) · <strong>📂</strong>(서버 PC 탐색기에서 파일 선택) · <strong>✕</strong> 삭제를 할 수 있습니다. <strong>💽 백업 (ZIP)</strong>은 보관함 전체를 작업내역서와 같은 백업 폴더에 <code>견적서_백업_날짜_시각.zip</code>(목록 <code>index.json</code> + 모든 Excel)으로 저장하고 백업 폴더를 열어 줍니다. <strong>📂 보관 폴더</strong>는 <code>quote_archive/</code> 자체를 엽니다. 복구는 ZIP 안의 <code>index.json</code>과 <code>excel/</code>의 파일을 <code>quote_archive/</code>에 그대로 복사하면 됩니다.
       </div>

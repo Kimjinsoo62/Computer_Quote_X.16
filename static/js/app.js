@@ -818,21 +818,19 @@ function openFormGallery(index) {
   }
   formGalleryIndex = index;
   const title = $("#formGalleryTitle");
-  const hint = $("#formGalleryHint");
   if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — ${q.tab_label || q.tier || ""} ${q.model || ""}`.trim();
-  if (hint) hint.textContent = "서식을 누르면 이 항목만 그 서식으로 담긴 파일(시트 이름 \"견   적   서\")을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
   grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
     const n = Number(k);
     return `
-      <div class="form-gallery-item" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 서식으로 받기">
+      <div class="form-gallery-item" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 크게 보기">
         <img class="form-gallery-thumb" src="/static/img/forms/form${n}.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 미리보기" loading="lazy" />
         <div class="form-gallery-name">폼${n} (${EXCEL_FORM_LABELS[n]})</div>
         <div class="form-gallery-desc">${FORM_GALLERY_DESC[n] || ""}</div>
-        <button type="button" class="btn btn-sm btn-primary">📥 이 서식으로 받기</button>
+        <button type="button" class="btn btn-sm btn-primary">🔍 크게 보기</button>
       </div>`;
   }).join("");
   grid.querySelectorAll(".form-gallery-item").forEach((item) => {
-    const pick = () => downloadFormFromGallery(Number(item.dataset.form));
+    const pick = () => showFormDetail(Number(item.dataset.form));
     item.addEventListener("click", pick);
     item.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -841,23 +839,163 @@ function openFormGallery(index) {
       }
     });
   });
+  showFormGrid();
   show(modal);
+}
+
+/** 8장 목록으로 돌아간다. */
+function showFormGrid() {
+  const hint = $("#formGalleryHint");
+  if (hint) hint.textContent = "서식을 누르면 크게 보여 줍니다. 크게 본 화면에서 📥 다운로드(Excel) 또는 ✉️ 이메일(견적서 첨부)을 고르세요. 그림은 샘플 견적으로 만든 디자인 미리보기입니다.";
+  show($("#formGalleryGrid"));
+  hide($("#formGalleryDetail"));
+}
+
+/** 고른 서식 한 장을 8장 보이던 자리에 크게 보여 주고, 다운로드 · 이메일 버튼을 단다. */
+function showFormDetail(n) {
+  const detail = $("#formGalleryDetail");
+  if (!detail || !EXCEL_FORM_LABELS[n]) return;
+  const customerEmail = (quoteInfo?.customer_email || "").trim();
+  const hint = $("#formGalleryHint");
+  if (hint) hint.textContent = "그림은 샘플 견적으로 만든 디자인 미리보기이며, 받는 파일에는 이 카드의 실제 견적 내용이 들어갑니다.";
+  detail.innerHTML = `
+    <div class="fg-detail-bar">
+      <button type="button" class="btn btn-sm btn-outline fg-back">⬅ 서식 목록</button>
+      <strong>폼${n} (${EXCEL_FORM_LABELS[n]})</strong>
+      <span class="fg-detail-desc">${FORM_GALLERY_DESC[n] || ""}</span>
+      <div class="fg-detail-actions">
+        <button type="button" class="btn btn-sm btn-primary fg-download" title="이 서식으로 이 카드의 견적서를 Excel 파일로 받습니다">📥 다운로드 (Excel)</button>
+        <button type="button" class="btn btn-sm btn-outline fg-email" title="견적서 Excel 을 첨부한 메일 작성 창을 엽니다 — 받는 사람: ${escapeHtml(customerEmail || "견적처 이메일 미입력(직접 입력)")}">✉️ 이메일</button>
+      </div>
+    </div>
+    <div class="fg-detail-view">
+      <img src="/static/img/forms/form${n}_large.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 크게 보기" />
+    </div>`;
+  detail.querySelector(".fg-back").addEventListener("click", showFormGrid);
+  detail.querySelector(".fg-download").addEventListener("click", () => downloadFormFromGallery(n));
+  detail.querySelector(".fg-email").addEventListener("click", () => emailFormFromGallery(n));
+  hide($("#formGalleryGrid"));
+  show(detail);
+  detail.querySelector(".fg-detail-view").scrollTop = 0;
 }
 
 function closeFormGallery() {
   hide($("#formGalleryModal"));
 }
 
+function galleryExcelUrl(n) {
+  return `/api/download/excel?${excelQueryParams(formGalleryIndex)}&archive=1&forms=${n}`;
+}
+
 async function downloadFormFromGallery(n) {
   if (!EXCEL_FORM_LABELS[n]) return;
   closeFormGallery();
-  await downloadWithBusy(
-    `/api/download/excel?${excelQueryParams(formGalleryIndex)}&archive=1&forms=${n}`,
-    {},
-    `견적서_폼${n}.xlsx`,
-    `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`
-  );
+  await downloadWithBusy(galleryExcelUrl(n), {}, `견적서_폼${n}.xlsx`, `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`);
 }
+
+// ---------- ✉️ 견적서 메일 발송 창 (Gmail SMTP, app/mail_send.py) ----------
+// [✉️ 이메일] → 서버가 Excel 을 만들어 초안으로 보관하고 받는 사람(견적처) · 참조(공급자) · 제목 · 본문을 채워 준다.
+// 이 창에서 고친 뒤 [보내기] 를 누르면 서버가 보내는 Gmail 계정으로 견적서를 첨부해 보낸다.
+const mailModal = $("#mailModal");
+let mailDraftId = "";
+let mailAccount = { user: "", configured: false };
+
+async function emailFormFromGallery(n) {
+  if (!EXCEL_FORM_LABELS[n]) return;
+  closeFormGallery();
+  showBusy(`폼${n} ${EXCEL_FORM_LABELS[n]} 견적서를 첨부한 메일 준비 중…`);
+  let data;
+  try {
+    const res = await fetch(`${galleryExcelUrl(n)}&email=1`);
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `메일 준비 실패 (${res.status})`);
+  } catch (e) {
+    alert("이메일 오류: " + e.message);
+    return;
+  } finally {
+    hideBusy();
+  }
+  if (data.archive_id) loadQuoteArchive();
+  mailDraftId = data.draft_id;
+  $("#mailTo").value = data.to || "";
+  $("#mailCc").value = data.cc || "";
+  $("#mailSubject").value = data.subject || "";
+  $("#mailBody").value = data.body || "";
+  $("#mailAttach").textContent = `📎 ${data.filename} (${qaFmtSize(data.size)})`;
+  syncMailAccountUI(data.account || mailAccount);
+  show(mailModal);
+  (data.to ? $("#mailSubject") : $("#mailTo"))?.focus();
+}
+
+function syncMailAccountUI(account, editing = false) {
+  mailAccount = account || { user: "", configured: false };
+  const form = !mailAccount.configured || editing;
+  $("#mailFrom").textContent = mailAccount.user || "-";
+  $("#mailAccountView").classList.toggle("hidden", form);
+  $("#mailAccountForm").classList.toggle("hidden", !form);
+  if (form) {
+    $("#mailUser").value = mailAccount.user || (quoteInfo?.supplier_email || "").trim();
+    $("#mailPass").value = "";
+  }
+}
+
+async function saveMailAccount() {
+  const user = $("#mailUser").value.trim();
+  const password = $("#mailPass").value;
+  showBusy("Gmail 로그인 확인 중…");
+  try {
+    const res = await postJsonRaw("/api/mail/account", { user, password });
+    if (!res.ok) throw new Error(res.data?.detail || "계정을 저장하지 못했습니다.");
+    syncMailAccountUI(res.data);
+  } catch (e) {
+    alert("보내는 계정 오류: " + e.message);
+  } finally {
+    hideBusy();
+  }
+}
+
+async function sendQuoteMail() {
+  if (!mailAccount.configured) {
+    alert("먼저 위의 보내는 Gmail 주소와 앱 비밀번호를 저장하세요.");
+    $("#mailUser")?.focus();
+    return;
+  }
+  const to = $("#mailTo").value.trim();
+  if (!to) {
+    alert("받는 사람 이메일을 입력하세요.");
+    $("#mailTo").focus();
+    return;
+  }
+  showBusy(`${to} 에게 견적서 메일 보내는 중…`);
+  let res;
+  try {
+    res = await postJsonRaw("/api/mail/send", {
+      draft_id: mailDraftId,
+      to,
+      cc: $("#mailCc").value.trim(),
+      subject: $("#mailSubject").value,
+      body: $("#mailBody").value,
+    });
+  } catch (_) {
+    res = { ok: false, status: 0, data: { detail: "서버에 연결할 수 없습니다." } };
+  } finally {
+    hideBusy();
+  }
+  if (res.ok) {
+    hide(mailModal);
+    alert(`✔ 견적서 메일을 보냈습니다.\n\n받는 사람: ${res.data.to.join(", ")}${res.data.cc.length ? `\n참조: ${res.data.cc.join(", ")}` : ""}\n보낸 계정: ${res.data.from}`);
+    return;
+  }
+  if (res.status === 410) hide(mailModal); // 초안 만료: 창을 닫고 다시 시작하게 한다
+  if (res.status === 428) syncMailAccountUI({ user: mailAccount.user, configured: false });
+  alert("메일 발송 오류: " + (res.data?.detail || `실패 (${res.status})`));
+}
+
+$("#mailAccountEdit")?.addEventListener("click", () => syncMailAccountUI(mailAccount, true));
+$("#mailAccountSave")?.addEventListener("click", saveMailAccount);
+$("#mailSend")?.addEventListener("click", sendQuoteMail);
+$("#mailCancel")?.addEventListener("click", () => hide(mailModal));
+$("#mailClose")?.addEventListener("click", () => hide(mailModal));
 
 $("#formGalleryClose")?.addEventListener("click", closeFormGallery);
 $("#formGalleryModal")?.addEventListener("click", (e) => {

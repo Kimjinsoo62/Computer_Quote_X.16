@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import smtplib
 import socket
 from dataclasses import replace
 from datetime import date
@@ -45,7 +46,7 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
-from app import customer_book, quote_archive
+from app import customer_book, mail_send, quote_archive
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
@@ -634,9 +635,12 @@ def download_excel(
     cto: str = "",
     forms: str = "",
     archive: int = 0,
+    email: int = 0,
 ):
     """카드 한 건(index)의 견적서를 내려준다. 목록 전체 비교 파일(전체 비교 Excel)은 없앴다(index 필수).
     archive=1 이면 만든 파일을 견적서 보관함(quote_archive/)에도 저장한다.
+    email=1 이면 파일 대신, 같은 Excel 을 메일 초안으로 보관하고 발송 창에 채울 받는 사람(견적처 이메일) ·
+    참조 · 제목 · 본문을 JSON 으로 돌려준다(발송은 /api/mail/send).
     파일명은 "{거래처명}_{구분}_{모델}_..." 로 시작해 보관함·탐색기에서 거래처별로 정렬된다.
 
     forms 를 주면(예: "3" 또는 "1,3") 견적요약 없이 해당 폼 시트만 담는다. 화면은 서식마다 따로 호출해
@@ -827,11 +831,61 @@ def download_excel(
             },
         )
         headers["X-Archive-Id"] = entry["id"]
+    if email:
+        data = buf.getvalue()
+        return {
+            "ok": True,
+            "draft_id": mail_send.add_draft(data, display_name),
+            "filename": display_name,
+            "size": len(data),
+            "account": mail_send.get_account(),
+            "archive_id": headers.get("X-Archive-Id", ""),
+            **mail_send.compose_fields(info, model_head or picked.model or "", picked.total, result.quote_date),
+        }
     return Response(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
     )
+
+
+# ---------------------------------------------------------------------------
+# 견적서 메일 발송 (Gmail SMTP, app/mail_send.py)
+# ---------------------------------------------------------------------------
+@app.get("/api/mail/account")
+def api_mail_account():
+    return mail_send.get_account()
+
+
+@app.post("/api/mail/account")
+def api_mail_account_save(payload: dict = Body(default={})):
+    """보내는 Gmail 주소 + 앱 비밀번호. 실제로 로그인해 본 뒤 저장한다."""
+    try:
+        return mail_send.set_account(str(payload.get("user") or ""), str(payload.get("password") or ""))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except (OSError, smtplib.SMTPException) as e:
+        raise HTTPException(status_code=502, detail=f"Gmail 에 연결하지 못했습니다: {e}") from e
+
+
+@app.post("/api/mail/send")
+def api_mail_send(payload: dict = Body(default={})):
+    try:
+        return mail_send.send_draft(
+            str(payload.get("draft_id") or ""),
+            str(payload.get("to") or ""),
+            str(payload.get("cc") or ""),
+            str(payload.get("subject") or ""),
+            str(payload.get("body") or ""),
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=410, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(status_code=428, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except (OSError, smtplib.SMTPException) as e:
+        raise HTTPException(status_code=502, detail=f"메일을 보내지 못했습니다: {e}") from e
 
 
 # ---------------------------------------------------------------------------
