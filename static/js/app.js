@@ -490,7 +490,7 @@ function summaryCardHtml(q, i) {
         ${q.url ? `
         <div class="price-row-btns">
           ${apple ? "" : `
-          <a href="${escapeHtml(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-compuzone" title="컴퓨존 상품 페이지로 바로 갑니다" onclick="event.stopPropagation()">
+          <a href="https://www.compuzone.co.kr/" target="_blank" rel="noopener" class="btn btn-sm btn-compuzone" title="컴퓨존 메인 페이지를 엽니다" onclick="event.stopPropagation()">
             ⚡ 컴퓨존
           </a>`}
           <a href="/api/image?redirect=1&url=${encodeURIComponent(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-image" title="원본 페이지의 대표 이미지를 새 창으로 봅니다" onclick="event.stopPropagation()">
