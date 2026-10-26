@@ -1220,7 +1220,7 @@ function updateExtrasUI() {
     included: includeMonitor,
     labelSel: "#monitorToggleLabel",
     btnSel: "#btnMonitorToggle",
-    name: "모니터",
+    name: "모니터27",
   });
   syncExtraToggleUI({
     included: includeKeyboard,
