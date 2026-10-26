@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+import base64
 import json
 import smtplib
 import socket
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date
 import urllib.error
 from pathlib import Path
@@ -46,7 +47,7 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
-from app import customer_book, mail_send, quote_archive
+from app import customer_book, mail_send, pdf_export, quote_archive
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
@@ -616,8 +617,43 @@ def _apply_cto_upgrades(result, cto_json: str):
     return replace(result, quotes=quotes)
 
 
+FORM_THUMB_WIDTH = 560  # 서식 목록 칸(약 280px)의 2배: 고해상도 화면에서도 또렷하게
+
+
+def _form_thumbnails(result, hide_prices: bool, kind_label: str, pdf_key) -> dict[str, str]:
+    """카드 한 건의 폼1~8 실제 견적서 썸네일 {"1": "data:image/png;base64,…", …}.
+
+    Excel 을 한 번만 띄워 8쪽 PDF 를 만들고 쪽별로 나눠 서식별 PDF 캐시에도 넣는다.
+    """
+    all_forms = sorted(FORM_LABELS)
+    thumbs_key = pdf_key(["thumbs"])
+    cached = pdf_export.cache_get(thumbs_key)
+    if cached is not None:
+        return json.loads(cached)
+    try:
+        pages = pdf_export.split_pages(
+            pdf_export.xlsx_to_pdf(
+                build_excel(
+                    result, hide_unit_prices=hide_prices, quote_kind_label=kind_label, forms=all_forms
+                ).getvalue()
+            )
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    if len(pages) != len(all_forms):
+        raise HTTPException(status_code=500, detail=f"PDF 쪽 수({len(pages)})가 서식 수와 다릅니다.")
+    out = {}
+    for n, page in zip(all_forms, pages):
+        pdf_export.cache_put(pdf_key([n]), page)
+        png = pdf_export.render_png(page, FORM_THUMB_WIDTH)
+        out[str(n)] = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    pdf_export.cache_put(thumbs_key, json.dumps(out).encode("utf-8"))
+    return out
+
+
 @app.get("/api/download/excel")
 def download_excel(
+    request: Request,
     cat: str = "ai",
     monitor: int = 0,
     keyboard: int = 0,
@@ -636,11 +672,16 @@ def download_excel(
     forms: str = "",
     archive: int = 0,
     email: int = 0,
+    pdf: int = 0,
+    thumbs: int = 0,
 ):
     """카드 한 건(index)의 견적서를 내려준다. 목록 전체 비교 파일(전체 비교 Excel)은 없앴다(index 필수).
     archive=1 이면 만든 파일을 견적서 보관함(quote_archive/)에도 저장한다.
     email=1 이면 파일 대신, 같은 Excel 을 메일 초안으로 보관하고 발송 창에 채울 받는 사람(견적처 이메일) ·
     참조 · 제목 · 본문을 JSON 으로 돌려준다(발송은 /api/mail/send).
+    pdf=1 이면 같은 견적서를 Excel(COM)로 PDF 로 바꿔 화면에 바로 보여 준다(서식 미리보기용, 보관하지 않음).
+    thumbs=1 이면 폼1~8 을 한 번에 PDF 로 바꿔(Excel 한 번) 서식 목록 썸네일 PNG 8장을 JSON 으로 돌려준다.
+    쪽별 PDF 는 서식별 pdf=1 캐시에 넣어 두므로, 썸네일을 본 뒤 크게 보기는 바로 뜬다.
     파일명은 "{거래처명}_{구분}_{모델}_..." 로 시작해 보관함·탐색기에서 거래처별로 정렬된다.
 
     forms 를 주면(예: "3" 또는 "1,3") 견적요약 없이 해당 폼 시트만 담는다. 화면은 서식마다 따로 호출해
@@ -786,6 +827,22 @@ def download_excel(
         kr_label += "_" + "_".join(f"폼{n}{FORM_LABELS[n]}" for n in selected_forms)
         form_tag = "_form" + "-".join(str(n) for n in selected_forms)
     single_title = SINGLE_SHEET_TITLE if len(selected_forms) == 1 else ""
+    # 같은 카드 · 같은 서식 · 같은 견적정보면 PDF 를 다시 만들지 않는다(썸네일 → 크게 보기 → 메일 PDF 첨부 재사용)
+    base_key = [
+        sorted(
+            (k, v) for k, v in request.query_params.items() if k not in ("archive", "email", "pdf", "thumbs", "forms")
+        ),
+        info,
+        # 수집 가격 · 구성이 바뀌면 다른 키 → 예전 PDF 를 보여 주거나 첨부하지 않는다.
+        # url(토큰) · fetched_at 은 매번 달라 넣지 않는다.
+        [picked.model, picked.total, [asdict(p) for p in picked.parts]],
+    ]
+
+    def _pdf_key(form_list) -> str:
+        return json.dumps([*base_key, list(form_list)], ensure_ascii=False, sort_keys=True, default=str)
+
+    if thumbs:
+        return {"thumbs": _form_thumbnails(result, hide_prices, kind_label, _pdf_key)}
     try:
         buf = build_excel(
             result,
@@ -804,6 +861,22 @@ def download_excel(
             f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{utf_name}'
         ),
     }
+    pdf_key = _pdf_key(selected_forms)
+    if pdf:
+        try:
+            pdf_bytes = pdf_export.cached_pdf(pdf_key, buf.getvalue)
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        pdf_name = display_name[: -len(".xlsx")] + ".pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f'inline; filename="{ascii_name[: -len(".xlsx")]}.pdf"; filename*=UTF-8\'\'{quote(pdf_name)}'
+                ),
+            },
+        )
     if archive:
         # 보관본은 서식 목록(썸네일) 시트 없이 저장한다. 서식을 골랐으면 애초에 그 시트가 없어 그대로 쓴다.
         archive_bytes = buf.getvalue()
@@ -835,9 +908,11 @@ def download_excel(
         data = buf.getvalue()
         return {
             "ok": True,
-            "draft_id": mail_send.add_draft(data, display_name),
+            "draft_id": mail_send.add_draft(data, display_name, pdf_key),
             "filename": display_name,
+            "pdf_filename": display_name[: -len(".xlsx")] + ".pdf",
             "size": len(data),
+            "pdf_available": pdf_export.excel_available(),
             "account": mail_send.get_account(),
             "archive_id": headers.get("X-Archive-Id", ""),
             **mail_send.compose_fields(info, model_head or picked.model or "", picked.total, result.quote_date),
@@ -877,6 +952,7 @@ def api_mail_send(payload: dict = Body(default={})):
             str(payload.get("cc") or ""),
             str(payload.get("subject") or ""),
             str(payload.get("body") or ""),
+            payload.get("attach") or ["xlsx"],
         )
     except LookupError as e:
         raise HTTPException(status_code=410, detail=str(e)) from e
@@ -884,6 +960,8 @@ def api_mail_send(payload: dict = Body(default={})):
         raise HTTPException(status_code=428, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:  # PDF 변환 실패(Excel 없음 등)
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except (OSError, smtplib.SMTPException) as e:
         raise HTTPException(status_code=502, detail=f"메일을 보내지 못했습니다: {e}") from e
 

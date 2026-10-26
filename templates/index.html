@@ -585,7 +585,11 @@
           <label for="mailTo">받는 사람</label><input type="text" id="mailTo" placeholder="견적처 이메일 (여러 명은 쉼표로)" />
           <label for="mailCc">참조</label><input type="text" id="mailCc" placeholder="(선택)" />
           <label for="mailSubject">제목</label><input type="text" id="mailSubject" />
-          <label>첨부</label><span id="mailAttach" class="mail-attach">-</span>
+          <label>첨부</label>
+          <div id="mailAttach" class="mail-attach">
+            <label><input type="checkbox" id="mailAttachXlsx" checked /> 📊 Excel <span id="mailAttachXlsxName" class="mail-attach-name">-</span></label>
+            <label><input type="checkbox" id="mailAttachPdf" checked /> 📄 PDF <span id="mailAttachPdfName" class="mail-attach-name">-</span></label>
+          </div>
           <label for="mailBody">본문</label><textarea id="mailBody" rows="13"></textarea>
         </div>
       </div>

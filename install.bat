@@ -106,7 +106,7 @@ REM ── 4) 설치 검증 ──
 :verify
 echo.
 echo [4/4] 설치 검증...
-"%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl, PIL; print('   - fastapi, uvicorn, jinja2, openpyxl, Pillow OK')"
+"%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl, PIL, pypdfium2; print('   - fastapi, uvicorn, jinja2, openpyxl, Pillow, pypdfium2 OK')"
 if errorlevel 1 (
     echo.
     echo [오류] 패키지 import 검증 실패

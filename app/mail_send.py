@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""견적서 메일 발송: 앱 안 발송 창 → Gmail(SMTP)로 견적서 Excel 을 첨부해 보낸다.
+"""견적서 메일 발송: 앱 안 발송 창 → Gmail(SMTP)로 견적서 Excel · PDF 를 첨부해 보낸다.
 
 흐름
 1. 카드 서식 미리보기의 [✉️ 이메일] → /api/download/excel?…&email=1 이 Excel 을 만들어 초안(draft)으로 잠시 보관하고
    받는 사람(견적처 이메일) · 참조(공급자 이메일) · 제목 · 본문을 채워 돌려준다.
-2. 화면의 발송 창에서 고친 뒤 [보내기] → /api/mail/send 가 초안의 Excel 을 첨부해 Gmail 로 보낸다.
+2. 화면의 발송 창에서 고친 뒤 [보내기] → /api/mail/send 가 초안의 Excel 과(또는) PDF 를 첨부해 Gmail 로 보낸다.
+   PDF 는 보낼 때 app/pdf_export.py 로 만든다(서식 미리보기에서 이미 만든 PDF 가 있으면 그대로 쓴다).
 
 보내는 계정(Gmail 주소 + 앱 비밀번호)은 app_settings.json 의 mail_smtp 에 둔다(저장소에 올라가지 않음).
 비밀번호는 Windows DPAPI 로 암호화해 이 PC · 이 Windows 사용자만 풀 수 있다.
@@ -24,6 +25,7 @@ from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from typing import Any
 
+from app import pdf_export
 from app.app_settings import get_setting, set_setting
 
 SMTP_HOST = "smtp.gmail.com"
@@ -147,13 +149,13 @@ def compose_fields(info: dict[str, Any], model: str, total: int, quote_date: str
     }
 
 
-def add_draft(xlsx_bytes: bytes, filename: str) -> str:
+def add_draft(xlsx_bytes: bytes, filename: str, pdf_key: str = "") -> str:
     now = time.time()
     draft_id = uuid.uuid4().hex
     with _drafts_lock:
         for key in [k for k, d in _drafts.items() if now - d["at"] > DRAFT_TTL_SEC]:
             _drafts.pop(key, None)
-        _drafts[draft_id] = {"at": now, "data": xlsx_bytes, "filename": filename}
+        _drafts[draft_id] = {"at": now, "data": xlsx_bytes, "filename": filename, "pdf_key": pdf_key}
     return draft_id
 
 
@@ -165,7 +167,8 @@ def _split_addrs(text: str) -> list[str]:
     return addrs
 
 
-def send_draft(draft_id: str, to: str, cc: str, subject: str, body: str) -> dict[str, Any]:
+def send_draft(draft_id: str, to: str, cc: str, subject: str, body: str, attach: list[str]) -> dict[str, Any]:
+    """attach: 첨부 형식 목록 ("xlsx", "pdf"). 하나 이상 골라야 한다."""
     with _drafts_lock:
         draft = _drafts.get(draft_id)
     if not draft:
@@ -176,6 +179,13 @@ def send_draft(draft_id: str, to: str, cc: str, subject: str, body: str) -> dict
     to_list, cc_list = _split_addrs(to), _split_addrs(cc)
     if not to_list:
         raise ValueError("받는 사람 이메일을 입력해 주세요.")
+    kinds = [k for k in ("xlsx", "pdf") if k in (attach or [])]
+    if not kinds:
+        raise ValueError("첨부 형식(Excel · PDF)을 하나 이상 골라 주세요.")
+    pdf_bytes = b""
+    if "pdf" in kinds:
+        # 계정 확인 뒤에 만든다: Excel 변환은 몇 초 걸린다. 변환 실패는 RuntimeError 로 그대로 올린다.
+        pdf_bytes = pdf_export.cached_pdf(draft["pdf_key"] or draft_id, lambda: draft["data"])
 
     msg = EmailMessage()
     msg["From"] = account["user"]
@@ -186,12 +196,20 @@ def send_draft(draft_id: str, to: str, cc: str, subject: str, body: str) -> dict
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = make_msgid()
     msg.set_content(body or "")
-    msg.add_attachment(
-        draft["data"],
-        maintype="application",
-        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=draft["filename"],
-    )
+    if "xlsx" in kinds:
+        msg.add_attachment(
+            draft["data"],
+            maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=draft["filename"],
+        )
+    if pdf_bytes:
+        msg.add_attachment(
+            pdf_bytes,
+            maintype="application",
+            subtype="pdf",
+            filename=draft["filename"].rsplit(".", 1)[0] + ".pdf",
+        )
     smtp = _login(account["user"], _password())
     try:
         smtp.send_message(msg)
@@ -199,4 +217,4 @@ def send_draft(draft_id: str, to: str, cc: str, subject: str, body: str) -> dict
         smtp.quit()
     with _drafts_lock:
         _drafts.pop(draft_id, None)
-    return {"ok": True, "from": account["user"], "to": to_list, "cc": cc_list}
+    return {"ok": True, "from": account["user"], "to": to_list, "cc": cc_list, "attach": kinds}

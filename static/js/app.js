@@ -793,7 +793,8 @@ function ctoUpgradesForExcel(index) {
 const EXCEL_FORM_LABELS = { 1: "표준", 2: "인보이스", 3: "보고서", 4: "명세서", 5: "리테일", 6: "조립PC", 7: "데스크탑", 8: "클래식" };
 
 // ---------- 서식 미리보기 갤러리 (카드 한 건: 폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
-// 썸네일은 static/img/forms/formN.png (샘플 견적으로 만든 디자인 미리보기, 실제 금액 아님).
+// 창을 열면 서버가 이 카드의 폼1~8 실제 견적서를 PDF 로 만들어(thumbs=1, Excel COM 한 번) 썸네일을 돌려준다.
+// 한 장을 누르면 같은 PDF(pdf=1, 서버 캐시)를 크게 보여 준다. Excel 이 없으면 static/img/forms/formN.png 샘플로 대신한다.
 const FORM_GALLERY_DESC = {
   1: "B2B 표준 견적서 · 공급자/수급자 직인란",
   2: "영문 모던 INVOICE 스타일",
@@ -805,6 +806,17 @@ const FORM_GALLERY_DESC = {
   8: "관공서/기업 납품 세로형 전통 서식",
 };
 let formGalleryIndex = 0;
+let formPdfUrls = {}; // 폼 번호 → 실제 견적서 PDF blob URL (갤러리를 다시 열면 비운다)
+let formDetailSeq = 0;
+let formGallerySession = 0;
+let formThumbsPromise = null; // 썸네일을 만드는 동안 크게 보기는 이것을 기다렸다가 서버 캐시를 쓴다
+let formThumbsState = "loading"; // loading | ok | error
+let formThumbsError = "";
+
+function resetFormPdfUrls() {
+  Object.values(formPdfUrls).forEach((u) => URL.revokeObjectURL(u));
+  formPdfUrls = {};
+}
 
 function openFormGallery(index) {
   const modal = $("#formGalleryModal");
@@ -817,13 +829,14 @@ function openFormGallery(index) {
     return;
   }
   formGalleryIndex = index;
+  resetFormPdfUrls();
   const title = $("#formGalleryTitle");
   if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — ${q.tab_label || q.tier || ""} ${q.model || ""}`.trim();
   grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
     const n = Number(k);
     return `
       <div class="form-gallery-item" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 크게 보기">
-        <img class="form-gallery-thumb" src="/static/img/forms/form${n}.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 미리보기" loading="lazy" />
+        <div class="form-gallery-thumb fg-thumb-wait">⏳ 실제 견적서<br>만드는 중…</div>
         <div class="form-gallery-name">폼${n} (${EXCEL_FORM_LABELS[n]})</div>
         <div class="form-gallery-desc">${FORM_GALLERY_DESC[n] || ""}</div>
         <button type="button" class="btn btn-sm btn-primary">🔍 크게 보기</button>
@@ -841,61 +854,152 @@ function openFormGallery(index) {
   });
   showFormGrid();
   show(modal);
+  loadFormThumbs();
+}
+
+/** 이 카드의 폼1~8 실제 견적서 썸네일을 받아 목록 그림을 바꾼다. 실패하면 디자인 샘플 그림을 보여 준다. */
+function loadFormThumbs() {
+  const session = ++formGallerySession;
+  const started = Date.now();
+  formThumbsState = "loading";
+  formThumbsError = "";
+  updateFormGridHint(0);
+  const tick = setInterval(() => {
+    if (session !== formGallerySession || formThumbsState !== "loading") return clearInterval(tick);
+    updateFormGridHint(Math.round((Date.now() - started) / 1000));
+  }, 1000);
+  formThumbsPromise = (async () => {
+    try {
+      const res = await fetch(`/api/download/excel?${excelQueryParams(formGalleryIndex)}&thumbs=1`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `썸네일 생성 실패 (${res.status})`);
+      if (session !== formGallerySession) return;
+      formThumbsState = "ok";
+      setFormGridImages((n) => data.thumbs?.[n] || `/static/img/forms/form${n}.png`, "실제 견적서");
+    } catch (e) {
+      if (session !== formGallerySession) return;
+      formThumbsState = "error";
+      formThumbsError = e.message;
+      setFormGridImages((n) => `/static/img/forms/form${n}.png`, "디자인 샘플");
+    } finally {
+      clearInterval(tick);
+      if (session === formGallerySession) updateFormGridHint();
+    }
+  })();
+}
+
+function setFormGridImages(srcOf, label) {
+  $("#formGalleryGrid")?.querySelectorAll(".form-gallery-item").forEach((item) => {
+    const n = Number(item.dataset.form);
+    const img = document.createElement("img");
+    img.className = "form-gallery-thumb";
+    img.src = srcOf(n);
+    img.alt = `폼${n} ${EXCEL_FORM_LABELS[n]} ${label}`;
+    item.querySelector(".form-gallery-thumb")?.replaceWith(img);
+  });
+}
+
+function updateFormGridHint(elapsed = 0) {
+  const hint = $("#formGalleryHint");
+  if (!hint || $("#formGalleryGrid")?.classList.contains("hidden")) return;
+  if (formThumbsState === "loading") {
+    hint.textContent = `⏳ 이 카드의 실제 견적서 8장을 만드는 중… ${elapsed}초 (Excel → PDF, 20~30초 걸립니다). 먼저 서식을 눌러도 됩니다.`;
+  } else if (formThumbsState === "error") {
+    hint.textContent = `⚠️ 실제 견적서 썸네일을 만들지 못해 디자인 샘플 그림을 보여 줍니다(${formThumbsError}). 📥 다운로드 · ✉️ 이메일은 그대로 쓸 수 있습니다.`;
+  } else {
+    hint.textContent = "이 카드의 실제 견적서입니다(현재 마진 · 견적정보 · 옵션 반영). 서식을 누르면 크게 보여 주고, 거기서 📥 다운로드(Excel) 또는 ✉️ 이메일(Excel · PDF 첨부)을 고릅니다.";
+  }
 }
 
 /** 8장 목록으로 돌아간다. */
 function showFormGrid() {
-  const hint = $("#formGalleryHint");
-  if (hint) hint.textContent = "서식을 누르면 크게 보여 줍니다. 크게 본 화면에서 📥 다운로드(Excel) 또는 ✉️ 이메일(견적서 첨부)을 고르세요. 그림은 샘플 견적으로 만든 디자인 미리보기입니다.";
   show($("#formGalleryGrid"));
   hide($("#formGalleryDetail"));
+  updateFormGridHint();
 }
 
-/** 고른 서식 한 장을 8장 보이던 자리에 크게 보여 주고, 다운로드 · 이메일 버튼을 단다. */
+/** 고른 서식으로 만든 이 카드의 실제 견적서(PDF)를 8장 보이던 자리에 크게 보여 주고, 다운로드 · 이메일 버튼을 단다. */
 function showFormDetail(n) {
   const detail = $("#formGalleryDetail");
   if (!detail || !EXCEL_FORM_LABELS[n]) return;
   const customerEmail = (quoteInfo?.customer_email || "").trim();
   const hint = $("#formGalleryHint");
-  if (hint) hint.textContent = "그림은 샘플 견적으로 만든 디자인 미리보기이며, 받는 파일에는 이 카드의 실제 견적 내용이 들어갑니다.";
+  if (hint) hint.textContent = "이 카드의 실제 견적서입니다(현재 마진 · 견적정보 · 옵션 반영). 폼 번호를 누르면 다른 서식으로 바꿔 봅니다.";
+  const tabs = Object.keys(EXCEL_FORM_LABELS).map((k) =>
+    `<button type="button" class="btn btn-sm ${Number(k) === n ? "btn-primary" : "btn-outline"} fg-tab" data-form="${k}" title="폼${k} (${EXCEL_FORM_LABELS[k]})">폼${k}</button>`).join("");
   detail.innerHTML = `
     <div class="fg-detail-bar">
       <button type="button" class="btn btn-sm btn-outline fg-back">⬅ 서식 목록</button>
       <strong>폼${n} (${EXCEL_FORM_LABELS[n]})</strong>
-      <span class="fg-detail-desc">${FORM_GALLERY_DESC[n] || ""}</span>
+      <span class="fg-tabs">${tabs}</span>
       <div class="fg-detail-actions">
         <button type="button" class="btn btn-sm btn-primary fg-download" title="이 서식으로 이 카드의 견적서를 Excel 파일로 받습니다">📥 다운로드 (Excel)</button>
-        <button type="button" class="btn btn-sm btn-outline fg-email" title="견적서 Excel 을 첨부한 메일 작성 창을 엽니다 — 받는 사람: ${escapeHtml(customerEmail || "견적처 이메일 미입력(직접 입력)")}">✉️ 이메일</button>
+        <button type="button" class="btn btn-sm btn-outline fg-email" title="견적서(Excel · PDF 선택)를 첨부한 메일 작성 창을 엽니다 — 받는 사람: ${escapeHtml(customerEmail || "견적처 이메일 미입력(직접 입력)")}">✉️ 이메일</button>
       </div>
     </div>
-    <div class="fg-detail-view">
-      <img src="/static/img/forms/form${n}_large.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 크게 보기" />
-    </div>`;
+    <div class="fg-detail-view"><div class="fg-detail-msg">⏳ 실제 견적서를 만드는 중… (Excel → PDF, 처음 한 번은 10초 안팎)</div></div>`;
   detail.querySelector(".fg-back").addEventListener("click", showFormGrid);
+  detail.querySelectorAll(".fg-tab").forEach((b) => b.addEventListener("click", () => showFormDetail(Number(b.dataset.form))));
   detail.querySelector(".fg-download").addEventListener("click", () => downloadFormFromGallery(n));
   detail.querySelector(".fg-email").addEventListener("click", () => emailFormFromGallery(n));
   hide($("#formGalleryGrid"));
   show(detail);
-  detail.querySelector(".fg-detail-view").scrollTop = 0;
+  loadFormPdf(n, detail.querySelector(".fg-detail-view"));
+}
+
+/** 실제 견적서 PDF 를 받아 iframe(브라우저 PDF 보기)으로 띄운다. 실패하면 샘플 그림과 이유를 보여 준다. */
+async function loadFormPdf(n, view) {
+  const seq = ++formDetailSeq;
+  let url = formPdfUrls[n];
+  if (!url) {
+    showBusy(`폼${n} ${EXCEL_FORM_LABELS[n]} 실제 견적서 만드는 중…`);
+    try {
+      // 썸네일을 만드는 중이면 끝날 때까지 기다린다 → 서버 캐시에서 바로 받는다(Excel 을 두 번 띄우지 않음)
+      if (formThumbsPromise) await formThumbsPromise;
+      const res = await fetch(galleryFileUrl(n, { pdf: true }));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `미리보기 실패 (${res.status})`);
+      }
+      url = URL.createObjectURL(await res.blob());
+      formPdfUrls[n] = url;
+    } catch (e) {
+      if (seq === formDetailSeq) {
+        view.innerHTML = `
+          <div class="fg-detail-msg fg-detail-err">⚠️ 실제 견적서 미리보기를 만들지 못했습니다: ${escapeHtml(e.message)}<br>
+          아래는 디자인 샘플입니다. 📥 다운로드 · ✉️ 이메일은 그대로 쓸 수 있습니다.</div>
+          <img src="/static/img/forms/form${n}_large.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 샘플" />`;
+      }
+      return;
+    } finally {
+      hideBusy();
+    }
+  }
+  if (seq !== formDetailSeq) return; // 그 사이 다른 서식을 눌렀거나 창을 닫았다
+  view.innerHTML = `<iframe class="fg-pdf" src="${url}#view=FitH" title="폼${n} ${EXCEL_FORM_LABELS[n]} 실제 견적서"></iframe>`;
 }
 
 function closeFormGallery() {
+  formDetailSeq += 1;
+  formGallerySession += 1;
   hide($("#formGalleryModal"));
 }
 
-function galleryExcelUrl(n) {
-  return `/api/download/excel?${excelQueryParams(formGalleryIndex)}&archive=1&forms=${n}`;
+/** 미리보기(pdf)는 보관함에 넣지 않는다. 다운로드 · 이메일만 archive=1. */
+function galleryFileUrl(n, { pdf = false } = {}) {
+  const base = `/api/download/excel?${excelQueryParams(formGalleryIndex)}&forms=${n}`;
+  return pdf ? `${base}&pdf=1` : `${base}&archive=1`;
 }
 
 async function downloadFormFromGallery(n) {
   if (!EXCEL_FORM_LABELS[n]) return;
   closeFormGallery();
-  await downloadWithBusy(galleryExcelUrl(n), {}, `견적서_폼${n}.xlsx`, `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`);
+  await downloadWithBusy(galleryFileUrl(n), {}, `견적서_폼${n}.xlsx`, `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`);
 }
 
 // ---------- ✉️ 견적서 메일 발송 창 (Gmail SMTP, app/mail_send.py) ----------
 // [✉️ 이메일] → 서버가 Excel 을 만들어 초안으로 보관하고 받는 사람(견적처) · 참조(공급자) · 제목 · 본문을 채워 준다.
-// 이 창에서 고친 뒤 [보내기] 를 누르면 서버가 보내는 Gmail 계정으로 견적서를 첨부해 보낸다.
+// 이 창에서 고치고 첨부 형식(Excel · PDF)을 고른 뒤 [보내기] 를 누르면 서버가 보내는 Gmail 계정으로 보낸다.
 const mailModal = $("#mailModal");
 let mailDraftId = "";
 let mailAccount = { user: "", configured: false };
@@ -906,7 +1010,7 @@ async function emailFormFromGallery(n) {
   showBusy(`폼${n} ${EXCEL_FORM_LABELS[n]} 견적서를 첨부한 메일 준비 중…`);
   let data;
   try {
-    const res = await fetch(`${galleryExcelUrl(n)}&email=1`);
+    const res = await fetch(`${galleryFileUrl(n)}&email=1`);
     data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || `메일 준비 실패 (${res.status})`);
   } catch (e) {
@@ -921,7 +1025,13 @@ async function emailFormFromGallery(n) {
   $("#mailCc").value = data.cc || "";
   $("#mailSubject").value = data.subject || "";
   $("#mailBody").value = data.body || "";
-  $("#mailAttach").textContent = `📎 ${data.filename} (${qaFmtSize(data.size)})`;
+  $("#mailAttachXlsxName").textContent = `${data.filename} (${qaFmtSize(data.size)})`;
+  $("#mailAttachPdfName").textContent = data.pdf_available
+    ? data.pdf_filename
+    : "이 PC 에 Excel 이 없어 PDF 를 만들 수 없습니다";
+  $("#mailAttachXlsx").checked = true;
+  $("#mailAttachPdf").checked = !!data.pdf_available;
+  $("#mailAttachPdf").disabled = !data.pdf_available;
   syncMailAccountUI(data.account || mailAccount);
   show(mailModal);
   (data.to ? $("#mailSubject") : $("#mailTo"))?.focus();
@@ -966,7 +1076,14 @@ async function sendQuoteMail() {
     $("#mailTo").focus();
     return;
   }
-  showBusy(`${to} 에게 견적서 메일 보내는 중…`);
+  const attach = [["xlsx", "#mailAttachXlsx"], ["pdf", "#mailAttachPdf"]]
+    .filter(([, sel]) => $(sel).checked && !$(sel).disabled)
+    .map(([kind]) => kind);
+  if (!attach.length) {
+    alert("첨부할 형식(Excel · PDF)을 하나 이상 고르세요.");
+    return;
+  }
+  showBusy(attach.includes("pdf") ? `PDF 만들고 ${to} 에게 견적서 메일 보내는 중…` : `${to} 에게 견적서 메일 보내는 중…`);
   let res;
   try {
     res = await postJsonRaw("/api/mail/send", {
@@ -975,6 +1092,7 @@ async function sendQuoteMail() {
       cc: $("#mailCc").value.trim(),
       subject: $("#mailSubject").value,
       body: $("#mailBody").value,
+      attach,
     });
   } catch (_) {
     res = { ok: false, status: 0, data: { detail: "서버에 연결할 수 없습니다." } };
@@ -983,7 +1101,8 @@ async function sendQuoteMail() {
   }
   if (res.ok) {
     hide(mailModal);
-    alert(`✔ 견적서 메일을 보냈습니다.\n\n받는 사람: ${res.data.to.join(", ")}${res.data.cc.length ? `\n참조: ${res.data.cc.join(", ")}` : ""}\n보낸 계정: ${res.data.from}`);
+    const attached = (res.data.attach || []).map((k) => (k === "pdf" ? "PDF" : "Excel")).join(" + ");
+    alert(`✔ 견적서 메일을 보냈습니다.\n\n받는 사람: ${res.data.to.join(", ")}${res.data.cc.length ? `\n참조: ${res.data.cc.join(", ")}` : ""}\n첨부: ${attached}\n보낸 계정: ${res.data.from}`);
     return;
   }
   if (res.status === 410) hide(mailModal); // 초안 만료: 창을 닫고 다시 시작하게 한다
