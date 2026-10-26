@@ -3,7 +3,7 @@
 컴퓨존 견적 추출 엔진
 
 로직 흐름 (AI PC):
-  1. DISCOVER → 기획전/조립PC 메인관에서 ProductNo 수집
+  1. DISCOVER → AI PC 전용관(실패 시 조립PC 메인관)에서 ProductNo 수집
   2. FETCH    → 상품 상세 HTML 요청 (EUC-KR)
   3. PARSE    → 실시간 BOM 슬롯 + CardPrice
   4. ADJUST   → (옵션) 모니터/키보드/메모리32GB + 번들할인 행
@@ -23,7 +23,8 @@ from typing import Any
 
 from app.quote_info import extra_item_prices
 from app.config import (
-    AI_PC_SEED_PNOS,
+    AI_STORE_TITLE,
+    AI_STORE_URL,
     ALL_ASSEMBLED_URL,
     APPLE_CATEGORIES,
     APPLE_FALLBACK_BOM,
@@ -36,10 +37,6 @@ from app.config import (
     CATEGORY_ORDER,
     CONSUMER_MARGIN_PERCENT,
     ESTIMATE_TOKEN_URL,
-    EVENT_DESKTOP_URL,
-    EVENT_NO,
-    EVENT_TITLE,
-    EVENT_URL,
     EXTRA_ITEMS,
     GAMING_PC_API_URL,
     GAMING_PC_URL,
@@ -907,9 +904,9 @@ def _is_ai_pc_title(title: str) -> bool:
     if not title:
         return False
     upper = title.upper()
-    if "AI PC" in title or "AMD AI" in upper:
-        return True
-    if "아이웍스X-020" in title or "아이웍스X-02" in title:
+    # 상품명에 AI PC 표기가 있는 것만 인정한다. "아이웍스X-02xx" 모델번호만으로는 판단하지 않는다
+    # (X-0216 내장그래픽 · X-0265 게이밍 등 일반 아이웍스 상품이 AI PC 로 잘못 잡혔음)
+    if re.search(r"AI\s*PC", upper) or "AMD AI" in upper:
         return True
     if "아이웍스X" in title and any(k in upper for k in ("4545P", "4585PX", "EPYC")):
         return True
@@ -935,45 +932,47 @@ def _classify_ai_tier(model: str, index: int) -> tuple[str, str, str]:
     return "AI PC", f"ai-{index}", code or f"AI-{index}"
 
 
-def discover_ai_pc_product_nos() -> list[int]:
-    """기획전·조립PC 메인관에서 AI PC ProductNo 를 실시간 수집"""
+def _discover_ai_store_pnos() -> list[int]:
+    """AI PC 전용관의 [컴퓨존] 조립PC ProductNo (전용관에 올라온 것 자체를 AI PC 로 본다).
+    노트북·브랜드PC·서버·부품은 슬롯 BOM 이 없어 견적을 만들 수 없으므로 뺀다."""
     found: list[int] = []
-    seen: set[int] = set()
+    html = _fetch_url(AI_STORE_URL)
+    for m in re.finditer(r'ProductNo=(\d+)"[^>]*class="probox"', html):
+        pno = int(m.group(1))
+        if pno in found:
+            continue
+        close = html.find("</a>", m.end())
+        body = html[m.end() : close if close > 0 else m.end() + 3000]
+        text = re.sub(r"<[^>]+>", " ", body.split(">", 1)[-1])
+        if text.strip().startswith("[컴퓨존]"):
+            found.append(pno)
+    return found
 
-    # 1) AI 기획전 페이지 링크
+
+def discover_ai_pc_product_nos() -> tuple[list[int], bool]:
+    """AI PC ProductNo 실시간 수집 → (상품번호 목록, 전용관 출처 여부).
+    전용관을 못 읽거나 비어 있으면 조립PC 메인관에서 AI PC 문맥의 상품을 찾는다
+    (이때는 상세 상품명의 AI PC 표기로 한 번 더 거른다)."""
     try:
-        html = _fetch_url(EVENT_DESKTOP_URL)
-        for m in re.finditer(r"ProductNo=(\d+)", html):
-            pno = int(m.group(1))
-            if pno >= 100000 and pno not in seen:
-                seen.add(pno)
-                found.append(pno)
+        store = _discover_ai_store_pnos()
+        if store:
+            return store, True
     except (urllib.error.URLError, TimeoutError, OSError):
         pass
 
-    # 2) 조립PC 메인관 — AI/아이웍스X-02 문맥의 상품만
+    found: list[int] = []
     try:
-        html = _fetch_url("https://www.compuzone.co.kr/product/Allassembled.htm")
+        html = _fetch_url(ALL_ASSEMBLED_URL)
         for m in re.finditer(r"ProductNo=(\d+)", html):
             pno = int(m.group(1))
-            if pno < 100000 or pno in seen:
+            if pno < 100000 or pno in found:
                 continue
             ctx = html[max(0, m.start() - 280) : m.start() + 1200]
-            if any(
-                k in ctx
-                for k in ("AMD AI", "AI PC", "아이웍스X-02", "4545P", "4585PX")
-            ):
-                seen.add(pno)
+            if any(k in ctx for k in ("AMD AI", "AI PC", "4545P", "4585PX")):
                 found.append(pno)
     except (urllib.error.URLError, TimeoutError, OSError):
         pass
-
-    # 3) 시드(기획전 파싱 실패 대비) — 판매종료면 이후 단계에서 스킵
-    for pno in AI_PC_SEED_PNOS:
-        if pno not in seen:
-            found.append(pno)
-            seen.add(pno)
-    return found
+    return found, False
 
 
 def _memory_slot_ids(html: str) -> list[str]:
@@ -1050,8 +1049,10 @@ def fetch_ai_pc_live_quote(
     include_ram32: bool = False,
     include_setup: bool = False,
     index: int = 1,
+    require_ai_title: bool = True,
 ) -> Quote:
-    """하드코딩 BOM 없이 상품 상세 실시간 데이터만으로 AI PC 견적 생성"""
+    """하드코딩 BOM 없이 상품 상세 실시간 데이터만으로 AI PC 견적 생성.
+    require_ai_title=False 는 AI PC 전용관에서 온 상품(상품명에 AI 표기가 없어도 인정)."""
     html = _fetch_html(pno)
     if _is_unavailable_product(html):
         raise RuntimeError(f"판매종료 상품: ProductNo={pno}")
@@ -1060,7 +1061,7 @@ def fetch_ai_pc_live_quote(
     if not og:
         raise RuntimeError(f"상품명을 찾을 수 없습니다: ProductNo={pno}")
     model = _clean_product_name(og.group(1).split(" : ")[0])
-    if not _is_ai_pc_title(model):
+    if require_ai_title and not _is_ai_pc_title(model):
         raise RuntimeError(f"AI PC 상품이 아닙니다: {model}")
 
     parts, subtotal = _parse_live_bom(
@@ -1302,8 +1303,8 @@ def get_logic_steps() -> list[dict[str, str]]:
     return [
         {
             "step": "01",
-            "title": "기획전 매핑",
-            "desc": f"EventNo={EVENT_NO} 기획전·조립PC 메인관에서 AI PC ProductNo 실시간 수집",
+            "title": "전용관 매핑",
+            "desc": "컴퓨존 AI PC 전용관의 [컴퓨존] 조립PC ProductNo 실시간 수집 (실패 시 조립PC 메인관)",
         },
         {
             "step": "02",
@@ -1335,8 +1336,8 @@ def fetch_today_quotes(
     include_ram32: bool = False,
     include_setup: bool = False,
 ) -> TodayQuotesResult:
-    """AI PC: 기획전에서 상품번호를 실시간 수집 후, 각 상세페이지 BOM/가격만 사용"""
-    pnos = discover_ai_pc_product_nos()
+    """AI PC: 전용관에서 상품번호를 실시간 수집 후, 각 상세페이지 BOM/가격만 사용"""
+    pnos, from_store = discover_ai_pc_product_nos()
     quotes: list[Quote] = []
 
     with ThreadPoolExecutor(max_workers=6) as pool:
@@ -1349,6 +1350,7 @@ def fetch_today_quotes(
                 include_ram32,
                 include_setup,
                 idx,
+                not from_store,
             ): pno
             for idx, pno in enumerate(pnos, 1)
         }
@@ -1376,8 +1378,8 @@ def fetch_today_quotes(
 
     return TodayQuotesResult(
         quote_date=date.today().isoformat(),
-        event_url=EVENT_DESKTOP_URL or EVENT_URL,
-        event_title=EVENT_TITLE,
+        event_url=AI_STORE_URL if from_store else ALL_ASSEMBLED_URL,
+        event_title=AI_STORE_TITLE,
         series=SERIES_NAME,
         quotes=quotes,
         logic_steps=get_logic_steps(),

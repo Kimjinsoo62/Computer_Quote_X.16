@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 """컴퓨존 AI PC 견적 서비스 설정"""
 
-EVENT_URL = "https://m.compuzone.co.kr/s_event/event_detail.htm?EventNo=60921"
-EVENT_DESKTOP_URL = "https://www.compuzone.co.kr/event_zone/eventzone_view.htm?EventNo=60921"
-EVENT_NO = 60921
-EVENT_TITLE = "AI 데스크탑 이해와 선택"
-SERIES_NAME = "컴퓨존 아이웍스X (AMD AI PC)"
-# 기획전 파싱 실패 시에만 사용하는 시드(판매종료면 자동 스킵)
-AI_PC_SEED_PNOS = [1339664, 1339673, 1339674]
+# AI PC 수집처: 컴퓨존 AI PC 전용관. 노트북·브랜드PC·서버·부품이 섞여 있어 [컴퓨존] 조립PC만 쓴다.
+# (예전 AI 데스크탑 기획전 EventNo=60921 은 상품이 모두 판매종료돼 수집처에서 뺐다)
+AI_STORE_URL = "https://www.compuzone.co.kr/product/ai_store.htm"
+AI_STORE_TITLE = "AI PC 전용관"
+SERIES_NAME = "컴퓨존 AI PC 전용관 (아이웍스X)"
 BASE_PRODUCT_URL = "https://www.compuzone.co.kr/product/product_detail.htm?ProductNo={pno}"
 SHARE_PRODUCT_URL = (
     "https://compuzone.co.kr/product/product_detail.htm?ProductNo={pno}&token={token}"
