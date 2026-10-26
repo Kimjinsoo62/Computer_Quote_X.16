@@ -71,7 +71,7 @@ Mac 계열(`MAC_TIER_PREFIXES`)은 공식몰 구성하기 API로 **실시간 CTO
 
 ## 반드시 지켜야 할 불변 조건
 
-1. **버전 올리기는 정확히 5개 파일**: `README.md`(맨 위에 "Ver X.NN 주요 변경" 절 추가), `app/main.py`의 `FastAPI(version=...)`, `app/daangn_search.py`의 `NOMINATIM_UA`, `templates/index.html`(`<title>`과 헤더 문구, 2곳), `templates/사용설명서.html`(제목 · 헤더 · 개요 · 변경 절 · 푸터). 커밋 메시지는 `chore: Bump version to X.NN`. 프로젝트 폴더 이름(`Computer_Quote_X.NN`)도 버전을 따른다.
+1. **버전 올리기는 정확히 5개 파일**: `README.md`(맨 위에 "Ver XI.NN 주요 변경" 절 추가), `app/main.py`의 `FastAPI(version=...)`, `app/daangn_search.py`의 `NOMINATIM_UA`, `templates/index.html`(`<title>`과 헤더 문구, 2곳), `templates/사용설명서.html`(제목 · 헤더 · 개요 · 변경 절 · 푸터). 커밋 메시지는 `chore: Bump version to XI.NN`. 프로젝트 폴더 이름(`Computer_Quote_XI.NN`, `rename_folder.bat`)도 버전을 따른다. 버전 체계는 X.42 다음부터 `XI.NN`(XI.01 부터)이다.
 2. **GitHub 저장소 이름은 `Computer_Quote_X.16`으로 고정**이다. `update_service.REPO_NAME`과 `update.bat :fixremote`가 X.16을 가리키는 것은 버그가 아니다. 버전을 올려도 바꾸지 않는다.
 3. **`CTO_BASE_ROW`는 `app/main.py`와 `static/js/app.js`에 중복 정의**돼 있고 반드시 동일해야 한다(양쪽 주석에 명시).
 4. **종료 시 자기 자신을 taskkill하지 않는다.** `shutdown_service.protected_pids()`로 자신과 부모를 제외하고, 자신은 `os._exit(0)`로만 끝낸다. 콘솔에 붙은 프로세스를 강제 종료하면 conhost가 크래시한다. 브라우저도 `--app=http://127.0.0.1:8090` 창과 `AI-PC-Quote-Calc` 프로필만 닫는다.

@@ -32,7 +32,7 @@ if not exist "%PROJ%\app\main.py" (
 
 REM 1) 버전 읽기
 set "VER="
-for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "$m = Select-String -Path '%PROJ%\app\main.py' -Pattern 'version=.(X\.[0-9]+)' | Select-Object -First 1; if ($m) { $m.Matches[0].Groups[1].Value }"`) do set "VER=%%v"
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "$m = Select-String -Path '%PROJ%\app\main.py' -Pattern 'version=.([IVXL]+\.[0-9]+)' | Select-Object -First 1; if ($m) { $m.Matches[0].Groups[1].Value }"`) do set "VER=%%v"
 if "%VER%"=="" (
     echo [오류] app\main.py 에서 버전을 읽지 못했습니다.
     goto :end
