@@ -1713,8 +1713,6 @@ html.calc-html body {
 }
 .spinner.spinner-sm { width: 14px; height: 14px; border-width: 2px; margin: 0; flex: none; }
 
-/* 상단 서식 표시(누르면 설정관리 → 서식폼). 서식을 골라 두었으면 강조 */
-.excel-forms-btn.has-forms { border-color: var(--accent); color: var(--accent); }
 
 /* 견적서 서식 미리보기 갤러리 (폼1~8 썸네일, 클릭하면 그 서식만 담긴 파일) */
 .form-gallery-modal { max-width: 1180px; }
@@ -1729,7 +1727,6 @@ html.calc-html body {
   transition: border-color 0.15s, transform 0.15s;
 }
 .form-gallery-item:hover { border-color: var(--primary); transform: translateY(-2px); }
-.form-gallery-item.is-checked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .form-gallery-thumb {
   width: 100%; height: 300px; object-fit: contain; object-position: top;
   background: #fff; border-radius: 3px;
@@ -1759,7 +1756,6 @@ html.calc-html body {
 .settings-modal { max-width: 1500px; }
 .settings-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .settings-tab .archive-count { margin-left: 2px; }
-.settings-tab-sub { font-weight: 400; opacity: 0.85; }
 .settings-body { display: flex; flex-direction: column; min-height: 0; }
 .settings-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .settings-panel.hidden { display: none; }
@@ -1791,7 +1787,3 @@ html.calc-html body {
 .settings-info-form .modal-status { margin: 6px 0 0; }
 .settings-info-foot { display: flex; justify-content: flex-end; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .settings-info-foot #quoteInfoReset { margin-right: auto; }
-/* 서식폼 탭: 썸네일 4열 × 2줄이 한 화면에 들어가도록 */
-.settings-forms-grid .form-gallery-thumb { height: 330px; }
-.settings-forms-grid .form-gallery-name { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.settings-forms-grid .form-gallery-name input { accent-color: var(--accent); margin: 0; width: 13px; height: 13px; pointer-events: none; }

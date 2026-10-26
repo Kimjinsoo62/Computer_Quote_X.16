@@ -792,101 +792,8 @@ function ctoUpgradesForExcel(index) {
   return Object.keys(map).length ? JSON.stringify(map) : "";
 }
 
-// ---------- Excel 견적서 서식 선택 (폼1~8) — 설정관리 → 서식폼 탭 ----------
-// 선택은 이 기기의 브라우저(localStorage)에만 저장된다. 비어 있으면 "전체" = 견적요약 + 폼1~8 한 파일.
-// 서식을 고르면 견적요약 없이 서식마다 파일을 하나씩 내려받는다(서버 forms= 를 서식별로 따로 호출).
-const EXCEL_FORMS_KEY = "excelForms";
+// ---------- Excel 견적서 서식 (폼1~8) ----------
 const EXCEL_FORM_LABELS = { 1: "표준", 2: "인보이스", 3: "보고서", 4: "명세서", 5: "리테일", 6: "조립PC", 7: "데스크탑", 8: "클래식" };
-
-function loadExcelForms() {
-  try {
-    const arr = JSON.parse(localStorage.getItem(EXCEL_FORMS_KEY) || "[]");
-    if (!Array.isArray(arr)) return [];
-    return [...new Set(arr.map(Number).filter((n) => EXCEL_FORM_LABELS[n]))].sort((a, b) => a - b);
-  } catch (_) {
-    return [];
-  }
-}
-let excelForms = loadExcelForms();
-
-function saveExcelForms() {
-  try {
-    if (excelForms.length) localStorage.setItem(EXCEL_FORMS_KEY, JSON.stringify(excelForms));
-    else localStorage.removeItem(EXCEL_FORMS_KEY);
-  } catch (_) {}
-}
-
-function excelFormsShortText() {
-  if (!excelForms.length) return "전체";
-  if (excelForms.length <= 3) return excelForms.map((n) => `폼${n}`).join("·");
-  return `폼 ${excelForms.length}종`;
-}
-
-function syncExcelFormsUI() {
-  const short = excelFormsShortText();
-  const tabLabel = $("#excelFormsLabel");
-  if (tabLabel) tabLabel.textContent = short;
-  const chip = $("#excelFormsChip");
-  if (chip) chip.textContent = `서식: ${short}`;
-  $("#btnExcelForms")?.classList.toggle("has-forms", excelForms.length > 0);
-  document.querySelectorAll("#settingsFormsGrid .form-gallery-item").forEach((item) => {
-    const on = excelForms.includes(Number(item.dataset.form));
-    item.classList.toggle("is-checked", on);
-    const cb = item.querySelector("input[type=checkbox]");
-    if (cb) cb.checked = on;
-  });
-  const status = $("#excelFormsStatus");
-  if (status) {
-    status.textContent = excelForms.length
-      ? `자주 쓰는 서식 ${excelForms.length}개 표시됨`
-      : "표시한 서식 없음";
-  }
-}
-
-function toggleExcelForm(n) {
-  if (!EXCEL_FORM_LABELS[n]) return;
-  excelForms = excelForms.includes(n)
-    ? excelForms.filter((x) => x !== n)
-    : [...new Set([...excelForms, n])].sort((a, b) => a - b);
-  saveExcelForms();
-  syncExcelFormsUI();
-}
-
-/** 설정관리 서식폼 탭: 폼1~8 썸네일. 누를 때마다 선택/해제. */
-function renderSettingsForms() {
-  const grid = $("#settingsFormsGrid");
-  if (!grid) return;
-  if (!grid.childElementCount) {
-    grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
-      const n = Number(k);
-      return `
-        <div class="form-gallery-item" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 선택/해제">
-          <img class="form-gallery-thumb" src="/static/img/forms/form${n}.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 미리보기" loading="lazy" />
-          <label class="form-gallery-name" onclick="event.preventDefault()"><input type="checkbox" tabindex="-1" /> 폼${n} (${EXCEL_FORM_LABELS[n]})</label>
-          <div class="form-gallery-desc">${FORM_GALLERY_DESC[n] || ""}</div>
-        </div>`;
-    }).join("");
-    grid.querySelectorAll(".form-gallery-item").forEach((item) => {
-      const pick = () => toggleExcelForm(Number(item.dataset.form));
-      item.addEventListener("click", pick);
-      item.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          pick();
-        }
-      });
-    });
-  }
-  syncExcelFormsUI();
-}
-
-$("#excelFormsAll")?.addEventListener("click", () => {
-  excelForms = [];
-  saveExcelForms();
-  syncExcelFormsUI();
-});
-$("#btnExcelForms")?.addEventListener("click", () => openSettings("forms"));
-
 
 // ---------- 서식 미리보기 갤러리 (카드 한 건: 폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
 // 썸네일은 static/img/forms/formN.png (샘플 견적으로 만든 디자인 미리보기, 실제 금액 아님).
@@ -919,9 +826,8 @@ function openFormGallery(index) {
   if (hint) hint.textContent = "서식을 누르면 이 항목만 그 서식으로 담긴 파일(시트 이름 \"견   적   서\")을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
   grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
     const n = Number(k);
-    const checked = excelForms.includes(n);
     return `
-      <div class="form-gallery-item${checked ? " is-checked" : ""}" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 서식으로 받기">
+      <div class="form-gallery-item" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 서식으로 받기">
         <img class="form-gallery-thumb" src="/static/img/forms/form${n}.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 미리보기" loading="lazy" />
         <div class="form-gallery-name">폼${n} (${EXCEL_FORM_LABELS[n]})</div>
         <div class="form-gallery-desc">${FORM_GALLERY_DESC[n] || ""}</div>
@@ -1687,7 +1593,6 @@ function switchSettingsTab(tab) {
     panel.classList.toggle("hidden", panel.dataset.panel !== tab);
   });
   if (tab === "info") loadCustomers();
-  else if (tab === "forms") renderSettingsForms();
   else if (tab === "archive") {
     loadQuoteArchive();
     loadTrBackupDir();
@@ -1719,7 +1624,6 @@ settingsModal?.addEventListener("click", (e) => {
 settingsModal?.querySelectorAll(".settings-tab").forEach((btn) => {
   btn.addEventListener("click", () => switchSettingsTab(btn.dataset.tab));
 });
-syncExcelFormsUI();
 
 
 // ---------- 네트워크 접속 안내 모달 ----------
@@ -2855,16 +2759,8 @@ async function clearClientCaches() {
   try {
     sessionStorage.clear();
   } catch (_) {}
-  // Excel 서식 선택은 캐시가 아니라 이 기기의 설정이므로 종료 때 지우지 않는다.
-  let keepForms = null;
-  try {
-    keepForms = localStorage.getItem(EXCEL_FORMS_KEY);
-  } catch (_) {}
   try {
     localStorage.clear();
-  } catch (_) {}
-  try {
-    if (keepForms) localStorage.setItem(EXCEL_FORMS_KEY, keepForms);
   } catch (_) {}
   try {
     if (typeof caches !== "undefined") {

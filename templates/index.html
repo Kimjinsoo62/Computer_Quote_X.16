@@ -47,12 +47,9 @@
       <div class="hero-topbar-left">
         <p class="hero-date">견적 기준일: <strong id="quoteDate">{{ today }}</strong></p>
         <div class="hero-topbar-actions">
-          <!-- 현재 견적처·서식 표시. 누르면 설정관리의 해당 탭이 열린다 -->
+          <!-- 현재 견적처 표시. 누르면 설정관리의 견적정보 탭이 열린다 -->
           <button type="button" id="btnCurrentCustomer" class="btn btn-outline btn-sm blink-warning" title="현재 견적처(거래처) — 누르면 설정관리 → 견적정보 · 거래처 탭을 엽니다">
             <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">거래처: -</span>
-          </button>
-          <button type="button" id="btnExcelForms" class="btn btn-outline btn-sm excel-forms-btn" title="자주 쓰는 서식 표시 — 누르면 설정관리 → 서식폼 탭을 엽니다">
-            <span class="btn-icon">🗂️</span> <span id="excelFormsChip">서식: 전체</span>
           </button>
           <button type="button" id="btnMarginCycle" class="btn btn-outline btn-sm margin-cycle" aria-label="컴퓨존 견적 마진">
             <span class="btn-icon">💳</span>
@@ -239,7 +236,6 @@
           <h3 id="settingsTitle">⚙️ 설정관리</h3>
           <div class="settings-tabs" role="tablist">
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="info" role="tab">📇 견적정보 · 거래처</button>
-            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="forms" role="tab">🗂️ 서식폼 <span id="excelFormsLabel" class="settings-tab-sub">전체</span></button>
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab">🗃️ 견적보관함 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="taskreport" role="tab">📋 작업내역서 <span id="trListCount" class="archive-count">0</span></button>
           </div>
@@ -363,20 +359,7 @@
           </div>
         </section>
 
-        <!-- 2. 서식폼 -->
-        <section class="settings-panel hidden" data-panel="forms">
-          <div class="qa-toolbar">
-            <strong>Excel 견적서 서식 (폼1~폼8)</strong>
-            <span id="excelFormsStatus" class="qa-stats"></span>
-            <div class="qa-toolbar-right">
-              <button type="button" id="excelFormsAll" class="btn btn-outline btn-sm" title="표시한 서식을 모두 지웁니다">전체(기본)</button>
-            </div>
-          </div>
-          <p class="qa-hint">자주 쓰는 서식을 표시해 둡니다. 서식을 누를 때마다 표시/해제되고 바로 저장됩니다(이 기기 브라우저에만 저장). 표시한 서식은 카드의 <strong>📥 엑셀 견적서</strong> 미리보기 창에서 체크된 상태로 보이고, 받을 서식은 그 창에서 하나를 눌러 고릅니다.</p>
-          <div id="settingsFormsGrid" class="form-gallery-grid settings-forms-grid"></div>
-        </section>
-
-        <!-- 3. 견적보관함 -->
+        <!-- 2. 견적보관함 -->
         <section class="settings-panel hidden" data-panel="archive">
           <div class="qa-toolbar">
             <div class="set-search">
@@ -406,7 +389,7 @@
           </div>
         </section>
 
-        <!-- 4. 작업내역서 -->
+        <!-- 3. 작업내역서 -->
         <section class="settings-panel hidden" data-panel="taskreport" id="trListPanel">
           <div class="tr-list-toolbar">
             <div class="tr-list-search">
