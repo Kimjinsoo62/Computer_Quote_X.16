@@ -949,30 +949,31 @@ def _discover_ai_store_pnos() -> list[int]:
     return found
 
 
-def discover_ai_pc_product_nos() -> tuple[list[int], bool]:
-    """AI PC ProductNo 실시간 수집 → (상품번호 목록, 전용관 출처 여부).
-    전용관을 못 읽거나 비어 있으면 조립PC 메인관에서 AI PC 문맥의 상품을 찾는다
-    (이때는 상세 상품명의 AI PC 표기로 한 번 더 거른다)."""
+def discover_ai_pc_product_nos() -> tuple[dict[int, bool], bool]:
+    """AI PC ProductNo 실시간 수집 → ({상품번호: 상품명 AI 표기 검사 필요 여부}, 전용관 읽기 성공 여부).
+    전용관의 [컴퓨존] 조립PC(검사 생략)에 더해, 조립PC 메인관에서 AI PC 문맥의 상품을 함께 찾는다
+    (메인관 상품은 상세 상품명의 AI PC 표기로 한 번 더 거른다)."""
+    pnos: dict[int, bool] = {}
+    store_ok = False
     try:
-        store = _discover_ai_store_pnos()
-        if store:
-            return store, True
+        for pno in _discover_ai_store_pnos():
+            pnos[pno] = False
+        store_ok = bool(pnos)
     except (urllib.error.URLError, TimeoutError, OSError):
         pass
 
-    found: list[int] = []
     try:
         html = _fetch_url(ALL_ASSEMBLED_URL)
         for m in re.finditer(r"ProductNo=(\d+)", html):
             pno = int(m.group(1))
-            if pno < 100000 or pno in found:
+            if pno < 100000 or pno in pnos:
                 continue
             ctx = html[max(0, m.start() - 280) : m.start() + 1200]
             if any(k in ctx for k in ("AMD AI", "AI PC", "4545P", "4585PX")):
-                found.append(pno)
+                pnos[pno] = True
     except (urllib.error.URLError, TimeoutError, OSError):
         pass
-    return found, False
+    return pnos, store_ok
 
 
 def _memory_slot_ids(html: str) -> list[str]:
@@ -1304,7 +1305,7 @@ def get_logic_steps() -> list[dict[str, str]]:
         {
             "step": "01",
             "title": "전용관 매핑",
-            "desc": "컴퓨존 AI PC 전용관의 [컴퓨존] 조립PC ProductNo 실시간 수집 (실패 시 조립PC 메인관)",
+            "desc": "컴퓨존 AI PC 전용관의 [컴퓨존] 조립PC + 조립PC 메인관의 AI PC 표기 상품 ProductNo 실시간 수집",
         },
         {
             "step": "02",
@@ -1336,7 +1337,7 @@ def fetch_today_quotes(
     include_ram32: bool = False,
     include_setup: bool = False,
 ) -> TodayQuotesResult:
-    """AI PC: 전용관에서 상품번호를 실시간 수집 후, 각 상세페이지 BOM/가격만 사용"""
+    """AI PC: 전용관 + 조립PC 메인관에서 상품번호를 실시간 수집 후, 각 상세페이지 BOM/가격만 사용"""
     pnos, from_store = discover_ai_pc_product_nos()
     quotes: list[Quote] = []
 
@@ -1350,9 +1351,9 @@ def fetch_today_quotes(
                 include_ram32,
                 include_setup,
                 idx,
-                not from_store,
+                require_title,
             ): pno
-            for idx, pno in enumerate(pnos, 1)
+            for idx, (pno, require_title) in enumerate(pnos.items(), 1)
         }
         for fut in futures:
             try:
