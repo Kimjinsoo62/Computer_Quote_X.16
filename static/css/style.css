@@ -1766,6 +1766,17 @@ html.calc-html body {
   background: rgba(148, 163, 184, 0.08); color: var(--text); font-size: 1rem; color-scheme: dark;
 }
 .mail-attach { color: var(--text); }
+.mail-account-help { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.mail-account-help small { flex: 1; margin: 0; }
+.mail-account-help .btn { white-space: nowrap; }
+/* Gmail 앱 비밀번호 가져오는 법 (메일 발송 창 위) */
+.app-pw-help-modal { max-width: 760px; }
+.app-pw-lead { margin: 0 0 8px; line-height: 1.5; }
+.app-pw-steps { margin: 0 0 10px; padding-left: 22px; line-height: 1.55; }
+.app-pw-steps li { margin-bottom: 8px; }
+.app-pw-steps .btn { display: inline-flex; margin: 4px 0 0; text-decoration: none; }
+.app-pw-notes { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card2); }
+.app-pw-notes ul { margin: 4px 0 0; padding-left: 18px; line-height: 1.5; color: var(--muted); }
 /* 견적서 보관함 */
 .archive-count {
   display: inline-block; min-width: 16px; padding: 0 4px; border-radius: 8px;

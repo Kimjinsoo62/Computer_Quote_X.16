@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261027d" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261027e" />
 </head>
 <body>
   <nav class="nav">
@@ -575,9 +575,10 @@
               <label>앱 비밀번호 <input type="password" id="mailPass" placeholder="16자리 (띄어쓰기 상관없음)" autocomplete="new-password" /></label>
               <button type="button" id="mailAccountSave" class="btn btn-primary btn-sm">💾 저장 (로그인 확인)</button>
             </div>
-            <small>Gmail 일반 비밀번호는 쓸 수 없습니다. Google 계정에서 2단계 인증을 켠 뒤
-              <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">앱 비밀번호 만들기 ↗</a>에서 받은 16자리를 넣으세요.
-              비밀번호는 이 PC 에만 암호화해 저장됩니다(GitHub 에 올라가지 않음).</small>
+            <div class="mail-account-help">
+              <small>Gmail 일반 비밀번호는 쓸 수 없고, Google 에서 만든 16자리 <strong>앱 비밀번호</strong>를 넣어야 합니다. 비밀번호는 이 PC 에만 암호화해 저장됩니다(GitHub 에 올라가지 않음).</small>
+              <button type="button" id="appPwHelpOpen" class="btn btn-outline btn-sm">❓ 앱 비밀번호 가져오는 법</button>
+            </div>
           </div>
         </div>
         <div class="mail-form">
@@ -593,6 +594,42 @@
         <div class="modal-footer-right">
           <button type="button" id="mailCancel" class="btn btn-outline btn-sm">취소</button>
           <button type="button" id="mailSend" class="btn btn-primary btn-sm">📤 보내기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gmail 앱 비밀번호 가져오는 법 (메일 발송 창 위에 뜬다) -->
+  <div id="appPwHelpModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal app-pw-help-modal" role="dialog" aria-labelledby="appPwHelpTitle">
+      <div class="modal-header">
+        <h3 id="appPwHelpTitle">❓ Gmail 앱 비밀번호 가져오는 법</h3>
+        <button type="button" class="modal-close btn-modal-close" id="appPwHelpClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <p class="app-pw-lead">견적서 메일은 <strong>보내는 Gmail 계정</strong>으로 나갑니다. Gmail 은 프로그램에서 로그인할 때 평소 비밀번호 대신 <strong>앱 비밀번호(16자리)</strong>를 요구합니다. 아래 순서대로 한 번만 만들면 됩니다.
+          링크는 <strong>보내는 Gmail 계정으로 로그인된 브라우저</strong>에서 여세요.</p>
+        <ol class="app-pw-steps">
+          <li>
+            <strong>2단계 인증 켜기</strong> — 앱 비밀번호는 2단계 인증이 켜진 계정에서만 만들 수 있습니다. 이미 켜져 있으면 건너뜁니다.
+            <a class="btn btn-outline btn-sm" href="https://myaccount.google.com/signinoptions/twosv" target="_blank" rel="noopener">🔐 2단계 인증 설정 열기 ↗</a>
+          </li>
+          <li>
+            <strong>앱 비밀번호 페이지 열기</strong> — Google 계정 → 보안 → 2단계 인증 → 맨 아래 <b>앱 비밀번호</b>. 메뉴가 안 보이면 Google 계정 맨 위 검색창에 "앱 비밀번호"를 입력하세요.
+            <a class="btn btn-primary btn-sm" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">🔑 앱 비밀번호 만들기 열기 ↗</a>
+          </li>
+          <li><strong>앱 이름 입력 → 만들기</strong> — 이름은 아무거나 됩니다(예: <code>견적프로그램</code>). 비밀번호 확인을 다시 물으면 Gmail 비밀번호를 넣으세요.</li>
+          <li><strong>16자리 복사</strong> — 노란 상자에 <code>abcd efgh ijkl mnop</code> 같은 16자리가 나옵니다. 그대로 복사하세요(띄어쓰기는 있어도 없어도 됩니다).</li>
+          <li><strong>이 창에 붙여넣기 → 저장</strong> — 메일 보내기 창의 <b>보내는 Gmail 주소</b>에 그 계정 주소, <b>앱 비밀번호</b>에 16자리를 넣고 <b>💾 저장 (로그인 확인)</b>을 누릅니다. 로그인이 확인되면 "보내는 계정"이 표시됩니다.</li>
+        </ol>
+        <div class="app-pw-notes">
+          <strong>알아 두기</strong>
+          <ul>
+            <li>16자리는 만들 때 <b>한 번만</b> 보여 줍니다. 창을 닫아 잊었으면 같은 페이지에서 새로 만들면 됩니다(예전 것은 삭제해도 됩니다).</li>
+            <li>Gmail 비밀번호를 바꾸면 앱 비밀번호가 모두 해제됩니다. 메일 발송 창의 <b>계정 변경</b>으로 새 16자리를 넣으세요.</li>
+            <li>"앱 비밀번호" 메뉴가 아예 없으면 2단계 인증이 꺼져 있거나, 회사 Google Workspace 계정에서 관리자가 막아 둔 경우입니다(관리자에게 문의).</li>
+            <li>앱 비밀번호로는 메일 보내기만 합니다. 이 프로그램은 서버 PC 에만 암호화해 저장하며 다른 곳으로 보내지 않습니다.</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -860,6 +897,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261027d"></script>
+  <script src="/static/js/app.js?v=20261027e"></script>
 </body>
 </html>

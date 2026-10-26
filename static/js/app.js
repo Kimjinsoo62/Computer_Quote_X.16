@@ -996,6 +996,13 @@ $("#mailAccountSave")?.addEventListener("click", saveMailAccount);
 $("#mailSend")?.addEventListener("click", sendQuoteMail);
 $("#mailCancel")?.addEventListener("click", () => hide(mailModal));
 $("#mailClose")?.addEventListener("click", () => hide(mailModal));
+// ❓ 앱 비밀번호 가져오는 법 (메일 발송 창 위에 뜨는 안내 팝업)
+const appPwHelpModal = $("#appPwHelpModal");
+$("#appPwHelpOpen")?.addEventListener("click", () => show(appPwHelpModal));
+$("#appPwHelpClose")?.addEventListener("click", () => hide(appPwHelpModal));
+appPwHelpModal?.addEventListener("click", (e) => {
+  if (e.target === appPwHelpModal) hide(appPwHelpModal);
+});
 
 $("#formGalleryClose")?.addEventListener("click", closeFormGallery);
 $("#formGalleryModal")?.addEventListener("click", (e) => {
@@ -1526,6 +1533,12 @@ function qiRerender() {
 $("#btnCurrentCustomer")?.addEventListener("click", () => openSettings("info"));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  // 메일 발송 창 위의 앱 비밀번호 안내만 닫는다(아래 발송 창의 입력은 그대로)
+  const pwHelp = $("#appPwHelpModal");
+  if (pwHelp && !pwHelp.classList.contains("hidden")) {
+    hide(pwHelp);
+    return;
+  }
   if (ctoModal && !ctoModal.classList.contains("hidden")) closeCtoModal();
   if (trModal && !trModal.classList.contains("hidden")) closeTrModal();
   else if (settingsModal && !settingsModal.classList.contains("hidden")) closeSettings();
