@@ -108,6 +108,7 @@
           <li><strong>📧 견적처 이메일 표시</strong>: 📇 견적 정보의 견적처 이메일이 폼1~폼8의 견적처 연락처 옆에 들어갑니다. 행을 늘리지 않아 서식 모양은 그대로입니다. (<a href="#s12">12번 항목</a>)</li>
           <li><strong>📐 Excel 견적서 테두리 · 행 높이 정리</strong>: 병합 칸(폼1 합계금액 칸, 모든 폼의 합계 행)에서 오른쪽 · 아래 테두리가 빠지던 문제와 폼3 · 폼4 상단 박스의 오른쪽 선이 끊기던 문제를 고쳤습니다. 한 줄짜리 구분 · 품명 때문에 행 높이가 들쭉날쭉하던 것도 실제 Excel 글자 폭 기준으로 맞췄습니다. (<a href="#s12">12번 항목</a>)</li>
           <li><strong>📥 상단 버튼 이름 변경</strong>: "Excel 다운로드"가 <strong>[전체 비교 Excel]</strong>로 바뀌었습니다. 현재 목록 전체를 견적요약 비교표와 함께 한 파일로 받는 버튼이며, 최종 견적서 1건은 카드의 [엑셀 견적서]나 [서식 미리보기]를 씁니다. (<a href="#s11">11번 항목</a>)</li>
+          <li><strong>📦 오프라인 설치 패키지</strong>: <code>Offline Install Package</code> 폴더에 Python 설치 파일과 모든 구성요소를 담아, 인터넷 없는 PC에서도 <span class="manual-key">START.bat</span> · <span class="manual-key">install.bat</span>으로 설치됩니다. (<a href="#s1">1번 항목</a>)</li>
         </ul>
       </div>
 
@@ -254,6 +255,21 @@
         <li>Excel 견적서·작업내역서 생성, Apple CTO 옵션 불러오기, 중고 시세 검색, 업데이트 대기처럼 시간이 걸리는 작업은 화면 <strong>우측 하단의 작은 처리 상태 창</strong>에 진행 상황이 표시됩니다.</li>
         <li>PC에 처음 설치하는 환경이라면 <span class="manual-key">START.bat</span> 이 필요한 패키지가 없음을 감지하고 <span class="manual-key">install.bat</span> 을 자동으로 실행합니다. 직접 <span class="manual-key">install.bat</span> 을 먼저 실행해도 됩니다.</li>
       </ul>
+
+      <h3>인터넷 없는 PC에 설치하기 (오프라인 설치)</h3>
+      <p>프로그램 폴더 안의 <code>Offline Install Package</code> 폴더에 설치에 필요한 파일이 모두 들어 있습니다. 프로그램 폴더를 통째로(USB 등으로) 복사하면 인터넷 없이 설치됩니다.</p>
+      <table class="manual-table">
+        <tr><th>폴더 · 파일</th><th>내용</th></tr>
+        <tr><td><code>python\python-3.12.10-amd64.exe</code></td><td>Python 3.12.10 공식 설치 파일 (Windows 64비트)</td></tr>
+        <tr><td><code>wheels\</code></td><td>fastapi · uvicorn · jinja2 · openpyxl · python-multipart · python-dotenv · Pillow와 그 하위 구성요소, pip (Python 3.12용)</td></tr>
+        <tr><td><span class="manual-key">download.bat</span></td><td>인터넷이 되는 PC에서 위 파일들을 다시 받습니다. 구성요소(requirements.txt)가 바뀐 뒤 패키지를 새로 만들 때 씁니다.</td></tr>
+      </table>
+      <ol>
+        <li>Python이 없는 PC라면 <code>python\python-3.12.10-amd64.exe</code> 를 실행하고, 첫 화면에서 <strong>"Add python.exe to PATH"</strong> 를 꼭 체크한 뒤 설치합니다.</li>
+        <li><span class="manual-key">START.bat</span> (또는 <span class="manual-key">install.bat</span>)을 실행합니다. <code>wheels</code> 폴더가 있으면 자동으로 <strong>[3/4] 오프라인 설치</strong>를 먼저 하고, 성공하면 인터넷에 접속하지 않습니다.</li>
+        <li>오프라인 설치가 실패하면(예: PC에 Python 3.13 · 3.14 등 다른 버전이 먼저 잡혀 있음) 자동으로 일반 온라인 설치를 시도합니다. 인터넷이 없으면 다른 버전 Python을 지우거나 PATH 순서를 바꿔 3.12가 쓰이게 한 뒤, <code>.venv</code> 폴더를 지우고 다시 실행하세요.</li>
+      </ol>
+      <p>오프라인 설치를 해도 견적 수집(컴퓨존 · Apple · 다나와 · 쿠팡 등)과 [업데이트]는 인터넷이 있어야 동작합니다.</p>
 
       <h3>종료하기</h3>
       <table class="manual-table">

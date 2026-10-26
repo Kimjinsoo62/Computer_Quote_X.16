@@ -17,6 +17,7 @@ if errorlevel 1 (
     echo [오류] Python이 설치되어 있지 않거나 PATH에 없습니다.
     echo.
     echo   1. https://www.python.org/downloads/ 에서 Python 3.10 이상 설치
+    echo      ^(인터넷이 없으면 "Offline Install Package\python\python-3.12.10-amd64.exe" 실행^)
     echo   2. 설치 시 "Add python.exe to PATH" 체크
     echo   3. 설치 후 명령 프롬프트를 다시 열고 install.bat 재실행
     echo.
@@ -66,6 +67,21 @@ set "PY=%~dp0.venv\Scripts\python.exe"
 set "PIP=%~dp0.venv\Scripts\python.exe -m pip"
 
 REM ── 3) pip / 의존성 설치 ──
+REM "Offline Install Package\wheels"에 휠이 있으면 인터넷 없이 먼저 설치를 시도하고,
+REM 실패하면(Python 버전 불일치 등) 아래 온라인 설치로 넘어간다.
+set "WHEELS=%~dp0Offline Install Package\wheels"
+if exist "%WHEELS%\*.whl" (
+    echo.
+    echo [3/4] 오프라인 설치 ^(Offline Install Package\wheels^)...
+    "%PY%" -m pip install --no-index --find-links "%WHEELS%" --upgrade pip
+    "%PY%" -m pip install --no-index --find-links "%WHEELS%" -r "%~dp0requirements.txt"
+    if not errorlevel 1 (
+        echo   - 오프라인 설치 완료
+        goto :verify
+    )
+    echo   - 오프라인 설치 실패 ^(휠은 Python 3.12용^). 온라인 설치를 시도합니다...
+)
+
 echo.
 echo [3/4] pip 업그레이드 및 라이브러리 설치...
 "%PY%" -m pip install --upgrade pip
@@ -87,6 +103,7 @@ if errorlevel 1 (
 echo   - requirements.txt 설치 완료
 
 REM ── 4) 설치 검증 ──
+:verify
 echo.
 echo [4/4] 설치 검증...
 "%PY%" -c "import fastapi, uvicorn, jinja2, openpyxl, PIL; print('   - fastapi, uvicorn, jinja2, openpyxl, Pillow OK')"
