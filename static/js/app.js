@@ -1428,19 +1428,15 @@ function updateBlinkWarnings() {
   $("#btnSettings")?.classList.toggle("blink-warning", qiDummy);
   $("#settingsBtnText")?.classList.toggle("blink-warning-text", qiDummy);
 
-  // 2. 메인창 "작업내역서" 버튼 및 작업내역서 업체정보 영역 깜박임 처리
+  // 2. 작업내역서 업체정보 영역 깜박임 처리
   const trName = $("#trCompanyName")?.value || quoteInfo?.supplier_name;
   const trAddr = $("#trCompanyAddress")?.value || quoteInfo?.supplier_address;
   const trPhone = $("#trCompanyPhone")?.value || quoteInfo?.supplier_phone;
   const trDummy = isTaskReportCompanyDummy(trName, trAddr, trPhone);
 
-  const btnTr = $("#btnOpenTaskReport");
-  const txtTr = $("#taskReportBtnText");
   const brandBox = $("#trBrandInfoBox");
   const bannerTr = $("#trCompanyWarningNotice");
 
-  if (btnTr) btnTr.classList.toggle("blink-warning", trDummy);
-  if (txtTr) txtTr.classList.toggle("blink-warning-text", trDummy);
   if (brandBox) brandBox.classList.toggle("blink-warning", trDummy);
   if (bannerTr) bannerTr.classList.toggle("hidden", !trDummy);
 
@@ -3674,7 +3670,6 @@ async function downloadTrExcelDirect() {
 }
 
 // 이벤트 바인딩
-$("#btnOpenTaskReport")?.addEventListener("click", openTrModal);
 $("#trModalClose")?.addEventListener("click", closeTrModal);
 trModal?.addEventListener("click", (e) => {
   if (e.target === trModal) closeTrModal();
