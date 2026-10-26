@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 캐시 삭제만 | `.venv\Scripts\python.exe -c "from app.shutdown_service import clear_python_cache; clear_python_cache()"` |
 | 서식 썸네일 재생성 | `.venv\Scripts\python.exe tools\make_form_thumbnails.py` — 폼1~8 디자인을 고쳤을 때만. Excel(COM)이 필요하고 잠깐 Excel 창이 뜬다. 샘플 견적 + 기본(가짜) 견적처 정보로 `static/img/forms/formN.png`(480px)를 만든다 |
 
-런타임 데이터 파일은 모두 `.gitignore`에 있다: `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(쿠팡 파트너스 API 키 — 절대 커밋 금지), `quote_archive/`(견적서 보관함: 카드별 다운로드(`archive=1`)의 xlsx 사본 + `index.json`, `app/quote_archive.py`. 보관본은 `gallery=False`로 다시 만들어 서식 목록 시트를 뺀다), `app_settings.json`(작업내역서·보관함 공용 백업 폴더 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
+런타임 데이터 파일은 모두 `.gitignore`에 있다: `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(쿠팡 파트너스 API 키 — 절대 커밋 금지), `quote_archive/`(견적서 보관함: 카드별 다운로드(`archive=1`)의 xlsx 사본 + `index.json`, `app/quote_archive.py`. 파일명은 `{거래처명}_{구분}_{모델}_…_{id}.xlsx`. 보관본은 `gallery=False`로 다시 만들어 서식 목록 시트를 뺀다), `customers.json`(거래처 목록, `app/customer_book.py`. [설정관리 → 견적정보] 탭의 생성·검색·삭제. 상호명 기준 upsert), `app_settings.json`(작업내역서·보관함 공용 백업 폴더 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
 
 ## 아키텍처
 
@@ -50,7 +50,7 @@ templates/index.html + static/js/app.js  ──fetch──▶  app/main.py (모�
 
 ### 프론트엔드
 
-`static/js/app.js` 한 파일(약 3,100줄)에 모듈 전역 상태(`currentStore`, `quoteData`, `currentCat`, `quoteMarginPercent`, `include*` 토글, CTO 상태)와 렌더 함수가 모두 있다. 번들러 없음. `templates/index.html`은 Jinja2로 서버 정보(LAN IP 등)만 주입받는다. `templates/calc.html` + `static/js/calc.js`는 독립 계산기 창, `templates/사용설명서.html`은 `/manual`로 서빙된다.
+`static/js/app.js` 한 파일(약 3,100줄)에 모듈 전역 상태(`currentStore`, `quoteData`, `currentCat`, `quoteMarginPercent`, `include*` 토글, CTO 상태)와 렌더 함수가 모두 있다. 번들러 없음. `templates/index.html`은 Jinja2로 서버 정보(LAN IP 등)만 주입받는다. 견적정보·거래처 / 서식폼 / 견적보관함 / 작업내역서 목록은 `#settingsModal`(⚙️ 설정관리) 한 창의 탭이며, 기존 요소 id(`qi*`, `qa*`, `trListPanel` 등)를 그대로 쓴다. 작업내역서 작성 창(`#taskReportModal`)은 따로 있고 인쇄 CSS가 그 id에 묶여 있다. `templates/calc.html` + `static/js/calc.js`는 독립 계산기 창, `templates/사용설명서.html`은 `/manual`로 서빙된다.
 
 ### 마진 · 금액 규칙
 
@@ -67,7 +67,7 @@ Mac 계열(`MAC_TIER_PREFIXES`)은 공식몰 구성하기 API로 **실시간 CTO
 
 ### Excel
 
-`excel_export.build_excel()`은 `견적요약` 시트 1장 + **견적(카드)마다** 폼1~8 시트 8장을 만든다. `forms=[1,3]`을 주면 전부 만든 뒤 `_keep_selected_forms()`가 견적요약과 선택 외 폼 시트를 지운다(폼 생성 코드는 한 함수에 순서대로 있어 쪼개지 않는다). 시트 하나만 남는 카드별 추출은 `main.SINGLE_SHEET_TITLE`("견   적   서", 공백 3칸)로 이름을 바꾼다. 화면은 서식마다 `forms=N`으로 따로 호출해 파일을 하나씩 받고, 선택은 브라우저 localStorage `excelForms`에만 저장한다(종료 시 캐시 삭제에서 보존). 서식 선택이 없는 전체 파일은 맨 앞에 `서식 목록` 시트(`_add_form_gallery_sheet`, 썸네일 + 시트 내부 링크)가 붙는다. 썸네일은 `static/img/forms/formN.png`로 저장소에 포함되며 Excel 삽입에 Pillow가 필요하다. 화면 갤러리(`openFormGallery`)도 같은 PNG를 쓴다. 폼 시트는 A4 세로 1페이지 강제(`_apply_page_setup`, 견적요약만 예외), 총 열 너비는 `MAX_TOTAL_COL_WIDTH = 88`을 `_assert_print_width()`가 검사한다. 열을 추가하면 다른 열 너비를 줄여 88 안에 맞춘다. 행 높이는 `_auto_fit_row_heights()`가 글자 폭 추정으로 계산한다.
+`excel_export.build_excel()`은 `견적요약` 시트 1장 + **견적(카드)마다** 폼1~8 시트 8장을 만든다. `forms=[1,3]`을 주면 전부 만든 뒤 `_keep_selected_forms()`가 견적요약과 선택 외 폼 시트를 지운다(폼 생성 코드는 한 함수에 순서대로 있어 쪼개지 않는다). 시트 하나만 남는 카드별 추출은 `main.SINGLE_SHEET_TITLE`("견   적   서", 공백 3칸)로 이름을 바꾼다. `/api/download/excel`은 카드 한 건(`index>=0`) 전용이다(목록 전체 비교 파일은 없앰, `index<0`이면 400). 화면은 서식마다 `forms=N`으로 따로 호출해 파일을 하나씩 받고, 선택은 브라우저 localStorage `excelForms`에만 저장한다(종료 시 캐시 삭제에서 보존). 서식 선택이 없는 전체 파일은 맨 앞에 `서식 목록` 시트(`_add_form_gallery_sheet`, 썸네일 + 시트 내부 링크)가 붙는다. 썸네일은 `static/img/forms/formN.png`로 저장소에 포함되며 Excel 삽입에 Pillow가 필요하다. 화면 갤러리(`openFormGallery`)도 같은 PNG를 쓴다. 폼 시트는 A4 세로 1페이지 강제(`_apply_page_setup`, 견적요약만 예외), 총 열 너비는 `MAX_TOTAL_COL_WIDTH = 88`을 `_assert_print_width()`가 검사한다. 열을 추가하면 다른 열 너비를 줄여 88 안에 맞춘다. 행 높이는 `_auto_fit_row_heights()`가 글자 폭 추정으로 계산한다.
 
 ## 반드시 지켜야 할 불변 조건
 

@@ -488,9 +488,15 @@ function summaryCardHtml(q, i) {
       <div class="price-row">
         <div class="price">${fmt(displayTotal(q))}</div>
         ${q.url ? `
-        <a href="/api/image?redirect=1&url=${encodeURIComponent(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-image" title="원본 페이지의 대표 이미지를 새 창으로 봅니다" onclick="event.stopPropagation()">
-          🖼️ 이미지
-        </a>` : ""}
+        <div class="price-row-btns">
+          ${apple ? "" : `
+          <a href="${escapeHtml(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-compuzone" title="컴퓨존 상품 페이지로 바로 갑니다" onclick="event.stopPropagation()">
+            ⚡ 컴퓨존
+          </a>`}
+          <a href="/api/image?redirect=1&url=${encodeURIComponent(q.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-image" title="원본 페이지의 대표 이미지를 새 창으로 봅니다" onclick="event.stopPropagation()">
+            🖼️ 이미지
+          </a>
+        </div>` : ""}
       </div>
       <p class="source ${sourceClass}">
         ${sourceText}
@@ -758,7 +764,7 @@ function renderDetail(quotes) {
   loadDetailImage(detailArea);
 }
 
-function excelQueryParams(index = -1) {
+function excelQueryParams(index) {
   const params = new URLSearchParams({
     cat: currentCat === "game-pc" ? "game" : currentCat,
     monitor: includeMonitor ? "1" : "0",
@@ -779,16 +785,16 @@ function excelQueryParams(index = -1) {
     params.set("max_price", String(lastPriceQuery.max_price));
     params.set("price_type", lastPriceQuery.type || "assembled");
   }
-  if (index >= 0) params.set("index", String(index));
+  params.set("index", String(index));
   const cto = ctoUpgradesForExcel(index);
   if (cto) params.set("cto", cto);
   return params.toString();
 }
 
 /** 화면에서 적용한 Apple CTO 추가 품목을 {tier_key: [{category, name, amount}]} JSON 으로 만든다. */
-function ctoUpgradesForExcel(index = -1) {
+function ctoUpgradesForExcel(index) {
   const quotes = quoteData?.quotes || [];
-  const picked = index >= 0 ? [quotes[index]] : quotes;
+  const picked = [quotes[index]];
   const map = {};
   picked.forEach((q) => {
     const added = q?._ctoAdded || [];
@@ -798,12 +804,12 @@ function ctoUpgradesForExcel(index = -1) {
   return Object.keys(map).length ? JSON.stringify(map) : "";
 }
 
-/** 카드 한 건만 견적서로 내려받는다. 상단 버튼(전체)은 그대로 둔다. */
+/** 카드 한 건만 견적서로 내려받는다. */
 function downloadOneExcel(index) {
   downloadExcelFiles(index);
 }
 
-// ---------- Excel 견적서 서식 선택 (폼1~8) ----------
+// ---------- Excel 견적서 서식 선택 (폼1~8) — 설정관리 → 서식폼 탭 ----------
 // 선택은 이 기기의 브라우저(localStorage)에만 저장된다. 비어 있으면 "전체" = 견적요약 + 폼1~8 한 파일.
 // 서식을 고르면 견적요약 없이 서식마다 파일을 하나씩 내려받는다(서버 forms= 를 서식별로 따로 호출).
 const EXCEL_FORMS_KEY = "excelForms";
@@ -827,90 +833,80 @@ function saveExcelForms() {
   } catch (_) {}
 }
 
-function excelFormsButtonText() {
-  if (!excelForms.length) return "서식: 전체";
-  if (excelForms.length <= 3) return "서식: " + excelForms.map((n) => `폼${n}`).join("·");
-  return `서식: 폼 ${excelForms.length}종`;
+function excelFormsShortText() {
+  if (!excelForms.length) return "전체";
+  if (excelForms.length <= 3) return excelForms.map((n) => `폼${n}`).join("·");
+  return `폼 ${excelForms.length}종`;
 }
 
 function syncExcelFormsUI() {
-  const label = $("#excelFormsLabel");
-  if (label) label.textContent = excelFormsButtonText();
+  const short = excelFormsShortText();
+  const tabLabel = $("#excelFormsLabel");
+  if (tabLabel) tabLabel.textContent = short;
+  const chip = $("#excelFormsChip");
+  if (chip) chip.textContent = `서식: ${short}`;
   $("#btnExcelForms")?.classList.toggle("has-forms", excelForms.length > 0);
-  document.querySelectorAll("#excelFormsPop input[data-form]").forEach((cb) => {
-    cb.checked = excelForms.includes(Number(cb.dataset.form));
+  document.querySelectorAll("#settingsFormsGrid .form-gallery-item").forEach((item) => {
+    const on = excelForms.includes(Number(item.dataset.form));
+    item.classList.toggle("is-checked", on);
+    const cb = item.querySelector("input[type=checkbox]");
+    if (cb) cb.checked = on;
   });
   const status = $("#excelFormsStatus");
   if (status) {
     status.textContent = excelForms.length
-      ? `선택 ${excelForms.length}개 → 파일 ${excelForms.length}개 (견적요약 제외)`
-      : "전체: 견적요약 + 폼1~8 한 파일";
+      ? `선택 ${excelForms.length}개 → 카드마다 파일 ${excelForms.length}개 (견적요약 제외)`
+      : "선택 없음 → 견적요약 + 폼1~8 한 파일";
   }
 }
 
-function positionExcelFormsPop() {
-  const btn = $("#btnExcelForms");
-  const pop = $("#excelFormsPop");
-  if (!btn || !pop) return;
-  const r = btn.getBoundingClientRect();
-  const width = pop.offsetWidth || 340;
-  const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-  pop.style.left = `${Math.round(left)}px`;
-  pop.style.top = `${Math.round(r.bottom + 4)}px`;
-}
-
-function toggleExcelFormsPop(open) {
-  const pop = $("#excelFormsPop");
-  const btn = $("#btnExcelForms");
-  if (!pop) return;
-  const willOpen = open === undefined ? pop.classList.contains("hidden") : !!open;
-  if (willOpen) {
-    syncExcelFormsUI();
-    show(pop);
-    positionExcelFormsPop();
-  } else {
-    hide(pop);
-  }
-  btn?.setAttribute("aria-expanded", willOpen ? "true" : "false");
-}
-
-function initExcelFormsUI() {
-  const btn = $("#btnExcelForms");
-  const pop = $("#excelFormsPop");
-  if (!btn || !pop) return;
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleExcelFormsPop();
-  });
-  pop.addEventListener("click", (e) => e.stopPropagation());
-  pop.addEventListener("change", (e) => {
-    const cb = e.target.closest("input[data-form]");
-    if (!cb) return;
-    const n = Number(cb.dataset.form);
-    excelForms = cb.checked ? [...new Set([...excelForms, n])].sort((a, b) => a - b) : excelForms.filter((x) => x !== n);
-    saveExcelForms();
-    syncExcelFormsUI();
-  });
-  $("#excelFormsAll")?.addEventListener("click", () => {
-    excelForms = [];
-    saveExcelForms();
-    syncExcelFormsUI();
-  });
-  $("#excelFormsClose")?.addEventListener("click", () => toggleExcelFormsPop(false));
-  document.addEventListener("click", () => {
-    if (!pop.classList.contains("hidden")) toggleExcelFormsPop(false);
-  });
-  window.addEventListener("resize", () => {
-    if (!pop.classList.contains("hidden")) positionExcelFormsPop();
-  });
+function toggleExcelForm(n) {
+  if (!EXCEL_FORM_LABELS[n]) return;
+  excelForms = excelForms.includes(n)
+    ? excelForms.filter((x) => x !== n)
+    : [...new Set([...excelForms, n])].sort((a, b) => a - b);
+  saveExcelForms();
   syncExcelFormsUI();
 }
-initExcelFormsUI();
 
-/** 전체(index=-1) 또는 카드 한 건(index>=0)의 Excel. 서식을 골랐으면 서식마다 파일을 하나씩 차례로 받는다. */
-async function downloadExcelFiles(index = -1) {
-  // 카드 한 건(최종 선택) 다운로드는 견적서 보관함에도 저장한다.
-  const base = `/api/download/excel?${excelQueryParams(index)}${index >= 0 ? "&archive=1" : ""}`;
+/** 설정관리 서식폼 탭: 폼1~8 썸네일. 누를 때마다 선택/해제. */
+function renderSettingsForms() {
+  const grid = $("#settingsFormsGrid");
+  if (!grid) return;
+  if (!grid.childElementCount) {
+    grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
+      const n = Number(k);
+      return `
+        <div class="form-gallery-item" data-form="${n}" role="button" tabindex="0" title="폼${n} ${EXCEL_FORM_LABELS[n]} 선택/해제">
+          <img class="form-gallery-thumb" src="/static/img/forms/form${n}.png" alt="폼${n} ${EXCEL_FORM_LABELS[n]} 미리보기" loading="lazy" />
+          <label class="form-gallery-name" onclick="event.preventDefault()"><input type="checkbox" tabindex="-1" /> 폼${n} (${EXCEL_FORM_LABELS[n]})</label>
+          <div class="form-gallery-desc">${FORM_GALLERY_DESC[n] || ""}</div>
+        </div>`;
+    }).join("");
+    grid.querySelectorAll(".form-gallery-item").forEach((item) => {
+      const pick = () => toggleExcelForm(Number(item.dataset.form));
+      item.addEventListener("click", pick);
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          pick();
+        }
+      });
+    });
+  }
+  syncExcelFormsUI();
+}
+
+$("#excelFormsAll")?.addEventListener("click", () => {
+  excelForms = [];
+  saveExcelForms();
+  syncExcelFormsUI();
+});
+$("#btnExcelForms")?.addEventListener("click", () => openSettings("forms"));
+
+/** 카드 한 건(index)의 Excel. 서식을 골랐으면 서식마다 파일을 하나씩 차례로 받는다. 받은 파일은 견적서 보관함에도 저장된다. */
+async function downloadExcelFiles(index) {
+  const base = `/api/download/excel?${excelQueryParams(index)}&archive=1`;
   if (!excelForms.length) {
     await downloadWithBusy(base, {}, "견적서.xlsx", "견적서 Excel 생성 중…");
     return;
@@ -927,7 +923,7 @@ async function downloadExcelFiles(index = -1) {
   }
 }
 
-// ---------- 서식 미리보기 갤러리 (폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
+// ---------- 서식 미리보기 갤러리 (카드 한 건: 폼1~8 썸네일 → 하나 골라 그 서식만 받기) ----------
 // 썸네일은 static/img/forms/formN.png (샘플 견적으로 만든 디자인 미리보기, 실제 금액 아님).
 const FORM_GALLERY_DESC = {
   1: "B2B 표준 견적서 · 공급자/수급자 직인란",
@@ -939,28 +935,23 @@ const FORM_GALLERY_DESC = {
   7: "제품 SPEC 표 · 고객 발주확인란",
   8: "관공서/기업 납품 세로형 전통 서식",
 };
-let formGalleryIndex = -1; // -1 = 현재 목록 전체, 0 이상 = 카드 한 건
+let formGalleryIndex = 0;
 
-function openFormGallery(index = -1) {
+function openFormGallery(index) {
   const modal = $("#formGalleryModal");
   const grid = $("#formGalleryGrid");
   if (!modal || !grid) return;
   const quotes = quoteData?.quotes || [];
-  if (!quotes.length) {
+  const q = quotes[index];
+  if (!q) {
     alert("먼저 견적을 불러오세요.");
     return;
   }
-  formGalleryIndex = index >= 0 && index < quotes.length ? index : -1;
+  formGalleryIndex = index;
   const title = $("#formGalleryTitle");
   const hint = $("#formGalleryHint");
-  if (formGalleryIndex >= 0) {
-    const q = quotes[formGalleryIndex];
-    if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — ${q.tab_label || q.tier || ""} ${q.model || ""}`.trim();
-    if (hint) hint.textContent = "서식을 누르면 이 항목만 그 서식으로 담긴 파일(시트 이름 \"견   적   서\")을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
-  } else {
-    if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — 현재 목록 ${quotes.length}건`;
-    if (hint) hint.textContent = "서식을 누르면 현재 목록 전체가 그 서식(카드마다 시트 1장)으로 담긴 파일을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
-  }
+  if (title) title.textContent = `🖼️ 견적서 서식 미리보기 — ${q.tab_label || q.tier || ""} ${q.model || ""}`.trim();
+  if (hint) hint.textContent = "서식을 누르면 이 항목만 그 서식으로 담긴 파일(시트 이름 \"견   적   서\")을 바로 받습니다. 썸네일은 샘플 견적으로 만든 디자인 미리보기입니다.";
   grid.innerHTML = Object.keys(EXCEL_FORM_LABELS).map((k) => {
     const n = Number(k);
     const checked = excelForms.includes(n);
@@ -992,10 +983,8 @@ function closeFormGallery() {
 async function downloadFormFromGallery(n) {
   if (!EXCEL_FORM_LABELS[n]) return;
   closeFormGallery();
-  const index = formGalleryIndex;
-  const base = `/api/download/excel?${excelQueryParams(index)}${index >= 0 ? "&archive=1" : ""}`;
   await downloadWithBusy(
-    `${base}&forms=${n}`,
+    `/api/download/excel?${excelQueryParams(formGalleryIndex)}&archive=1&forms=${n}`,
     {},
     `견적서_폼${n}.xlsx`,
     `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`
@@ -1005,10 +994,6 @@ async function downloadFormFromGallery(n) {
 $("#formGalleryClose")?.addEventListener("click", closeFormGallery);
 $("#formGalleryModal")?.addEventListener("click", (e) => {
   if (e.target === $("#formGalleryModal")) closeFormGallery();
-});
-$("#excelFormsPreview")?.addEventListener("click", () => {
-  toggleExcelFormsPop(false);
-  openFormGallery(-1);
 });
 
 // ---------- 견적서 보관함 (카드별로 내려받은 최종 견적서 저장 · 관리 · 백업) ----------
@@ -1042,7 +1027,7 @@ function renderQuoteArchive() {
     <tr class="${e.missing ? "is-missing" : ""}" data-id="${escapeHtml(e.id)}">
       <td>${escapeHtml(e.saved_at || "")}</td>
       <td>${escapeHtml(e.customer || "-")}</td>
-      <td>${escapeHtml(e.tab_label ? `${e.tab_label} · ` : "")}${escapeHtml(e.model || "")}${e.kind === "list" ? ` <span class="qa-stats">(목록 ${e.quotes || 0}건)</span>` : ""}</td>
+      <td>${escapeHtml(e.tab_label ? `${e.tab_label} · ` : "")}${escapeHtml(e.model || "")}</td>
       <td>${escapeHtml(qaFormsLabel(e))}</td>
       <td class="qa-num">${e.total ? fmt(e.total) : "-"}</td>
       <td class="qa-file" title="${escapeHtml(e.filename || "")}">${escapeHtml(e.filename || "")}<br /><span>${qaFmtSize(e.size)}${e.missing ? " · 파일 없음" : ""}</span></td>
@@ -1073,16 +1058,6 @@ async function loadQuoteArchive() {
     qaEntries = [];
   }
   renderQuoteArchive();
-}
-
-function openQuoteArchive() {
-  show($("#quoteArchiveModal"));
-  loadQuoteArchive();
-  loadTrBackupDir();
-}
-
-function closeQuoteArchive() {
-  hide($("#quoteArchiveModal"));
 }
 
 async function qaDownload(id) {
@@ -1167,11 +1142,6 @@ async function qaBackup() {
   }
 }
 
-$("#btnQuoteArchive")?.addEventListener("click", openQuoteArchive);
-$("#quoteArchiveClose")?.addEventListener("click", closeQuoteArchive);
-$("#quoteArchiveModal")?.addEventListener("click", (e) => {
-  if (e.target === $("#quoteArchiveModal")) closeQuoteArchive();
-});
 $("#qaSearch")?.addEventListener("input", renderQuoteArchive);
 $("#qaBtnRefresh")?.addEventListener("click", loadQuoteArchive);
 $("#qaBtnOpenDir")?.addEventListener("click", () => qaOpenDir());
@@ -1290,9 +1260,6 @@ function updateExtrasUI() {
   });
   updateExtraButtonsVisibility();
   syncMarginUI();
-
-  const excelBtn = $("#btnDownloadExcel");
-  if (excelBtn) excelBtn.href = `/api/download/excel?${excelQueryParams()}`;
 }
 
 function toggleExtraAndReload(kind) {
@@ -1381,8 +1348,7 @@ $("#btnMarginCycle")?.addEventListener("click", (e) => {
 
 updateExtrasUI();
 
-// ---------- 견적처/공급자 정보 관리 모달 ----------
-const qiModal = $("#quoteInfoModal");
+// ---------- 견적처/공급자 정보 관리 (설정관리 → 견적정보 · 거래처 탭) ----------
 const qiFields = {
   customer_name: "#qiCustomerName",
   customer_manager: "#qiCustomerManager",
@@ -1447,15 +1413,20 @@ function isTaskReportCompanyDummy(name, addr, phone) {
 
 // 깜박임(Blink Warning) 상태 통합 갱신 함수
 function updateBlinkWarnings() {
-  // 1. 메인창 "견적정보" 버튼 및 글자 깜박임 처리
+  // 1. 메인창 "거래처" 표시 · "설정관리" 버튼 깜박임 처리
   const qiDummy = isQuoteInfoDummy(quoteInfo);
-  const btnQi = $("#btnQuoteInfo");
+  const btnQi = $("#btnCurrentCustomer");
   const txtQi = $("#quoteInfoBtnText");
   const bannerQi = $("#qiWarningNotice");
 
   if (btnQi) btnQi.classList.toggle("blink-warning", qiDummy);
-  if (txtQi) txtQi.classList.toggle("blink-warning-text", qiDummy);
+  if (txtQi) {
+    txtQi.classList.toggle("blink-warning-text", qiDummy);
+    txtQi.textContent = `거래처: ${(quoteInfo?.customer_name || "").trim() || "미지정"}`;
+  }
   if (bannerQi) bannerQi.classList.toggle("hidden", !qiDummy);
+  $("#btnSettings")?.classList.toggle("blink-warning", qiDummy);
+  $("#settingsBtnText")?.classList.toggle("blink-warning-text", qiDummy);
 
   // 2. 메인창 "작업내역서" 버튼 및 작업내역서 업체정보 영역 깜박임 처리
   const trName = $("#trCompanyName")?.value || quoteInfo?.supplier_name;
@@ -1542,43 +1513,22 @@ async function loadQuoteInfo() {
   }
 }
 
-function qiOpen() {
-  if (!qiModal) return;
-  qiFillForm(quoteInfo);
-  show(qiModal);
-  updateBlinkWarnings();
-}
-
-function qiClose() {
-  if (!qiModal) return;
-  hide(qiModal);
-}
-
 function qiRerender() {
   if (quoteData && quoteData.quotes) {
     renderDetail(quoteData.quotes);
   }
 }
 
-$("#btnQuoteInfo")?.addEventListener("click", qiOpen);
-$("#quoteInfoClose")?.addEventListener("click", qiClose);
-$("#quoteInfoCancel")?.addEventListener("click", qiClose);
-qiModal?.addEventListener("click", (e) => {
-  if (e.target === qiModal) qiClose();
-});
+$("#btnCurrentCustomer")?.addEventListener("click", () => openSettings("info"));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (qiModal && !qiModal.classList.contains("hidden")) qiClose();
   if (ctoModal && !ctoModal.classList.contains("hidden")) closeCtoModal();
   if (trModal && !trModal.classList.contains("hidden")) closeTrModal();
+  else if (settingsModal && !settingsModal.classList.contains("hidden")) closeSettings();
   if (netModal && !netModal.classList.contains("hidden")) hide(netModal);
   if (danawaModal && !danawaModal.classList.contains("hidden")) hide(danawaModal);
-  const excelPop = $("#excelFormsPop");
-  if (excelPop && !excelPop.classList.contains("hidden")) toggleExcelFormsPop(false);
   const galleryModal = $("#formGalleryModal");
   if (galleryModal && !galleryModal.classList.contains("hidden")) closeFormGallery();
-  const archiveModal = $("#quoteArchiveModal");
-  if (archiveModal && !archiveModal.classList.contains("hidden")) closeQuoteArchive();
 });
 
 $("#quoteInfoSave")?.addEventListener("click", async () => {
@@ -1597,7 +1547,8 @@ $("#quoteInfoSave")?.addEventListener("click", async () => {
     isQuoteInfoSaved = true;
     syncQuoteInfoToTaskReport(true);
     updateBlinkWarnings();
-    qiSetStatus("✔ 저장되었습니다. 모든 견적서 및 작업내역서에 적용됩니다.");
+    const registered = await custUpsertFromForm({ quiet: true });
+    qiSetStatus(`✔ 저장되었습니다. 모든 견적서 및 작업내역서에 적용됩니다.${registered ? " (거래처 목록에도 등록)" : ""}`);
     qiRerender();
     qiReloadQuotesIfNeeded();
   } catch (e) {
@@ -1623,6 +1574,182 @@ $("#quoteInfoReset")?.addEventListener("click", async () => {
   }
 });
 
+
+
+// ---------- 거래처 목록 (customers.json) — 설정관리 → 견적정보 · 거래처 탭 ----------
+// 행을 누르면 견적처 칸에 불러오고(저장 전), [✔ 적용]은 불러온 뒤 바로 견적정보로 저장한다.
+// 상호명이 같으면 같은 거래처로 보고 갱신한다(이름을 바꿔 저장하면 새 거래처로 등록, 옛 항목은 그대로).
+let custList = [];
+let custSelectedName = "";
+const CUST_FORM = {
+  name: "#qiCustomerName",
+  manager: "#qiCustomerManager",
+  address: "#qiCustomerAddress",
+  phone: "#qiCustomerPhone",
+  email: "#qiCustomerEmail",
+};
+
+async function loadCustomers() {
+  try {
+    const res = await fetch("/api/customers", { cache: "no-store" });
+    const data = await res.json();
+    custList = data.customers || [];
+  } catch (_) {
+    custList = [];
+  }
+  renderCustomers();
+}
+
+function renderCustomers() {
+  const tbody = $("#custTbody");
+  if (!tbody) return;
+  const q = ($("#custSearch")?.value || "").trim().toLowerCase();
+  const rows = custList.filter((c) => !q || ["name", "manager", "phone", "address", "email"].some((k) => String(c[k] || "").toLowerCase().includes(q)));
+  const count = $("#custCount");
+  if (count) count.textContent = q ? `${rows.length} / ${custList.length}건` : `${custList.length}건`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;">${custList.length ? "검색 결과가 없습니다." : "등록된 거래처가 없습니다. 견적처를 입력하고 💾 저장하면 등록됩니다."}</td></tr>`;
+    return;
+  }
+  const current = (custSelectedName || quoteInfo?.customer_name || "").trim();
+  tbody.innerHTML = rows.map((c) => `
+    <tr class="cust-row${c.name === current ? " is-selected" : ""}" data-id="${escapeHtml(c.id)}" title="${escapeHtml([c.address, c.email].filter(Boolean).join(" · "))}">
+      <td><strong>${escapeHtml(c.name || "")}</strong></td>
+      <td>${escapeHtml(c.manager || "")}</td>
+      <td>${escapeHtml(c.phone || "")}</td>
+      <td>
+        <div class="qa-actions">
+          <button type="button" class="btn btn-sm btn-primary cust-apply" data-id="${escapeHtml(c.id)}" title="불러온 뒤 바로 저장해 견적서에 적용합니다">✔ 적용</button>
+          <button type="button" class="btn btn-sm btn-outline cust-del" data-id="${escapeHtml(c.id)}" title="거래처 목록에서 삭제">✕</button>
+        </div>
+      </td>
+    </tr>`).join("");
+}
+
+function custFillForm(c) {
+  if (!c) return;
+  for (const [key, sel] of Object.entries(CUST_FORM)) {
+    const input = $(sel);
+    if (input) input.value = c[key] || "";
+  }
+  custSelectedName = c.name || "";
+  $("#qiCustomerName")?.dispatchEvent(new Event("input"));
+  renderCustomers();
+}
+
+/** 견적처 칸의 내용을 거래처 목록에 저장(상호명 기준 생성/갱신). 저장했으면 true. */
+async function custUpsertFromForm({ quiet = false } = {}) {
+  const data = {};
+  for (const [key, sel] of Object.entries(CUST_FORM)) data[key] = $(sel)?.value.trim() || "";
+  if (isDummyValue(data.name, DUMMY_VALUES.names)) {
+    if (!quiet) qiSetStatus("거래처 상호명을 실제 이름으로 입력해 주세요.", false);
+    return false;
+  }
+  try {
+    const res = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("거래처 저장에 실패했습니다.");
+    custSelectedName = data.name;
+    await loadCustomers();
+    if (!quiet) qiSetStatus(`📒 '${data.name}' 거래처 목록에 저장했습니다. (견적서에는 💾 저장을 눌러야 적용됩니다)`);
+    return true;
+  } catch (e) {
+    if (!quiet) qiSetStatus(e.message, false);
+    return false;
+  }
+}
+
+async function custDelete(id) {
+  const c = custList.find((x) => x.id === id);
+  if (!confirm(`거래처 '${c?.name || id}'을(를) 목록에서 삭제할까요?\n(현재 견적정보와 보관된 견적서는 그대로 남습니다)`)) return;
+  try {
+    const res = await fetch(`/api/customers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("삭제에 실패했습니다.");
+  } catch (e) {
+    alert(e.message);
+  }
+  loadCustomers();
+}
+
+$("#custSearch")?.addEventListener("input", renderCustomers);
+$("#custBtnNew")?.addEventListener("click", () => {
+  custFillForm({ name: "", manager: "", address: "", phone: "", email: "" });
+  qiSetStatus("새 거래처를 입력한 뒤 💾 저장 또는 📒 거래처 목록에만 저장을 누르세요.");
+  $("#qiCustomerName")?.focus();
+});
+$("#custBtnSaveOnly")?.addEventListener("click", () => custUpsertFromForm());
+$("#custTbody")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-id]");
+  if (btn) {
+    const id = btn.dataset.id;
+    if (btn.classList.contains("cust-del")) custDelete(id);
+    else if (btn.classList.contains("cust-apply")) {
+      custFillForm(custList.find((x) => x.id === id));
+      $("#quoteInfoSave")?.click();
+    }
+    return;
+  }
+  const row = e.target.closest("tr.cust-row");
+  if (!row) return;
+  const c = custList.find((x) => x.id === row.dataset.id);
+  custFillForm(c);
+  qiSetStatus(`'${c?.name || ""}' 불러옴 — 💾 저장을 누르면 견적서에 적용됩니다.`);
+});
+
+// ---------- ⚙️ 설정관리 (견적정보 · 거래처 / 서식폼 / 견적보관함 / 작업내역서) ----------
+const settingsModal = $("#settingsModal");
+let settingsTab = "info";
+
+function switchSettingsTab(tab) {
+  if (!settingsModal) return;
+  settingsTab = tab;
+  settingsModal.querySelectorAll(".settings-tab").forEach((btn) => {
+    const on = btn.dataset.tab === tab;
+    btn.classList.toggle("active", on);
+    btn.classList.toggle("btn-primary", on);
+    btn.classList.toggle("btn-outline", !on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  settingsModal.querySelectorAll(".settings-panel").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.panel !== tab);
+  });
+  if (tab === "info") loadCustomers();
+  else if (tab === "forms") renderSettingsForms();
+  else if (tab === "archive") {
+    loadQuoteArchive();
+    loadTrBackupDir();
+  } else if (tab === "taskreport") {
+    loadTrReportsList();
+    loadTrBackupDir();
+  }
+}
+
+/** 설정관리 창을 연다. 견적정보 칸은 열 때마다 저장된 값으로 다시 채운다(저장하지 않은 수정은 버림). */
+function openSettings(tab = settingsTab) {
+  if (!settingsModal) return;
+  custSelectedName = "";
+  qiFillForm(quoteInfo);
+  show(settingsModal);
+  switchSettingsTab(tab);
+  updateBlinkWarnings();
+}
+
+function closeSettings() {
+  hide(settingsModal);
+}
+
+$("#btnSettings")?.addEventListener("click", () => openSettings());
+$("#settingsClose")?.addEventListener("click", closeSettings);
+settingsModal?.addEventListener("click", (e) => {
+  if (e.target === settingsModal) closeSettings();
+});
+settingsModal?.querySelectorAll(".settings-tab").forEach((btn) => {
+  btn.addEventListener("click", () => switchSettingsTab(btn.dataset.tab));
+});
+syncExcelFormsUI();
 
 
 // ---------- 네트워크 접속 안내 모달 ----------
@@ -2915,22 +3042,13 @@ function reloadWhenServerBack() {
 
 $("#btnUpdateApp")?.addEventListener("click", updateApp);
 
-$("#btnDownloadExcel")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  // href 는 CTO 적용 전 값일 수 있으므로 누를 때 다시 만든다. 서식 선택이 있으면 서식별 파일로 받는다.
-  downloadExcelFiles();
-});
-
 // ==========================================================================
 // 📋 컴퓨터 작업내역서 (Task Report) 프론트엔드 컨트롤러
 // ==========================================================================
 let trReportsList = [];
 
 const trModal = $("#taskReportModal");
-const trTabFormBtn = $("#trTabFormBtn");
 const trTabListBtn = $("#trTabListBtn");
-const trFormPanel = $("#trFormPanel");
-const trListPanel = $("#trListPanel");
 
 // 서명 캔버스 초기화
 const signCanvasCust = $("#trSignCanvasCust");
@@ -3245,26 +3363,6 @@ function resetTrForm() {
   fillTrForm(null);
 }
 
-// 탭 전환
-function switchTrTab(tab) {
-  if (tab === "form") {
-    trTabFormBtn?.classList.add("active", "btn-primary");
-    trTabFormBtn?.classList.remove("btn-outline");
-    trTabListBtn?.classList.remove("active", "btn-primary");
-    trTabListBtn?.classList.add("btn-outline");
-    show(trFormPanel);
-    hide(trListPanel);
-  } else {
-    trTabListBtn?.classList.add("active", "btn-primary");
-    trTabListBtn?.classList.remove("btn-outline");
-    trTabFormBtn?.classList.remove("active", "btn-primary");
-    trTabFormBtn?.classList.add("btn-outline");
-    hide(trFormPanel);
-    show(trListPanel);
-    loadTrReportsList();
-  }
-}
-
 // 작업내역서 모달 열기/닫기
 function openTrModal() {
   if (!trModal) return;
@@ -3276,7 +3374,6 @@ function openTrModal() {
   if (!currentTrId) {
     resetTrForm();
   }
-  switchTrTab("form");
   loadTrReportsList();
   show(trModal);
   updateBlinkWarnings();
@@ -3305,6 +3402,8 @@ async function loadTrReportsList() {
     renderTrListTable(trReportsList);
     const countEl = $("#trListCount");
     if (countEl) countEl.textContent = trReportsList.length;
+    const statsEl = $("#trListStats");
+    if (statsEl) statsEl.textContent = `${trReportsList.length}건`;
     updateBlinkWarnings();
   } catch (e) {
     console.warn("작업내역서 목록 로드 오류:", e);
@@ -3349,7 +3448,7 @@ window.loadTrReportItem = async function(id) {
     if (!res.ok) throw new Error("내역 조회 실패");
     const data = await res.json();
     fillTrForm(data.report);
-    switchTrTab("form");
+    openTrModal(); // 설정관리 위에 작업내역서 창이 뜬다. 닫으면 목록으로 돌아온다.
   } catch (e) {
     alert(e.message);
   }
@@ -3581,8 +3680,16 @@ trModal?.addEventListener("click", (e) => {
   if (e.target === trModal) closeTrModal();
 });
 
-trTabFormBtn?.addEventListener("click", () => switchTrTab("form"));
-trTabListBtn?.addEventListener("click", () => switchTrTab("list"));
+trTabListBtn?.addEventListener("click", () => {
+  closeTrModal();
+  openSettings("taskreport");
+});
+$("#setTrBtnNew")?.addEventListener("click", () => {
+  resetTrForm();
+  openTrModal();
+});
+$("#setTrBtnBackup")?.addEventListener("click", backupTrReport);
+$("#setTrBtnBackupOpen")?.addEventListener("click", () => openTrBackupDir());
 
 $("#trBtnNew")?.addEventListener("click", () => {
   if (confirm("새 작업내역서를 작성하시겠습니까? (현재 작성 내용 초기화)")) {

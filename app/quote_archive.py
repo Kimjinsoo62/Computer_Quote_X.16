@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """견적서 보관함: 앱에서 내려받은 최종 선택 Excel 견적서를 quote_archive/ 에 저장·관리·백업한다.
 
-- 파일: quote_archive/{id}_{파일명}.xlsx (id 는 저장 시각 기반)
+- 파일: quote_archive/{거래처명_…}_{id}.xlsx (파일명이 거래처명으로 시작, id 는 저장 시각 기반)
 - 목록: quote_archive/index.json (최신이 앞)
 - 백업: 백업 폴더(app_settings.json 의 task_report_backup_dir, 작업내역서와 같은 폴더)에
         견적서_백업_YYYYMMDD_HHMMSS.zip (index.json + 모든 xlsx)
@@ -23,7 +23,8 @@ _lock = threading.Lock()
 _BAD_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
 
 
-def _safe(text: str, limit: int = 120) -> str:
+def safe_filename_part(text: str, limit: int = 120) -> str:
+    """Windows 파일명에 못 쓰는 글자를 공백으로 바꾸고 공백을 하나로 줄인다."""
     cleaned = " ".join(_BAD_RE.sub(" ", str(text or "")).split()).strip(" .")
     return cleaned[:limit]
 
@@ -70,10 +71,11 @@ def add_entry(content: bytes, *, filename: str, meta: dict[str, Any]) -> dict[st
         ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
         now = datetime.now()
         entry_id = now.strftime("%Y%m%d-%H%M%S-") + f"{now.microsecond // 1000:03d}"
-        display = _safe(filename) or "견적서.xlsx"
+        display = safe_filename_part(filename) or "견적서.xlsx"
         if not display.lower().endswith(".xlsx"):
             display += ".xlsx"
-        stored = f"{entry_id}_{display}"
+        # 탐색기에서 거래처명 순으로 정렬되도록 id 는 뒤에 붙인다(예전 보관본은 id 가 앞, stored_name 으로 찾으므로 그대로 동작).
+        stored = f"{display[:-5]}_{entry_id}.xlsx"
         (ARCHIVE_DIR / stored).write_bytes(content)
         entry = {
             "id": entry_id,

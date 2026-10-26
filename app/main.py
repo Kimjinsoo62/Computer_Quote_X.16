@@ -45,7 +45,7 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
-from app import quote_archive
+from app import customer_book, quote_archive
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
@@ -351,6 +351,27 @@ def api_quote_info_delete():
     return reset_quote_info()
 
 
+# 거래처 목록 (customers.json) — [설정관리 → 견적정보] 탭
+@app.get("/api/customers")
+def api_customers_list():
+    return {"customers": customer_book.list_customers()}
+
+
+@app.post("/api/customers")
+def api_customers_save(payload: dict = Body(...)):
+    try:
+        return {"customer": customer_book.save_customer(payload)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.delete("/api/customers/{customer_id}")
+def api_customers_delete(customer_id: str):
+    if not customer_book.delete_customer(customer_id):
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+    return {"ok": True}
+
+
 @app.get("/api/category/{cat_key}")
 def api_category(cat_key: str, monitor: int = 0, keyboard: int = 0, setup: int = 0):
     # 구버전 UI가 /api/category/game-pc 로 호출해도 404 대신 위자드 유도
@@ -622,12 +643,15 @@ def download_excel(
     forms: str = "",
     archive: int = 0,
 ):
-    """index 를 주면 해당 카드 한 건만, 없으면 카테고리 전체를 내려준다.
-    archive=1 이면 만든 파일을 견적서 보관함(quote_archive/)에도 저장한다(화면은 카드별 다운로드에 붙인다).
+    """카드 한 건(index)의 견적서를 내려준다. 목록 전체 비교 파일(전체 비교 Excel)은 없앴다(index 필수).
+    archive=1 이면 만든 파일을 견적서 보관함(quote_archive/)에도 저장한다.
+    파일명은 "{거래처명}_{구분}_{모델}_..." 로 시작해 보관함·탐색기에서 거래처별로 정렬된다.
 
     forms 를 주면(예: "3" 또는 "1,3") 견적요약 없이 해당 폼 시트만 담는다. 화면은 서식마다 따로 호출해
-    파일을 하나씩 받는다. 카드 한 건 + 서식 하나면 시트 이름은 "견   적   서" 가 된다.
+    파일을 하나씩 받는다. 서식 하나면 시트 이름은 "견   적   서" 가 된다.
     """
+    if index < 0:
+        raise HTTPException(status_code=400, detail="견적 카드(index)를 지정해야 합니다.")
     selected_forms = _parse_forms(forms)
     include_monitor = bool(monitor)
     include_keyboard = bool(keyboard)
@@ -739,32 +763,33 @@ def download_excel(
     if hide_prices:
         kr_label += "_단가미표시"
 
-    # 카드별 다운로드: 선택한 항목 하나만 남긴다.
-    if index >= 0:
-        if index >= len(result.quotes):
-            raise HTTPException(
-                status_code=404, detail=f"{index}번 견적 항목이 없습니다."
-            )
-        picked = result.quotes[index]
-        result = replace(result, quotes=[picked])
-        # tab_label 만 쓰면 "표준형" 이 여러 건이라 파일명이 겹친다. 모델명을 함께 붙인다.
-        model_head = (picked.model or "").split("(")[0].strip()
-        for ch in '\\/:*?"<>|':
-            model_head = model_head.replace(ch, " ")
-        # "6코어 CPU / 5코어 GPU" 처럼 / 를 지우면 공백이 겹치므로 하나로 줄인다.
-        model_head = " ".join(model_head.split())
-        name_parts = [
-            p for p in ((picked.tab_label or picked.tier or "").strip(), model_head) if p
-        ]
-        if name_parts:
-            kr_label = f"{'_'.join(name_parts)}_{kr_label}"
+    # 선택한 카드 하나만 남긴다.
+    if index >= len(result.quotes):
+        raise HTTPException(
+            status_code=404, detail=f"{index}번 견적 항목이 없습니다."
+        )
+    picked = result.quotes[index]
+    result = replace(result, quotes=[picked])
+    # tab_label 만 쓰면 "표준형" 이 여러 건이라 파일명이 겹친다. 모델명을 함께 붙인다.
+    model_head = (picked.model or "").split("(")[0].strip()
+    for ch in '\\/:*?"<>|':
+        model_head = model_head.replace(ch, " ")
+    # "6코어 CPU / 5코어 GPU" 처럼 / 를 지우면 공백이 겹치므로 하나로 줄인다.
+    model_head = " ".join(model_head.split())
+    info = load_quote_info()
+    # 파일명 맨 앞은 거래처(견적처) 상호명. 비어 있으면 "거래처미지정".
+    customer_name = quote_archive.safe_filename_part(info.get("customer_name") or "", 40) or "거래처미지정"
+    name_parts = [
+        p for p in (customer_name, (picked.tab_label or picked.tier or "").strip(), model_head) if p
+    ]
+    kr_label = f"{'_'.join(name_parts)}_{kr_label}"
 
     kind_label = "" if is_apple else margin_kind_label(margin_pct)
     form_tag = ""
     if selected_forms:
         kr_label += "_" + "_".join(f"폼{n}{FORM_LABELS[n]}" for n in selected_forms)
         form_tag = "_form" + "-".join(str(n) for n in selected_forms)
-    single_title = SINGLE_SHEET_TITLE if (index >= 0 and len(selected_forms) == 1) else ""
+    single_title = SINGLE_SHEET_TITLE if len(selected_forms) == 1 else ""
     try:
         buf = build_excel(
             result,
@@ -775,7 +800,7 @@ def download_excel(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    ascii_name = f"quote_{cat}{f'_{index}' if index >= 0 else ''}{form_tag}_{result.quote_date}.xlsx"
+    ascii_name = f"quote_{cat}_{index}{form_tag}_{result.quote_date}.xlsx"
     display_name = f"{kr_label}_{result.quote_date}.xlsx"
     utf_name = quote(display_name)
     headers = {
@@ -784,8 +809,6 @@ def download_excel(
         ),
     }
     if archive:
-        first = result.quotes[0] if result.quotes else None
-        info = load_quote_info()
         # 보관본은 서식 목록(썸네일) 시트 없이 저장한다. 서식을 골랐으면 애초에 그 시트가 없어 그대로 쓴다.
         archive_bytes = buf.getvalue()
         if not selected_forms:
@@ -799,14 +822,14 @@ def download_excel(
             archive_bytes,
             filename=display_name,
             meta={
-                "kind": "card" if index >= 0 else "list",
+                "kind": "card",
                 "category": cat,
-                "model": (first.model if (first and index >= 0) else result.series) or "",
-                "tab_label": (first.tab_label or first.tier) if (first and index >= 0) else "",
-                "quotes": len(result.quotes),
+                "model": picked.model or "",
+                "tab_label": picked.tab_label or picked.tier or "",
+                "quotes": 1,
                 "forms": selected_forms,
                 "margin": None if is_apple else margin_pct,
-                "total": first.total if (first and index >= 0) else None,
+                "total": picked.total,
                 "customer": (info.get("customer_name") or "").strip(),
                 "quote_date": result.quote_date,
             },

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261020f" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261026a" />
 </head>
 <body>
   <nav class="nav">
@@ -19,6 +19,9 @@
         </a>
       </div>
       <div class="nav-links">
+        <button type="button" id="btnSettings" class="btn btn-outline btn-sm blink-warning" title="견적정보 · 거래처 · 서식폼 · 견적보관함 · 작업내역서를 한 곳에서 관리합니다">
+          <span id="settingsBtnText" class="blink-warning-text">⚙️ 설정관리</span>
+        </button>
         <button type="button" id="btnOpenTaskReport" class="btn btn-outline btn-sm blink-warning" title="컴퓨터 출장/수리 작업내역서를 작성하고 인쇄/저장합니다">
           <span id="taskReportBtnText" class="blink-warning-text">📋 작업내역서</span>
         </button>
@@ -47,40 +50,12 @@
       <div class="hero-topbar-left">
         <p class="hero-date">견적 기준일: <strong id="quoteDate">{{ today }}</strong></p>
         <div class="hero-topbar-actions">
-          <a id="btnDownloadExcel" class="btn btn-outline btn-sm" href="/api/download/excel" title="현재 목록 전체를 한 파일로 받습니다 (견적요약 비교표 + 카드마다 폼1~8). 서식을 골라 두었으면 서식마다 파일 하나씩. 최종 견적서 1건은 카드의 [엑셀 견적서]를 쓰세요">
-            <span class="btn-icon">📥</span> 전체 비교 Excel
-          </a>
-          <button type="button" id="btnExcelForms" class="btn btn-outline btn-sm excel-forms-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="excelFormsPop"
-                  title="Excel에 담을 견적서 서식(폼1~폼8)을 고릅니다. 여러 개를 고르면 서식마다 파일이 따로 내려옵니다. 이 기기(브라우저)에만 저장됩니다">
-            <span class="btn-icon">🗂️</span> <span id="excelFormsLabel">서식: 전체</span> <span class="excel-forms-caret">▾</span>
+          <!-- 현재 견적처·서식 표시. 누르면 설정관리의 해당 탭이 열린다 -->
+          <button type="button" id="btnCurrentCustomer" class="btn btn-outline btn-sm blink-warning" title="현재 견적처(거래처) — 누르면 설정관리 → 견적정보 · 거래처 탭을 엽니다">
+            <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">거래처: -</span>
           </button>
-          <div id="excelFormsPop" class="excel-forms-pop hidden" role="dialog" aria-label="Excel 견적서 서식 선택" aria-hidden="true">
-            <div class="excel-forms-head">
-              <strong>Excel 견적서 서식</strong>
-              <span class="excel-forms-hint">여러 개 선택 시 서식마다 파일 1개 · 견적요약 시트 제외</span>
-            </div>
-            <div class="excel-forms-grid">
-              <label><input type="checkbox" data-form="1" /> 폼1 표준</label>
-              <label><input type="checkbox" data-form="2" /> 폼2 인보이스</label>
-              <label><input type="checkbox" data-form="3" /> 폼3 보고서</label>
-              <label><input type="checkbox" data-form="4" /> 폼4 명세서</label>
-              <label><input type="checkbox" data-form="5" /> 폼5 리테일</label>
-              <label><input type="checkbox" data-form="6" /> 폼6 조립PC</label>
-              <label><input type="checkbox" data-form="7" /> 폼7 데스크탑</label>
-              <label><input type="checkbox" data-form="8" /> 폼8 클래식</label>
-            </div>
-            <div class="excel-forms-foot">
-              <button type="button" id="excelFormsAll" class="btn btn-outline btn-sm" title="선택을 모두 지우고 지금처럼 견적요약 + 폼1~8을 한 파일로 받습니다">전체(기본)</button>
-              <button type="button" id="excelFormsPreview" class="btn btn-outline btn-sm" title="폼1~8 썸네일을 보고 하나를 골라 현재 목록 전체를 그 서식으로 받습니다">🖼️ 미리보기</button>
-              <span id="excelFormsStatus" class="excel-forms-hint"></span>
-              <button type="button" id="excelFormsClose" class="btn btn-primary btn-sm">닫기</button>
-            </div>
-          </div>
-          <button type="button" id="btnQuoteArchive" class="btn btn-outline btn-sm" title="카드별로 내려받은 최종 견적서가 자동으로 보관됩니다. 목록 · 다시 받기 · 메모 · 삭제 · ZIP 백업">
-            <span class="btn-icon">🗃️</span> 보관함 <span id="quoteArchiveCount" class="archive-count hidden">0</span>
-          </button>
-          <button id="btnQuoteInfo" class="btn btn-outline btn-sm blink-warning" title="견적처·공급자 정보를 관리합니다">
-            <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">견적 정보</span>
+          <button type="button" id="btnExcelForms" class="btn btn-outline btn-sm excel-forms-btn" title="카드 [엑셀 견적서]에 담을 서식 — 누르면 설정관리 → 서식폼 탭을 엽니다">
+            <span class="btn-icon">🗂️</span> <span id="excelFormsChip">서식: 전체</span>
           </button>
           <button type="button" id="btnMarginCycle" class="btn btn-outline btn-sm margin-cycle" aria-label="컴퓨존 견적 마진">
             <span class="btn-icon">💳</span>
@@ -259,100 +234,212 @@
     </div>
   </footer>
 
-  <!-- 견적처/공급자 정보 관리 모달 -->
-  <div id="quoteInfoModal" class="modal-overlay hidden" aria-hidden="true">
-    <div class="modal modal-lg" role="dialog" aria-labelledby="quoteInfoTitle">
+  <!-- ⚙️ 설정관리: 견적정보·거래처 / 서식폼 / 견적보관함 / 작업내역서 를 한 곳에서 관리 -->
+  <div id="settingsModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal modal-xl settings-modal" role="dialog" aria-labelledby="settingsTitle">
       <div class="modal-header">
-        <h3 id="quoteInfoTitle">📇 견적 정보 관리</h3>
-        <button type="button" class="modal-close btn-modal-close" id="quoteInfoClose" aria-label="닫기">✕ 닫기</button>
-      </div>
-      <div class="modal-body">
-        <div id="qiWarningNotice" class="qi-warning-banner">
-          ⚠️ 견적처 또는 공급자에 기본 가짜 데이터(대한민국주식회사 등)가 입력되어 있습니다. 실제 정보로 변경 후 저장해 주세요.
-        </div>
-        <div class="modal-columns">
-          <fieldset class="modal-group">
-            <legend>견적처</legend>
-            <label>견적처 (상호명)
-              <input type="text" id="qiCustomerName" placeholder="예: 대한민국주식회사" />
-            </label>
-            <label>대표/담당자
-              <input type="text" id="qiCustomerManager" placeholder="예: 홍길동대표" />
-            </label>
-            <label>주소
-              <input type="text" id="qiCustomerAddress" placeholder="예: 서울시" />
-            </label>
-            <label>연락처
-              <input type="text" id="qiCustomerPhone" placeholder="예: 010-1234-5678" />
-            </label>
-            <label>이메일
-              <input type="email" id="qiCustomerEmail" placeholder="예: email1234@gmail.com" autocomplete="off" />
-            </label>
-            <label>견적일
-              <input type="date" id="qiQuoteDate" />
-              <small>비워두면 다운로드 당일 날짜가 사용됩니다</small>
-            </label>
-          </fieldset>
-          <fieldset class="modal-group">
-            <legend>공급자</legend>
-            <label>공급자 (상호명)
-              <input type="text" id="qiSupplierName" placeholder="예: 대한민국주식회사" />
-            </label>
-            <label>사업자등록번호
-              <input type="text" id="qiSupplierBizNo" placeholder="예: 123-45-67890" autocomplete="off" />
-            </label>
-            <label>대표/담당자
-              <input type="text" id="qiSupplierManager" placeholder="예: 홍길동대표" />
-            </label>
-            <label>주소
-              <input type="text" id="qiSupplierAddress" placeholder="예: 서울시" />
-            </label>
-            <label>연락처
-              <input type="text" id="qiSupplierPhone" placeholder="예: 010-1234-5678" />
-            </label>
-            <label>이메일
-              <input type="email" id="qiSupplierEmail" placeholder="예: email1234@gmail.com" autocomplete="off" />
-            </label>
-          </fieldset>
-        </div>
-        <fieldset class="modal-group extra-price-group">
-          <legend>추가 품목 금액</legend>
-          <div class="extra-price-grid">
-            <label>모니터 금액
-              <input type="number" id="qiMonitorPrice" min="0" step="10000" placeholder="예: 180000" />
-            </label>
-            <label>키보드마우스 금액
-              <input type="number" id="qiKeyboardPrice" min="0" step="10000" placeholder="예: 30000" />
-            </label>
-            <label>초기 세팅비 금액
-              <input type="number" id="qiSetupPrice" min="0" step="10000" placeholder="예: 0" />
-            </label>
+        <div class="tr-modal-header-left">
+          <h3 id="settingsTitle">⚙️ 설정관리</h3>
+          <div class="settings-tabs" role="tablist">
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="info" role="tab">📇 견적정보 · 거래처</button>
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="forms" role="tab">🗂️ 서식폼 <span id="excelFormsLabel" class="settings-tab-sub">전체</span></button>
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab">🗃️ 견적보관함 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="taskreport" role="tab">📋 작업내역서 <span id="trListCount" class="archive-count">0</span></button>
           </div>
-          <small>포함으로 켠 항목에만 적용됩니다. 0원이면 별도청구로 표시됩니다.</small>
-        </fieldset>
-        <fieldset class="modal-group extra-price-group">
-          <legend>입금 계좌</legend>
-          <div class="extra-price-grid">
-            <label>은행명
-              <input type="text" id="qiBankName" placeholder="예: 국민은행" />
-            </label>
-            <label>계좌번호
-              <input type="text" id="qiBankAccount" placeholder="예: 123-456-789012" autocomplete="off" />
-            </label>
-            <label>예금주
-              <input type="text" id="qiBankHolder" placeholder="예: 홍길동" />
-            </label>
-          </div>
-          <small>계좌번호를 입력하면 모든 Excel 견적서 하단에 입금 계좌가 표시됩니다. 비워두면 표시하지 않습니다.</small>
-        </fieldset>
-        <p id="quoteInfoStatus" class="modal-status"></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline" id="quoteInfoReset">🗑 삭제(초기화)</button>
-        <div class="modal-footer-right">
-          <button type="button" class="btn btn-outline" id="quoteInfoCancel">닫기</button>
-          <button type="button" class="btn btn-primary" id="quoteInfoSave">💾 저장</button>
         </div>
+        <button type="button" class="modal-close btn-modal-close" id="settingsClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body settings-body">
+        <!-- 1. 견적정보 · 거래처 -->
+        <section class="settings-panel" data-panel="info">
+          <div class="settings-info-grid">
+            <aside class="cust-book">
+              <div class="cust-book-head">
+                <strong>📒 거래처 목록</strong>
+                <span id="custCount" class="qa-stats"></span>
+              </div>
+              <div class="cust-book-tools">
+                <input type="text" id="custSearch" class="tr-inp qa-search" placeholder="상호 · 담당자 · 연락처 · 주소 검색" autocomplete="off" />
+                <button type="button" id="custBtnNew" class="btn btn-outline btn-sm" title="견적처 칸을 비우고 새 거래처를 입력합니다">➕ 신규</button>
+              </div>
+              <div class="tr-list-table-wrap cust-table-wrap">
+                <table class="tr-list-table cust-table">
+                  <thead>
+                    <tr><th>상호명</th><th>담당자</th><th>연락처</th><th style="width: 92px;">관리</th></tr>
+                  </thead>
+                  <tbody id="custTbody"></tbody>
+                </table>
+              </div>
+              <p class="qa-hint">행을 누르면 오른쪽 견적처 칸에 불러옵니다. <strong>✔ 적용</strong>은 불러온 뒤 바로 저장해 견적서에 반영합니다. <strong>💾 저장</strong>하면 견적처가 이 목록에도 자동 등록·갱신됩니다.</p>
+            </aside>
+            <div class="settings-info-form">
+              <div id="qiWarningNotice" class="qi-warning-banner">
+                ⚠️ 견적처 또는 공급자에 기본 가짜 데이터(대한민국주식회사 등)가 입력되어 있습니다. 실제 정보로 변경 후 저장해 주세요.
+              </div>
+              <div class="modal-columns">
+                <fieldset class="modal-group">
+                  <legend>견적처</legend>
+                  <label>견적처 (상호명)
+                    <input type="text" id="qiCustomerName" placeholder="예: 대한민국주식회사" />
+                  </label>
+                  <label>대표/담당자
+                    <input type="text" id="qiCustomerManager" placeholder="예: 홍길동대표" />
+                  </label>
+                  <label>주소
+                    <input type="text" id="qiCustomerAddress" placeholder="예: 서울시" />
+                  </label>
+                  <label>연락처
+                    <input type="text" id="qiCustomerPhone" placeholder="예: 010-1234-5678" />
+                  </label>
+                  <label>이메일
+                    <input type="email" id="qiCustomerEmail" placeholder="예: email1234@gmail.com" autocomplete="off" />
+                  </label>
+                  <label>견적일
+                    <input type="date" id="qiQuoteDate" />
+                    <small>비워두면 다운로드 당일 날짜가 사용됩니다</small>
+                  </label>
+                </fieldset>
+                <fieldset class="modal-group">
+                  <legend>공급자</legend>
+                  <label>공급자 (상호명)
+                    <input type="text" id="qiSupplierName" placeholder="예: 대한민국주식회사" />
+                  </label>
+                  <label>사업자등록번호
+                    <input type="text" id="qiSupplierBizNo" placeholder="예: 123-45-67890" autocomplete="off" />
+                  </label>
+                  <label>대표/담당자
+                    <input type="text" id="qiSupplierManager" placeholder="예: 홍길동대표" />
+                  </label>
+                  <label>주소
+                    <input type="text" id="qiSupplierAddress" placeholder="예: 서울시" />
+                  </label>
+                  <label>연락처
+                    <input type="text" id="qiSupplierPhone" placeholder="예: 010-1234-5678" />
+                  </label>
+                  <label>이메일
+                    <input type="email" id="qiSupplierEmail" placeholder="예: email1234@gmail.com" autocomplete="off" />
+                  </label>
+                </fieldset>
+              </div>
+              <fieldset class="modal-group extra-price-group">
+                <legend>추가 품목 금액</legend>
+                <div class="extra-price-grid">
+                  <label>모니터 금액
+                    <input type="number" id="qiMonitorPrice" min="0" step="10000" placeholder="예: 180000" />
+                  </label>
+                  <label>키보드마우스 금액
+                    <input type="number" id="qiKeyboardPrice" min="0" step="10000" placeholder="예: 30000" />
+                  </label>
+                  <label>초기 세팅비 금액
+                    <input type="number" id="qiSetupPrice" min="0" step="10000" placeholder="예: 0" />
+                  </label>
+                </div>
+                <small>포함으로 켠 항목에만 적용됩니다. 0원이면 별도청구로 표시됩니다.</small>
+              </fieldset>
+              <fieldset class="modal-group extra-price-group">
+                <legend>입금 계좌</legend>
+                <div class="extra-price-grid">
+                  <label>은행명
+                    <input type="text" id="qiBankName" placeholder="예: 국민은행" />
+                  </label>
+                  <label>계좌번호
+                    <input type="text" id="qiBankAccount" placeholder="예: 123-456-789012" autocomplete="off" />
+                  </label>
+                  <label>예금주
+                    <input type="text" id="qiBankHolder" placeholder="예: 홍길동" />
+                  </label>
+                </div>
+                <small>계좌번호를 입력하면 모든 Excel 견적서 하단에 입금 계좌가 표시됩니다. 비워두면 표시하지 않습니다.</small>
+              </fieldset>
+              <p id="quoteInfoStatus" class="modal-status"></p>
+              <div class="settings-info-foot">
+                <button type="button" class="btn btn-outline btn-sm" id="quoteInfoReset" title="저장된 견적처/공급자 정보를 기본값으로 되돌립니다 (거래처 목록은 그대로)">🗑 초기화</button>
+                <button type="button" class="btn btn-outline btn-sm" id="custBtnSaveOnly" title="현재 견적처 칸의 내용을 거래처 목록에만 저장합니다 (견적서에는 적용하지 않음)">📒 거래처 목록에만 저장</button>
+                <button type="button" class="btn btn-primary btn-sm" id="quoteInfoSave" title="견적처·공급자 정보를 저장해 모든 견적서·작업내역서에 적용하고, 견적처를 거래처 목록에 등록합니다">💾 저장 (견적서에 적용)</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. 서식폼 -->
+        <section class="settings-panel hidden" data-panel="forms">
+          <div class="qa-toolbar">
+            <strong>Excel 견적서 서식 (폼1~폼8)</strong>
+            <span id="excelFormsStatus" class="qa-stats"></span>
+            <div class="qa-toolbar-right">
+              <button type="button" id="excelFormsAll" class="btn btn-outline btn-sm" title="선택을 모두 지우고 견적요약 + 폼1~8 을 한 파일로 받습니다">전체(기본)</button>
+            </div>
+          </div>
+          <p class="qa-hint">카드의 <strong>📥 엑셀 견적서</strong>로 받을 서식을 고릅니다. 서식을 누를 때마다 선택/해제되고 바로 저장됩니다(이 기기 브라우저에만 저장). 여러 개를 고르면 서식마다 파일이 하나씩 내려오고, 아무것도 고르지 않으면 견적요약 + 폼1~8 한 파일입니다.</p>
+          <div id="settingsFormsGrid" class="form-gallery-grid settings-forms-grid"></div>
+        </section>
+
+        <!-- 3. 견적보관함 -->
+        <section class="settings-panel hidden" data-panel="archive">
+          <div class="qa-toolbar">
+            <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="고객 · 모델 · 파일명 · 메모 검색" />
+            <span id="qaStats" class="qa-stats"></span>
+            <div class="qa-toolbar-right">
+              <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
+              <button type="button" id="qaBtnBackup" class="btn btn-outline btn-sm" title="보관함 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
+              <button type="button" id="qaBtnRefresh" class="btn btn-outline btn-sm">🔄 새로고침</button>
+            </div>
+          </div>
+          <p class="qa-hint">카드별 <strong>📥 엑셀 견적서</strong>와 <strong>🖼️ 서식 미리보기</strong>로 내려받은 파일이 자동으로 여기에 보관됩니다. 파일 이름은 <strong>거래처명</strong>(견적정보의 견적처 상호)으로 시작합니다.</p>
+          <div class="tr-list-table-wrap qa-table-wrap settings-table-wrap">
+            <table class="tr-list-table qa-table">
+              <thead>
+                <tr>
+                  <th style="width: 118px;">저장 시각</th>
+                  <th>고객</th>
+                  <th>모델 / 구분</th>
+                  <th style="width: 110px;">서식 · 마진</th>
+                  <th style="width: 90px;">금액</th>
+                  <th>파일명</th>
+                  <th style="width: 160px;">메모</th>
+                  <th style="width: 190px;">관리</th>
+                </tr>
+              </thead>
+              <tbody id="qaTbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 4. 작업내역서 -->
+        <section class="settings-panel hidden" data-panel="taskreport" id="trListPanel">
+          <div class="tr-list-toolbar">
+            <div class="tr-list-search">
+              <input type="text" id="trSearchInput" class="tr-inp" placeholder="고객명, 연락처, 접수번호 검색..." />
+            </div>
+            <span id="trListStats" class="qa-stats"></span>
+            <div class="qa-toolbar-right">
+              <button type="button" id="setTrBtnNew" class="btn btn-primary btn-sm" title="작업내역서 창을 열고 새 내역서를 작성합니다">➕ 새로 작성</button>
+              <button type="button" id="setTrBtnBackupOpen" class="btn btn-outline btn-sm" title="백업 폴더를 서버 PC 화면의 탐색기로 엽니다">📂 백업 폴더</button>
+              <button type="button" id="setTrBtnBackup" class="btn btn-outline btn-sm" title="저장된 작업내역서 전체를 백업 폴더에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
+              <button type="button" id="trBtnRefreshList" class="btn btn-outline btn-sm">🔄 새로고침</button>
+            </div>
+          </div>
+          <div class="tr-list-table-wrap settings-table-wrap">
+            <table class="tr-list-table">
+              <thead>
+                <tr>
+                  <th>접수일자</th>
+                  <th>접수번호</th>
+                  <th>고객명</th>
+                  <th>연락처</th>
+                  <th>장비/모델</th>
+                  <th>처리상태</th>
+                  <th>총 비용</th>
+                  <th style="width: 220px;">관리</th>
+                </tr>
+              </thead>
+              <tbody id="trListTbody">
+                <!-- 동적 목록 -->
+              </tbody>
+            </table>
+          </div>
+          <p class="qa-hint">📂 열기를 누르면 작업내역서 창에서 수정 · 인쇄할 수 있습니다. 백업 폴더는 견적보관함 백업과 같은 폴더를 씁니다.</p>
+        </section>
       </div>
     </div>
   </div>
@@ -469,45 +556,7 @@
 
 
 
-  <!-- 다나와 비슷한 PC 모달 -->
-  <div id="quoteArchiveModal" class="modal-overlay hidden" aria-hidden="true">
-    <div class="modal quote-archive-modal" role="dialog" aria-labelledby="quoteArchiveTitle">
-      <div class="modal-header">
-        <h3 id="quoteArchiveTitle">🗃️ 견적서 보관함</h3>
-        <button type="button" class="modal-close btn-modal-close" id="quoteArchiveClose" aria-label="닫기">✕ 닫기</button>
-      </div>
-      <div class="modal-body">
-        <div class="qa-toolbar">
-          <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="고객 · 모델 · 파일명 · 메모 검색" />
-          <span id="qaStats" class="qa-stats"></span>
-          <div class="qa-toolbar-right">
-            <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
-            <button type="button" id="qaBtnBackup" class="btn btn-outline btn-sm" title="보관함 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
-            <button type="button" id="qaBtnRefresh" class="btn btn-outline btn-sm">🔄 새로고침</button>
-          </div>
-        </div>
-        <p class="qa-hint">카드별 <strong>📥 엑셀 견적서</strong>와 <strong>🖼️ 서식 미리보기</strong>로 내려받은 파일이 자동으로 여기에 보관됩니다. 상단 전체 다운로드는 보관하지 않습니다.</p>
-        <div class="tr-list-table-wrap qa-table-wrap">
-          <table class="tr-list-table qa-table">
-            <thead>
-              <tr>
-                <th style="width: 118px;">저장 시각</th>
-                <th>고객</th>
-                <th>모델 / 구분</th>
-                <th style="width: 110px;">서식 · 마진</th>
-                <th style="width: 90px;">금액</th>
-                <th>파일명</th>
-                <th style="width: 160px;">메모</th>
-                <th style="width: 190px;">관리</th>
-              </tr>
-            </thead>
-            <tbody id="qaTbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <!-- 카드 한 건 서식 미리보기 -->
   <div id="formGalleryModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal form-gallery-modal" role="dialog" aria-labelledby="formGalleryTitle">
       <div class="modal-header">
@@ -521,6 +570,7 @@
     </div>
   </div>
 
+  <!-- 다나와 비슷한 PC 모달 -->
   <div id="danawaModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal danawa-modal" role="dialog" aria-labelledby="danawaTitle">
       <div class="modal-header">
@@ -541,8 +591,8 @@
         <div class="tr-modal-header-left">
           <h3 id="trModalTitle">📋 컴퓨터 작업 내역서</h3>
           <div class="tr-tab-buttons">
-            <button type="button" id="trTabFormBtn" class="btn btn-sm btn-primary active">📝 내역서 작성 / 수정</button>
-            <button type="button" id="trTabListBtn" class="btn btn-sm btn-outline">📂 저장된 내역 목록 (<span id="trListCount">0</span>)</button>
+            <span class="btn btn-sm btn-primary active" style="cursor: default;">📝 내역서 작성 / 수정</span>
+            <button type="button" id="trTabListBtn" class="btn btn-sm btn-outline" title="설정관리 → 작업내역서 탭에서 저장된 내역을 검색 · 열기 · 삭제합니다">📂 저장된 내역 목록 (설정관리)</button>
           </div>
         </div>
         <button type="button" class="modal-close btn-modal-close" id="trModalClose" aria-label="닫기">✕ 닫기</button>
@@ -568,7 +618,7 @@
 
           <!-- 실제 인쇄/작성되는 작업내역서 페이퍼 영역 -->
           <div id="trCompanyWarningNotice" class="tr-company-warning-notice no-print">
-            ⚠️ 작업내역서의 업체 정보가 기본 가짜 데이터(대한민국주식회사 등) 상태입니다. [견적 정보] 메뉴에서 공급자 정보를 변경하거나 직접 수정한 후 저장하세요.
+            ⚠️ 작업내역서의 업체 정보가 기본 가짜 데이터(대한민국주식회사 등) 상태입니다. [설정관리 → 견적정보] 탭에서 공급자 정보를 변경하거나 직접 수정한 후 저장하세요.
           </div>
           <div class="tr-paper" id="trPrintPaper">
             <!-- 상단 헤더 -->
@@ -770,34 +820,6 @@
           </div>
         </div>
 
-        <!-- 2. 목록 패널 -->
-        <div id="trListPanel" class="tr-panel hidden">
-          <div class="tr-list-toolbar">
-            <div class="tr-list-search">
-              <input type="text" id="trSearchInput" class="tr-inp" placeholder="고객명, 연락처, 접수번호 검색..." />
-            </div>
-            <button type="button" id="trBtnRefreshList" class="btn btn-outline btn-sm">🔄 새로고침</button>
-          </div>
-          <div class="tr-list-table-wrap">
-            <table class="tr-list-table">
-              <thead>
-                <tr>
-                  <th>접수일자</th>
-                  <th>접수번호</th>
-                  <th>고객명</th>
-                  <th>연락처</th>
-                  <th>장비/모델</th>
-                  <th>처리상태</th>
-                  <th>총 비용</th>
-                  <th style="width: 220px;">관리</th>
-                </tr>
-              </thead>
-              <tbody id="trListTbody">
-                <!-- 동적 목록 -->
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -807,6 +829,6 @@
     <span id="busyText">처리 중…</span>
   </div>
 
-  <script src="/static/js/app.js?v=20261020f"></script>
+  <script src="/static/js/app.js?v=20261026a"></script>
 </body>
 </html>
