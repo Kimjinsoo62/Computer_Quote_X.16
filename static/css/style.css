@@ -1778,7 +1778,8 @@ html.calc-html body {
 /* 견적정보 탭: 왼쪽 거래처 목록 + 오른쪽 견적처/공급자 입력 */
 .settings-info-grid { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 12px; flex: 1 1 auto; min-height: 0; }
 .cust-book { display: flex; flex-direction: column; min-height: 0; gap: 4px; }
-.cust-book-head { display: flex; align-items: baseline; justify-content: space-between; }
+.cust-book-head { display: flex; align-items: center; gap: 6px; }
+.cust-book-head-right { margin-left: auto; display: flex; gap: 3px; }
 .cust-book-tools { display: flex; gap: 4px; }
 .cust-book-tools .qa-search { flex: 1; max-width: none; }
 .set-search { display: flex; gap: 3px; align-items: center; flex: 1; max-width: 420px; }

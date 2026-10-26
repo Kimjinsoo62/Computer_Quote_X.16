@@ -1075,18 +1075,19 @@ async function qaOpenDir(id = "") {
   if (!res.ok) alert(res.data?.detail?.message || res.data?.detail || "폴더를 열지 못했습니다.");
 }
 
-async function qaBackup() {
-  const btn = $("#qaBtnBackup");
+/** 백업 폴더(작업내역서와 공용)에 ZIP 백업. 폴더가 없거나 사라졌으면 선택 창을 띄운 뒤 다시 시도한다. */
+async function backupZipToFolder({ url, btnSel, busyText, doneLabel }) {
+  const btn = $(btnSel);
   if (btn) btn.disabled = true;
   try {
     if (!trBackupDir) {
       const dir = await chooseTrBackupDir();
       if (!dir) return;
     }
-    showBusy("보관함을 ZIP 으로 묶는 중…");
+    showBusy(busyText);
     let res;
     try {
-      res = await postJsonRaw("/api/quotes/archive/backup", {});
+      res = await postJsonRaw(url, {});
     } finally {
       hideBusy();
     }
@@ -1095,9 +1096,9 @@ async function qaBackup() {
       syncTrBackupDirUI();
       const dir = await chooseTrBackupDir();
       if (!dir) return;
-      showBusy("보관함을 ZIP 으로 묶는 중…");
+      showBusy(busyText);
       try {
-        res = await postJsonRaw("/api/quotes/archive/backup", {});
+        res = await postJsonRaw(url, {});
       } finally {
         hideBusy();
       }
@@ -1107,7 +1108,7 @@ async function qaBackup() {
       throw new Error((d && (d.message || d)) || "백업에 실패했습니다.");
     }
     const openIt = confirm(
-      `✔ 백업 완료 — 견적서 ${res.data.count}건\n\n파일: ${res.data.path}\n크기: ${qaFmtSize(res.data.size)}\n\n백업 폴더를 열까요? (서버 PC 화면의 탐색기에 열립니다)`
+      `✔ 백업 완료 — ${doneLabel(res.data)}\n\n파일: ${res.data.path}\n크기: ${qaFmtSize(res.data.size)}\n\n백업 폴더를 열까요? (서버 PC 화면의 탐색기에 열립니다)`
     );
     if (openIt) await openTrBackupDir(res.data.path);
   } catch (e) {
@@ -1115,6 +1116,15 @@ async function qaBackup() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function qaBackup() {
+  return backupZipToFolder({
+    url: "/api/quotes/archive/backup",
+    btnSel: "#qaBtnBackup",
+    busyText: "보관함을 ZIP 으로 묶는 중…",
+    doneLabel: (d) => `견적서 ${d.count}건`,
+  });
 }
 
 $("#qaSearch")?.addEventListener("input", renderQuoteArchive);
@@ -1642,6 +1652,13 @@ async function custDelete(id) {
 }
 
 $("#custSearch")?.addEventListener("input", renderCustomers);
+$("#custBtnBackup")?.addEventListener("click", () => backupZipToFolder({
+  url: "/api/customers/backup",
+  btnSel: "#custBtnBackup",
+  busyText: "거래처 목록 · 견적정보를 ZIP 으로 묶는 중…",
+  doneLabel: (d) => `거래처 ${d.count}곳 + 견적정보`,
+}));
+$("#custBtnBackupOpen")?.addEventListener("click", () => openTrBackupDir());
 $("#custBtnNew")?.addEventListener("click", () => {
   custFillForm({ name: "", manager: "", address: "", phone: "", email: "" });
   qiSetStatus("새 거래처를 입력한 뒤 💾 저장 또는 📒 거래처 목록에만 저장을 누르세요.");

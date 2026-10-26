@@ -885,6 +885,21 @@ def api_quote_archive_delete(entry_id: str):
     return {"ok": True}
 
 
+@app.post("/api/customers/backup")
+def api_customers_backup(payload: dict = Body(default={})):
+    """거래처 목록 + 견적정보를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장. 폴더가 없으면 428."""
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요."})
+    try:
+        result = customer_book.backup_customers(folder)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"백업 파일을 쓰지 못했습니다: {e}") from e
+    return {"ok": True, **result}
+
+
 @app.post("/api/quotes/archive/backup")
 def api_quote_archive_backup(payload: dict = Body(default={})):
     """보관함 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장. 폴더가 없으면 428."""
