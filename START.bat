@@ -20,6 +20,14 @@ if not defined PY (
     set "PY=.venv\Scripts\python.exe"
 )
 
+REM Run the server console minimized: relaunch this script in a minimized window and close this one.
+REM (install.bat above stays visible. The minimized window stays on the taskbar as the server log.)
+if /i not "%~1"=="min" (
+    start "AI PC Quote Server (8090)" /min cmd /c ""%~f0" min"
+    exit /b
+)
+title AI PC Quote Server (8090)
+
 REM LAN address for access from other PCs
 set "LANIP=127.0.0.1"
 for /f "delims=" %%i in ('call "%PY%" -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.connect(('8.8.8.8',80));print(s.getsockname()[0])" 2^>nul') do set "LANIP=%%i"
@@ -28,6 +36,7 @@ echo ==========================================
 echo   AI PC Quote Server (Port 8090)
 echo   Local:   http://127.0.0.1:8090/
 echo   Network: http://!LANIP!:8090/
+echo   Stop:    app [Exit] button, or run stop.bat
 echo ==========================================
 
 set "BROWSER="
