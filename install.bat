@@ -9,6 +9,18 @@ echo   AI PC Quote - 최초 설치 (install.bat)
 echo ==========================================
 echo.
 
+REM ── 0) 압축을 풀지 않고 ZIP 안에서 실행했는지 확인 ──
+if not exist "%~dp0app\main.py" (
+    echo [오류] 프로그램 파일^(app 폴더^)을 찾을 수 없습니다.
+    echo.
+    echo   GitHub에서 받은 ZIP 파일을 먼저 압축 해제하세요.
+    echo   ZIP 파일 오른쪽 클릭 - [압축 풀기] 후, 풀린 폴더 안의 install.bat 을 실행합니다.
+    echo   경로가 너무 길면 설치가 실패할 수 있으니 C:\ 처럼 짧은 위치에 푸는 것을 권장합니다.
+    echo.
+    pause
+    exit /b 1
+)
+
 REM ── 1) Python 확인 ──
 echo [1/4] Python 설치 확인...
 where python >nul 2>&1
@@ -86,9 +98,7 @@ echo.
 echo [3/4] pip 업그레이드 및 라이브러리 설치...
 "%PY%" -m pip install --upgrade pip
 if errorlevel 1 (
-    echo [오류] pip 업그레이드 실패
-    pause
-    exit /b 1
+    echo   - [경고] pip 업그레이드 실패. 기존 pip 로 계속 설치합니다.
 )
 
 "%PY%" -m pip install -r "%~dp0requirements.txt"
@@ -118,7 +128,7 @@ if errorlevel 1 (
 "%PY%" -c "from app.main import app; print('   - app.main 로드 OK')"
 if errorlevel 1 (
     echo.
-    echo [오류] 앱 모듈 로드 실패 (app 폴더 위치 확인)
+    echo [오류] 앱 모듈 로드 실패 ^(app 폴더 위치 확인^)
     echo.
     pause
     exit /b 1
@@ -130,7 +140,7 @@ echo   설치 완료
 echo.
 echo   설치된 패키지 (requirements.txt):
 echo     - fastapi, uvicorn, jinja2
-echo     - openpyxl, python-multipart, Pillow
+echo     - openpyxl, python-multipart, Pillow, pypdfium2
 echo.
 echo   가상환경: .venv
 echo.

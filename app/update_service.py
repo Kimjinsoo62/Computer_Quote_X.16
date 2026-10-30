@@ -27,6 +27,20 @@ def _git(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
     )
 
 
+# GitHub 에서 ZIP 으로 받은 설치본에는 .git 폴더가 없어 fetch/pull 을 할 수 없다.
+# 어느 커밋에서 받은 ZIP 인지 알 수 없으므로 저장소로 바꾸지 않고 안내만 한다.
+ZIP_INSTALL_MESSAGE = (
+    "ZIP 파일로 받은 설치본이라 [업데이트]를 쓸 수 없습니다.\n\n"
+    "GitHub 에서 새 ZIP 을 받아 압축을 풀고 install.bat → START.bat 으로 다시 설치하거나,\n"
+    "git clone 으로 설치하면 다음부터 [업데이트] 버튼을 쓸 수 있습니다.\n"
+    "(견적정보 · 거래처 · 작업내역서 · 보관함 파일은 새 폴더로 복사해 옮기세요)"
+)
+
+
+def _is_git_install() -> bool:
+    return (BASE_DIR / ".git").exists()
+
+
 def _upstream() -> str:
     r = _git("rev-parse", "--abbrev-ref", "@{u}")
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "origin/main"
@@ -46,6 +60,8 @@ def _migrate_remote(remote: str) -> None:
 
 def check_update() -> dict:
     """원격 저장소를 fetch 해 받을 커밋이 있는지 알려 준다."""
+    if not _is_git_install():
+        return {"ok": False, "message": ZIP_INSTALL_MESSAGE}
     try:
         upstream = _upstream()
         remote = upstream.split("/", 1)[0]
@@ -71,6 +87,8 @@ def check_update() -> dict:
 
 def apply_update() -> dict:
     """fast-forward pull 로 갱신하고, 의존성 파일이 바뀌었는지 알려 준다."""
+    if not _is_git_install():
+        return {"ok": False, "message": ZIP_INSTALL_MESSAGE}
     try:
         upstream = _upstream()
         remote, branch = upstream.split("/", 1)

@@ -19,6 +19,13 @@ if /i "%~1"=="restart" goto deps
 
 echo.
 echo [1] Downloading latest version (Git Pull)...
+REM Installed from a GitHub ZIP (no .git folder): git pull is not possible
+if not exist "%~dp0.git" (
+    echo [WARNING] This copy was installed from a ZIP file ^(no .git folder^).
+    echo Download a new ZIP from GitHub, or install with "git clone" to use updates.
+    echo.
+    goto deps
+)
 call :fixremote & git pull origin main
 if %ERRORLEVEL% NEQ 0 (
     echo.
