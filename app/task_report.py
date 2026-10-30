@@ -24,6 +24,39 @@ DATA_FILE = Path(__file__).resolve().parent.parent / "task_reports.json"
 TEMPLATE_FILE = Path(__file__).resolve().parent.parent / "컴퓨터_작업내역서.xlsx"
 # 화면 기본 행 수. Excel 도 최소 이만큼 번호를 매긴다.
 MIN_TASK_ROWS = 5
+
+# 서명 그림(캔버스 PNG data URL). 이상한 값이나 너무 큰 값은 버린다.
+SIGN_IMG_PREFIX = "data:image/png;base64,"
+SIGN_IMG_MAX_CHARS = 600_000
+SIGN_IMG_KEYS = ("customer_sign_img", "technician_sign_img")
+
+
+def clean_sign_image(value: Any) -> str:
+    s = str(value or "")
+    return s if s.startswith(SIGN_IMG_PREFIX) and len(s) <= SIGN_IMG_MAX_CHARS else ""
+
+
+def _sign_image_for_excel(data_url: str, max_w: int = 300, max_h: int = 70):
+    """서명 PNG 를 Excel 그림으로 만든다. 빈 여백은 잘라 내고 칸 크기에 맞게 줄인다. 실패하면 None."""
+    data_url = clean_sign_image(data_url)
+    if not data_url:
+        return None
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+        from PIL import Image as PILImage
+
+        img = PILImage.open(BytesIO(base64.b64decode(data_url[len(SIGN_IMG_PREFIX):]))).convert("RGBA")
+        box = img.getbbox()
+        if not box:
+            return None
+        img = img.crop(box)
+        img.thumbnail((max_w, max_h))
+        out = BytesIO()
+        img.save(out, format="PNG")
+        out.seek(0)
+        return XLImage(out)
+    except Exception:
+        return None
 BACKUP_DIR_KEY = "task_report_backup_dir"
 
 
@@ -106,6 +139,8 @@ def create_task_report(data: dict[str, Any]) -> dict[str, Any]:
         # 6. 확인 및 서명
         "customer_sign": data.get("customer_sign", ""),
         "technician_sign": data.get("technician_sign", ""),
+        "customer_sign_img": clean_sign_image(data.get("customer_sign_img")),
+        "technician_sign_img": clean_sign_image(data.get("technician_sign_img")),
     }
 
     # 계산된 총액
@@ -133,6 +168,10 @@ def update_task_report(report_id: str, data: dict[str, Any]) -> dict[str, Any] |
     existing = reports[target_idx]
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    data = dict(data)
+    for key in SIGN_IMG_KEYS:
+        if key in data:
+            data[key] = clean_sign_image(data[key])
     existing.update(data)
     existing["id"] = report_id
     existing["updated_at"] = now_str
@@ -243,11 +282,24 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
     ws[f"B{total_row + 3}"] = report.get("technician", "김대건")
     ws[f"E{total_row + 3}"] = report.get("warranty_period", "3개월")
 
-    # 7. 확인 및 서명
-    if report.get("customer_sign"):
-        ws[f"A{total_row + 6}"] = f"서명: {report.get('customer_sign')}"
-    if report.get("technician_sign"):
-        ws[f"D{total_row + 6}"] = f"서명: {report.get('technician_sign')}"
+    # 7. 확인 및 서명: 그린 서명은 그림으로, 예전 글자 서명은 글자로 넣는다
+    sign_row = total_row + 6
+    for col, label, text_key, img_key in (
+        ("A", "고객 서명 (또는 인)", "customer_sign", "customer_sign_img"),
+        ("D", "담당자 서명 (또는 인)", "technician_sign", "technician_sign_img"),
+    ):
+        sign_img = _sign_image_for_excel(report.get(img_key, ""))
+        if sign_img is not None:
+            if not ws[f"{col}{sign_row - 1}"].value:
+                ws[f"{col}{sign_row - 1}"] = label
+                ws[f"{col}{sign_row - 1}"].font = Font(bold=True)
+            ws.add_image(sign_img, f"{col}{sign_row}")
+            # 그림 높이(px) → 행 높이(pt) 로 맞춰 아래 내용과 겹치지 않게
+            need_pt = sign_img.height * 0.75 + 4
+            if (ws.row_dimensions[sign_row].height or 15) < need_pt:
+                ws.row_dimensions[sign_row].height = need_pt
+        elif report.get(text_key):
+            ws[f"{col}{sign_row}"] = f"서명: {report.get(text_key)}"
 
     # 8. 입금 계좌 (견적 정보에서 가져옴, 계좌번호가 없으면 생략)
     bank_line = bank_account_line(load_quote_info())

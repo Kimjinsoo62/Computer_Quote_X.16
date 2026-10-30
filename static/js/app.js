@@ -3228,9 +3228,13 @@ function initSignCanvas(canvas) {
     return [clientX - rect.left, clientY - rect.top];
   }
 
+  canvas._syncSize = syncSize;
+  canvas._hasInk = false;
+
   function startDraw(e) {
     syncSize();
     isDrawing = true;
+    canvas._hasInk = true;
     [lastX, lastY] = getPos(e);
     if (e.type === "touchstart") e.preventDefault();
   }
@@ -3268,7 +3272,30 @@ function clearSignCanvas(type) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
+    canvas._hasInk = false;
   }
+}
+
+/** 그린 서명을 PNG data URL 로 돌려준다. 아무것도 안 그렸으면 "". */
+function getSignImage(canvas) {
+  return canvas && canvas._hasInk ? canvas.toDataURL("image/png") : "";
+}
+
+/** 저장해 둔 서명 그림을 캔버스에 다시 그린다(창이 숨어 있어도 다음 그리기 때 크기를 맞추며 옮겨 그려진다). */
+function loadSignImage(canvas, dataUrl) {
+  if (!canvas || !dataUrl) return;
+  const img = new Image();
+  img.onload = () => {
+    canvas._syncSize?.();
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    canvas._hasInk = true;
+  };
+  img.src = dataUrl;
 }
 
 // 작업 행 렌더링 & 계산 (기본 5행, 삭제 ✕ 는 맨 끝 조작 열)
@@ -3446,6 +3473,8 @@ function getTrFormData() {
     warranty_period: warrantyPeriod,
     customer_sign: customerSign,
     technician_sign: technicianSign,
+    customer_sign_img: getSignImage(signCanvasCust),
+    technician_sign_img: getSignImage(signCanvasTech),
   };
 }
 
@@ -3557,6 +3586,8 @@ function fillTrForm(data) {
 
   clearSignCanvas("cust");
   clearSignCanvas("tech");
+  loadSignImage(signCanvasCust, data?.customer_sign_img);
+  loadSignImage(signCanvasTech, data?.technician_sign_img);
   updateBlinkWarnings();
 }
 
