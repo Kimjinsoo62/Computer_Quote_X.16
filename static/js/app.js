@@ -3625,6 +3625,7 @@ function openTrModal() {
 
 function closeTrModal() {
   if (!trModal) return;
+  hideTrAfterPrintNotice();
   hide(trModal);
 }
 
@@ -3900,8 +3901,44 @@ async function backupTrReport() {
 
 // 인쇄 / PDF 출력
 function printTrPaper() {
-  // 폼의 최신 입력값들을 인쇄 전 DOM value에 정확히 매핑
+  // 인쇄 창(브라우저 것)은 버튼을 넣을 수 없으므로, 닫힌 뒤 앱 쪽에 [닫기] 안내를 띄운다
+  window.addEventListener("afterprint", showTrAfterPrintNotice, { once: true });
   window.print();
+}
+
+const TR_AFTER_PRINT_SEC = 10;
+let trAfterPrintTimer = null;
+
+/** 인쇄 창이 닫히면 잠깐 띄우는 안내. 앱 창의 ✕ 대신 여기 [✕ 닫기]로 작업내역서만 닫게 한다. */
+function showTrAfterPrintNotice() {
+  hideTrAfterPrintNotice();
+  const box = document.createElement("div");
+  box.id = "trAfterPrintNotice";
+  box.className = "tr-after-print no-print";
+  box.setAttribute("role", "alertdialog");
+  box.innerHTML = `
+    <div class="tr-after-print-msg">🖨️ 인쇄 창이 닫혔습니다.<br><small>작업내역서를 닫으려면 앱 창의 ✕ 가 아니라 아래 [✕ 닫기]를 누르세요.</small></div>
+    <div class="tr-after-print-btns">
+      <button type="button" class="btn-modal-close tr-after-print-close">✕ 닫기</button>
+      <button type="button" class="btn btn-outline btn-sm tr-after-print-stay">계속 작업 <span class="tr-after-print-sec">${TR_AFTER_PRINT_SEC}</span></button>
+    </div>`;
+  box.querySelector(".tr-after-print-close").addEventListener("click", () => { hideTrAfterPrintNotice(); closeTrModal(); });
+  box.querySelector(".tr-after-print-stay").addEventListener("click", hideTrAfterPrintNotice);
+  document.body.appendChild(box);
+  box.querySelector(".tr-after-print-close").focus();
+  let left = TR_AFTER_PRINT_SEC;
+  trAfterPrintTimer = setInterval(() => {
+    left -= 1;
+    const sec = box.querySelector(".tr-after-print-sec");
+    if (sec) sec.textContent = left;
+    if (left <= 0) hideTrAfterPrintNotice(); // 아무것도 안 누르면 창은 그대로 두고 안내만 사라진다
+  }, 1000);
+}
+
+function hideTrAfterPrintNotice() {
+  if (trAfterPrintTimer) clearInterval(trAfterPrintTimer);
+  trAfterPrintTimer = null;
+  document.getElementById("trAfterPrintNotice")?.remove();
 }
 
 // 실시간 엑셀 다운로드

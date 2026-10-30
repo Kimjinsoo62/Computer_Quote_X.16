@@ -1253,6 +1253,20 @@ a:hover { text-decoration: underline; }
 .tr-table .tr-col-cost { min-width: 12ch; white-space: nowrap; }
 .tr-warranty-group { gap: 10px; }
 .tr-textarea-auto { resize: none; overflow: hidden; min-height: 0; }
+/* 인쇄 창이 닫힌 뒤 잠깐 뜨는 [닫기] 안내 (작업내역서 창 위, 진행 표시 창 아래) */
+.tr-after-print {
+  position: fixed; top: 18%; left: 50%; transform: translateX(-50%);
+  z-index: 2500;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 14px 22px;
+  background: #0f172a; color: #f8fafc;
+  border: 2px solid #f87171; border-radius: 10px;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25), 0 12px 32px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+.tr-after-print-msg { font-size: 1.05rem; font-weight: 700; line-height: 1.5; }
+.tr-after-print-msg small { font-weight: 400; color: #cbd5e1; }
+.tr-after-print-btns { display: flex; gap: 10px; align-items: center; }
 .tr-warranty-group .tr-warranty-custom { width: 4em; text-align: center; border-bottom: 1px solid #94a3b8; }
 .btn-xs { padding: 1px 6px; font-size: 0.95rem; white-space: nowrap; }
 /* 표 머리글은 밝은 배경이라 어두운 글자·테두리로 보이게 한다 */
