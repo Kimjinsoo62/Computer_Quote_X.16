@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20260910r" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261030a" />
   <style>
     .manual-wrap { max-width: 1120px; margin: 0 auto; padding: 48px 16px 40px; }
     .manual-head { border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 28px; }
@@ -92,6 +92,7 @@
       </div>
       <div class="nav-links">
         <a href="/" class="btn btn-outline btn-sm manual-back">← 견적 화면으로</a>
+        <button type="button" id="manualClose" class="btn-modal-close" title="설명서 탭만 닫습니다 (앱 창은 그대로)">✕ 닫기</button>
       </div>
     </div>
   </nav>
@@ -104,6 +105,7 @@
       <div class="manual-note">
         <strong>🆕 Ver XI.01 주요 변경</strong>
         <ul>
+          <li><strong>🔴 [닫기] 버튼 강화</strong>: 모든 팝업 창의 [✕ 닫기]를 선명한 빨간색으로 바꾸고, 계산기 창 · 사용설명서 탭 · 작업내역서 도구줄(인쇄 버튼 옆)에도 [✕ 닫기]를 달았습니다. 인쇄 후나 기능을 다 쓴 뒤 브라우저(앱 창)의 ✕를 눌러 프로그램 화면 전체를 닫는 실수를 막기 위해서입니다. 창만 닫을 때는 빨간 [✕ 닫기] 또는 <span class="manual-key">Esc</span>를 쓰세요.</li>
           <li><strong>🔢 버전 표기 변경</strong>: X.42 다음 버전부터 <strong>XI.01</strong> 로 표기합니다. 기능은 X.42 와 같습니다. 폴더 이름도 rename_folder.bat 으로 <code>Computer_Quote_XI.01</code> 로 바꿀 수 있습니다.</li>
         </ul>
       </div>
@@ -762,7 +764,7 @@
         <li><strong>📅 날짜 자동 맞춤</strong>: 접수일과 예상/완료일은 컴퓨터(시스템) 날짜로 채워집니다. 프로그램을 켜 둔 채 다음 날이 되면, 작성 중인 새 내역서는 입력 내용은 그대로 두고 날짜 칸과 접수번호의 날짜만 오늘로 바뀝니다(직접 고친 날짜는 유지). 어제 저장한 내역서가 열려 있던 경우에는 작업내역서를 다시 열 때 오늘 날짜의 새 양식으로 시작하며, 어제 내역서는 <strong>📂 저장된 내역 목록</strong>에서 다시 열 수 있습니다.</li>
         <li><strong>🏦 입금 계좌</strong>: ⚙️ 설정관리 → 견적정보에 계좌번호를 저장해 두면 유의사항 위에 입금 계좌가 표시되어 함께 인쇄되고, Excel에도 들어갑니다. 계좌를 바꾸면 이미 저장된 내역서도 다음 인쇄/다운로드부터 새 계좌로 나옵니다.</li>
         <li><strong>📥 Excel 다운로드</strong>: <code>작업내역서_{고객명}_{접수번호}.xlsx</code> 파일로 다운로드됩니다.</li>
-        <li><strong>🔴 빨간색 [닫기] 버튼</strong>: 모달 우측 상단의 선명한 빨간색 버튼으로 작업을 마친 뒤 손쉽게 닫을 수 있습니다.</li>
+        <li><strong>🔴 빨간색 [닫기] 버튼</strong>: 창 우측 상단과 도구줄(인쇄 버튼 옆)의 선명한 빨간색 [✕ 닫기]로 작업내역서 창만 닫습니다. 인쇄 창을 닫은 뒤에도 브라우저(앱 창)의 ✕ 대신 이 버튼을 쓰세요 — 앱 창의 ✕는 프로그램 화면 전체를 닫습니다.</li>
       </ol>
     </section>
 
@@ -849,5 +851,12 @@
       <p>본 프로그램은 컴퓨존 및 Apple 공식 스토어의 실시간 정보를 바탕으로 작동하며, 가격 및 프로모션은 공식 홈페이지 기준에 따릅니다.</p>
     </div>
   </div>
+  <script>
+    // 설명서 탭만 닫는다. 브라우저가 막으면(주소를 직접 연 탭) 견적 화면으로 돌아간다.
+    document.getElementById("manualClose").addEventListener("click", () => {
+      window.close();
+      setTimeout(() => { location.href = "/"; }, 300);
+    });
+  </script>
 </body>
 </html>

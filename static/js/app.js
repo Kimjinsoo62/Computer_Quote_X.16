@@ -3812,6 +3812,7 @@ async function downloadTrExcelDirect() {
 
 // 이벤트 바인딩
 $("#trModalClose")?.addEventListener("click", closeTrModal);
+$("#trBtnClose")?.addEventListener("click", closeTrModal);
 trModal?.addEventListener("click", (e) => {
   if (e.target === trModal) closeTrModal();
 });
