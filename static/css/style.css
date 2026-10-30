@@ -1246,6 +1246,7 @@ a:hover { text-decoration: underline; }
 /* 비용: 천만 원 단위(99,999,999)까지 잘리지 않는 폭 */
 .tr-table .tr-col-cost { min-width: 12ch; white-space: nowrap; }
 .tr-warranty-group { gap: 10px; }
+.tr-textarea-auto { resize: none; overflow: hidden; min-height: 0; }
 .tr-warranty-group .tr-warranty-custom { width: 4em; text-align: center; border-bottom: 1px solid #94a3b8; }
 .btn-xs { padding: 1px 6px; font-size: 0.95rem; white-space: nowrap; }
 /* 표 머리글은 밝은 배경이라 어두운 글자·테두리로 보이게 한다 */

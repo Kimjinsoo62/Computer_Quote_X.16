@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261031b" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261031d" />
 </head>
 <body>
   <nav class="nav">
@@ -791,7 +791,7 @@
             <div class="tr-sec">
               <div class="tr-sec-title">3. 증상 / 요청 사항</div>
               <div class="tr-box-content">
-                <textarea id="trSymptoms" class="tr-textarea" rows="3" placeholder="고객 불편 증상 및 출장 요청 사항을 기재하세요"></textarea>
+                <textarea id="trSymptoms" class="tr-textarea tr-textarea-auto" rows="1" placeholder="고객 불편 증상 및 출장 요청 사항을 기재하세요"></textarea>
               </div>
             </div>
 
@@ -851,7 +851,6 @@
                     <div class="tr-radio-group tr-warranty-group">
                       <label><input type="radio" name="trWarranty" value="1개월" /> 1개월</label>
                       <label><input type="radio" name="trWarranty" value="3개월" checked /> 3개월</label>
-                      <label><input type="radio" name="trWarranty" value="6개월" /> 6개월</label>
                       <label title="직접 입력 (예: 12)"><input type="radio" name="trWarranty" value="custom" /> (<input type="text" id="trWarrantyCustom" class="tr-inp tr-inp-inline tr-warranty-custom" inputmode="numeric" /> 개월)</label>
                     </div>
                   </td>
@@ -910,6 +909,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261031c"></script>
+  <script src="/static/js/app.js?v=20261031d"></script>
 </body>
 </html>

@@ -3192,7 +3192,8 @@ const signCanvasCust = $("#trSignCanvasCust");
 const signCanvasTech = $("#trSignCanvasTech");
 
 function initSignCanvas(canvas) {
-  if (!canvas) return;
+  if (!canvas || canvas._signInit) return; // 창을 열 때마다 불리므로 이벤트가 겹쳐 달리지 않게
+  canvas._signInit = true;
   const ctx = canvas.getContext("2d");
   ctx.strokeStyle = "#0f172a";
   ctx.lineWidth = 2;
@@ -3360,8 +3361,8 @@ function getTrTasksFromForm({ keepEmpty = false } = {}) {
   return tasks;
 }
 
-/** 보증 기간: 1 · 3 · 6개월 중 고르거나 ( N 개월) 에 직접 적는다. 저장 값은 예전처럼 "N개월" 글자. */
-const TR_WARRANTY_PRESETS = ["1개월", "3개월", "6개월"];
+/** 보증 기간: 1 · 3개월 중 고르거나 ( N 개월) 에 직접 적는다. 저장 값은 예전처럼 "N개월" 글자. */
+const TR_WARRANTY_PRESETS = ["1개월", "3개월"];
 
 function getTrWarranty() {
   const picked = document.querySelector('input[name="trWarranty"]:checked')?.value || "3개월";
@@ -3379,6 +3380,15 @@ function setTrWarranty(value) {
   if (radio) radio.checked = true;
   if (custom) custom.value = isPreset ? "" : (v.match(/^(\d+)\s*개월$/)?.[1] ?? v);
 }
+
+/** 증상 / 요청 사항: 1행으로 시작해 글이 줄을 넘으면 행이 늘어난다. */
+function autoGrowTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  if (!el.scrollHeight) return; // 창이 숨어 있으면 잴 수 없다 — 창을 연 뒤 다시 맞춘다
+  el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+}
+$("#trSymptoms")?.addEventListener("input", (e) => autoGrowTextarea(e.target));
 
 // ( N 개월) 칸에 적으면 그 항목이 저절로 선택된다
 $("#trWarrantyCustom")?.addEventListener("input", () => {
@@ -3569,6 +3579,7 @@ function fillTrForm(data) {
   if ($("#trAccCustom")) $("#trAccCustom").value = data?.accessories_custom || "";
 
   if ($("#trSymptoms")) $("#trSymptoms").value = data?.symptoms || "";
+  autoGrowTextarea($("#trSymptoms"));
 
   // 작업 내역 행
   renderTrTaskRows(data?.tasks || []);
@@ -3608,6 +3619,7 @@ function openTrModal() {
   }
   loadTrReportsList();
   show(trModal);
+  autoGrowTextarea($("#trSymptoms"));
   updateBlinkWarnings();
 }
 
