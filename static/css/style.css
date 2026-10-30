@@ -1238,6 +1238,8 @@ a:hover { text-decoration: underline; }
 .tr-task-del-btn:disabled { opacity: 0.35; cursor: default; }
 /* 맨 끝 조작 열: 머리글에 [＋ 행추가], 행마다 [✕]. 인쇄·Excel 에는 없다. */
 .tr-table .tr-col-act { text-align: center; padding: 1px 3px; }
+/* 비용: 천만 원 단위(99,999,999)까지 잘리지 않는 폭 */
+.tr-table .tr-col-cost { min-width: 12ch; white-space: nowrap; }
 .btn-xs { padding: 1px 6px; font-size: 0.95rem; white-space: nowrap; }
 /* 표 머리글은 밝은 배경이라 어두운 글자·테두리로 보이게 한다 */
 .tr-table .tr-col-act .btn-outline { color: #1e3a8a; border-color: #64748b; background: #ffffff; }
@@ -1280,8 +1282,10 @@ a:hover { text-decoration: underline; }
 }
 .btn-clear-sign:hover { background: #e2e8f0; }
 .tr-sign-canvas {
+  display: block;
   width: 100%;
   height: 48px;
+  touch-action: none;
   border: 1px dashed #cbd5e1;
   border-radius: 3px;
   background: #ffffff;

@@ -3202,6 +3202,25 @@ function initSignCanvas(canvas) {
   let isDrawing = false;
   let lastX = 0, lastY = 0;
 
+  /** 캔버스 내부 픽셀 크기를 화면에 보이는 크기에 맞춘다. 안 맞으면 서명이 칸의 위쪽 일부에만 그려진다.
+   *  크기를 바꾸면 캔버스가 지워지므로 그려 둔 서명은 옮겨 그린다. */
+  function syncSize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(rect.width * dpr), h = Math.round(rect.height * dpr);
+    if (!w || !h || (canvas.width === w && canvas.height === h)) return;
+    const old = document.createElement("canvas");
+    old.width = canvas.width; old.height = canvas.height;
+    old.getContext("2d").drawImage(canvas, 0, 0);
+    canvas.width = w; canvas.height = h;
+    ctx.drawImage(old, 0, 0, w, h);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }
+
   function getPos(e) {
     const rect = canvas.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -3210,6 +3229,7 @@ function initSignCanvas(canvas) {
   }
 
   function startDraw(e) {
+    syncSize();
     isDrawing = true;
     [lastX, lastY] = getPos(e);
     if (e.type === "touchstart") e.preventDefault();
@@ -3244,7 +3264,10 @@ function clearSignCanvas(type) {
   const canvas = type === "cust" ? signCanvasCust : signCanvasTech;
   if (canvas) {
     const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
 }
 
@@ -3268,7 +3291,7 @@ function renderTrTaskRows(tasks = []) {
       <td style="text-align:center;"><span class="tr-row-no">${idx + 1}</span></td>
       <td><input type="text" class="tr-inp tr-task-desc" value="${escapeHtml(task.description || '')}" placeholder="작업 내용" /></td>
       <td><input type="text" class="tr-inp tr-task-parts" value="${escapeHtml(task.parts || '')}" placeholder="부품 / 자재" /></td>
-      <td><input type="number" class="tr-inp tr-task-cost" style="text-align:right;" value="${task.cost || ''}" placeholder="0" oninput="calcTrTotal()" /></td>
+      <td class="tr-col-cost"><input type="text" inputmode="numeric" class="tr-inp tr-task-cost" style="text-align:right;" value="${task.cost ? Number(task.cost).toLocaleString("ko-KR") : ''}" placeholder="0" oninput="formatTrCostInput(this)" /></td>
       <td class="tr-col-act no-print"><button type="button" class="tr-task-del-btn" title="이 행 삭제" onclick="deleteTrTaskRow(${idx})"${items.length <= 1 ? " disabled" : ""}>✕</button></td>
     `;
     tbody.appendChild(tr);
@@ -3298,7 +3321,7 @@ function getTrTasksFromForm({ keepEmpty = false } = {}) {
   rows.forEach((tr) => {
     const desc = tr.querySelector(".tr-task-desc")?.value.trim() || "";
     const parts = tr.querySelector(".tr-task-parts")?.value.trim() || "";
-    const cost = parseInt(tr.querySelector(".tr-task-cost")?.value, 10) || 0;
+    const cost = parseInt((tr.querySelector(".tr-task-cost")?.value || "").replace(/[^\d]/g, ""), 10) || 0;
     tasks.push({ no: 0, description: desc, parts: parts, cost: cost });
   });
   if (!keepEmpty) {
@@ -3309,6 +3332,21 @@ function getTrTasksFromForm({ keepEmpty = false } = {}) {
   tasks.forEach((t, i) => { t.no = i + 1; });
   return tasks;
 }
+
+/** 비용 칸: 입력하는 동안 숫자만 남기고 천 단위 콤마를 넣는다(커서는 뒤에서부터 같은 숫자 위치에 둔다). */
+window.formatTrCostInput = function(inp) {
+  const pos = inp.selectionStart ?? inp.value.length;
+  const digitsAfter = inp.value.slice(pos).replace(/[^\d]/g, "").length;
+  const digits = inp.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "").slice(0, 10);
+  inp.value = digits ? Number(digits).toLocaleString("ko-KR") : "";
+  let caret = inp.value.length, seen = 0;
+  while (caret > 0 && seen < digitsAfter) {
+    if (/\d/.test(inp.value[caret - 1])) seen += 1;
+    caret -= 1;
+  }
+  inp.setSelectionRange(caret, caret);
+  calcTrTotal();
+};
 
 function calcTrTotal() {
   const tasks = getTrTasksFromForm();
