@@ -493,7 +493,13 @@ a:hover { text-decoration: underline; }
   display: block; margin-top: 4px; font-weight: 400;
   font-size: 1rem; color: var(--muted);
 }
-.extra-price-group { margin-top: 16px; }
+.extra-price-group {
+  margin-top: 16px;
+  /* 추가 품목 금액 · 입금 계좌: 분홍 배경으로 다른 입력 묶음과 구분 */
+  background: rgba(236, 72, 153, 0.16);
+  border-color: rgba(244, 114, 182, 0.55);
+}
+.extra-price-group legend { color: #f9a8d4; }
 .extra-price-grid {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
 }
