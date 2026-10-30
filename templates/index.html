@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261031f" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261031g" />
 </head>
 <body>
   <nav class="nav">
@@ -238,6 +238,7 @@
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="info" role="tab">📇 견적정보 · 거래처</button>
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab">🗃️ 견적보관함 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="taskreport" role="tab">📋 작업내역서 <span id="trListCount" class="archive-count">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="manualquote" role="tab" title="폼1~8 중 하나를 골라 빈 견적에 품목을 직접 적어 견적서를 만듭니다">📝 새 견적 만들기 <span id="mqListCount" class="archive-count hidden">0</span></button>
           </div>
         </div>
         <button type="button" class="modal-close btn-modal-close" id="settingsClose" aria-label="닫기">✕ 닫기</button>
@@ -425,6 +426,110 @@
           </div>
           <p class="qa-hint">📂 열기를 누르면 작업내역서 창에서 수정 · 인쇄할 수 있습니다. 백업 폴더는 견적보관함 백업과 같은 폴더를 씁니다.</p>
         </section>
+
+        <!-- 4. 새 견적 만들기: 서식 8개 중 하나를 고르면 빈 견적 작성 창이 열린다 -->
+        <section class="settings-panel hidden" data-panel="manualquote">
+          <p class="qa-hint mq-pick-hint">① 서식을 고르면 빈 견적 작성 창이 열립니다. 품목 · 수량 · 단가(부가세 포함)를 직접 적고 저장하거나 Excel · 이메일로 보냅니다. 견적처 · 공급자는 <strong>📇 견적정보</strong>의 값이 들어갑니다.</p>
+          <div id="mqFormGrid" class="mq-form-grid"></div>
+          <div class="qa-toolbar mq-list-toolbar">
+            <div class="set-search">
+              <input type="text" id="mqSearch" class="tr-inp qa-search" placeholder="제목 · 거래처 검색" />
+              <button type="button" class="btn btn-primary btn-sm set-search-go" data-for="mqSearch" title="입력한 단어로 목록을 걸러 봅니다 (Enter)">🔍 검색</button><button type="button" class="btn btn-outline btn-sm set-search-clear" data-for="mqSearch" title="검색어를 지우고 전체 목록을 봅니다">✕</button>
+            </div>
+            <span id="mqStats" class="qa-stats"></span>
+            <div class="qa-toolbar-right">
+              <button type="button" id="mqBtnRefresh" class="btn btn-outline btn-sm">🔄 새로고침</button>
+            </div>
+          </div>
+          <div class="tr-list-table-wrap settings-table-wrap">
+            <table class="tr-list-table">
+              <thead>
+                <tr>
+                  <th style="width: 140px;">수정일</th>
+                  <th>제목</th>
+                  <th style="width: 22%;">거래처</th>
+                  <th style="width: 110px;">서식</th>
+                  <th style="width: 120px;">합계</th>
+                  <th style="width: 190px;">관리</th>
+                </tr>
+              </thead>
+              <tbody id="mqListTbody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📝 새 견적 작성 창 (설정관리 위에 뜬다. 메일 발송 창은 이 창보다 뒤에 있어 그 위에 뜬다) -->
+  <div id="manualQuoteModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal modal-xl mq-modal" role="dialog" aria-labelledby="mqTitle">
+      <div class="modal-header">
+        <h3 id="mqTitle">📝 새 견적 만들기</h3>
+        <button type="button" class="modal-close btn-modal-close" id="mqClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body mq-body">
+        <div class="tr-toolbar mq-toolbar">
+          <div class="tr-toolbar-left">
+            <label class="mq-inline">서식
+              <select id="mqForm" class="tr-inp mq-select"></select>
+            </label>
+            <label class="mq-inline" title="끄면 견적서에 품목별 단가 · 금액을 비우고 합계만 남깁니다"><input type="checkbox" id="mqUnitPrice" checked /> 단가 표시</label>
+            <span id="mqStatusBadge" class="badge-status">새 견적</span>
+          </div>
+          <div class="tr-toolbar-right">
+            <button type="button" id="mqBtnNew" class="btn btn-outline btn-sm" title="지금 서식으로 빈 견적을 새로 씁니다">➕ 새로 작성</button>
+            <button type="button" id="mqBtnSave" class="btn btn-primary btn-sm">💾 저장하기</button>
+            <button type="button" id="mqBtnPreview" class="btn btn-accent btn-sm" title="고른 서식으로 만든 견적서를 이 창에서 미리 봅니다(PDF). 미리보기에서 인쇄할 수 있습니다">👁️ 미리보기</button>
+            <button type="button" id="mqBtnExcel" class="btn btn-outline btn-sm" title="Excel 파일로 받고 견적서 보관함에도 보관합니다">📥 Excel 다운로드</button>
+            <button type="button" id="mqBtnEmail" class="btn btn-outline btn-sm" title="견적서(Excel · PDF 선택)를 첨부한 메일 작성 창을 엽니다">✉️ 이메일</button>
+            <button type="button" id="mqBtnClose" class="btn-modal-close" title="견적 작성 창만 닫습니다 (Esc)">✕ 닫기</button>
+          </div>
+        </div>
+
+        <div id="mqEditPane">
+          <div class="mq-meta">
+            <label class="mq-meta-title">견적 제목 (모델 / 내용)
+              <input type="text" id="mqQuoteTitle" class="tr-inp" placeholder="예: 사무용 PC 3대 · 노트북 교체 견적" />
+            </label>
+            <label class="mq-meta-date">견적일
+              <input type="date" id="mqQuoteDate" class="tr-inp" />
+            </label>
+            <div class="mq-meta-customer">견적처: <strong id="mqCustomer">-</strong> <small>(⚙️ 설정관리 → 견적정보에서 바꿉니다)</small></div>
+          </div>
+          <table class="tr-table mq-table">
+            <thead>
+              <tr>
+                <th style="width: 5%;">No</th>
+                <th style="width: 15%;">구분</th>
+                <th>품명 / 상세 모델명</th>
+                <th style="width: 8%;">수량</th>
+                <th class="tr-col-cost" style="width: 13%;">단가 (원, VAT 포함)</th>
+                <th class="tr-col-cost" style="width: 13%;">금액 (원)</th>
+                <th class="tr-col-act" style="width: 7%;">
+                  <button type="button" id="mqBtnAddRow" class="btn btn-xs btn-outline" title="품목 행을 하나 더 추가합니다 (최대 20행)">＋ 행추가</button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="mqItemsTbody"></tbody>
+            <tfoot>
+              <tr class="tr-total-row">
+                <th colspan="5" style="text-align: center;">합계 금액 (부가세 포함)</th>
+                <td style="text-align: right; font-weight: bold;"><span id="mqTotal" class="tr-total-cost">0</span> 원</td>
+                <td class="tr-col-act"></td>
+              </tr>
+            </tfoot>
+          </table>
+          <p class="qa-hint">품명이 빈 행은 견적서에서 빠집니다. 견적서는 A4 한 장으로 맞추므로 품목은 최대 20행까지 넣을 수 있습니다. 마진 · 만원 올림은 적용하지 않고 적은 단가를 그대로 씁니다.</p>
+        </div>
+
+        <div id="mqPreviewPane" class="mq-preview hidden">
+          <div class="fg-detail-bar">
+            <button type="button" id="mqPreviewBack" class="btn btn-sm btn-outline">⬅ 편집으로</button>
+            <strong id="mqPreviewLabel"></strong>
+          </div>
+          <div id="mqPreviewView" class="mq-preview-view"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -909,6 +1014,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261031f"></script>
+  <script src="/static/js/app.js?v=20261031g"></script>
 </body>
 </html>

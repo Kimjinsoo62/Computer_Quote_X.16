@@ -1868,3 +1868,37 @@ html.calc-html body {
 .settings-info-form .modal-status { margin: 6px 0 0; }
 .settings-info-foot { display: flex; justify-content: flex-end; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .settings-info-foot #quoteInfoReset { margin-right: auto; }
+
+/* ---------- 📝 새 견적 만들기 ---------- */
+/* 설정관리 탭: 서식 8개를 한 줄로 보여 주고 고르게 한다 */
+.mq-pick-hint { margin: 0 0 6px; }
+.mq-form-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.mq-form-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px; cursor: pointer;
+  background: var(--card2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 1rem; font-weight: 700;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.mq-form-card img { width: 100%; aspect-ratio: 210 / 297; object-fit: cover; object-position: top; background: #fff; border-radius: 4px; }
+.mq-form-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+.mq-list-toolbar { margin-top: 4px; }
+/* 작성 창 */
+.mq-modal { max-width: 1280px; }
+.mq-body { display: flex; flex-direction: column; gap: 8px; }
+.mq-toolbar { top: -12px; } /* .modal-body 위 여백(12px)만큼 올려 스크롤해도 맨 위에 붙인다 */
+.mq-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.mq-inline input[type="checkbox"] { width: 16px; height: 16px; }
+.mq-select { width: auto; min-width: 150px; background: #fff; border: 1px solid #94a3b8; border-radius: 4px; }
+.mq-meta { display: grid; grid-template-columns: 1fr 170px auto; gap: 12px; align-items: end; }
+.mq-meta label { display: flex; flex-direction: column; gap: 3px; font-weight: 700; color: var(--text); }
+.mq-meta .tr-inp { background: #fff; border: 1px solid #94a3b8; border-radius: 4px; padding: 4px 8px; }
+.mq-meta-customer { padding-bottom: 6px; color: var(--text); }
+.mq-meta-customer small { color: var(--muted); }
+.mq-table .tr-inp { border-color: #e2e8f0; }
+.mq-table .mq-amount { font-weight: 700; color: #0f172a; }
+.mq-preview { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; }
+.mq-preview.hidden { display: none; }
+.mq-preview-view { flex: 1 1 auto; min-height: 60vh; background: #fff; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.mq-preview-view .fg-pdf { width: 100%; height: 100%; min-height: 60vh; border: 0; display: block; }

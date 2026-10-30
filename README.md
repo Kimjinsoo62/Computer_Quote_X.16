@@ -6,7 +6,8 @@
 
 ## 🆕 Ver XI.05 주요 변경
 
-1. **🖨️ 인쇄 후 [닫기] 안내** — 브라우저 인쇄 창에는 버튼을 넣을 수 없으므로, 작업내역서 [인쇄 / PDF 출력] 뒤 `afterprint` 이벤트에서 "인쇄 창이 닫혔습니다" 안내와 빨간 [✕ 닫기](작업내역서 창만 닫음) · [계속 작업]을 10초 동안 띄웁니다(`showTrAfterPrintNotice`, 인쇄물에는 안 찍힘).
+1. **📝 새 견적 만들기** — [⚙️ 설정관리]에 `📝 새 견적 만들기` 탭을 추가했습니다. 폼1~8 썸네일 중 하나를 고르면 빈 견적 작성 창(`#manualQuoteModal`)이 열리고, 구분 · 품명 · 수량 · 단가(부가세 포함, 최대 20행)를 직접 적어 `manual_quotes.json`에 저장 · 수정합니다(`app/manual_quote.py`, `GET/POST/DELETE /api/manual-quotes`). `to_result()`가 `TodayQuotesResult` 한 건으로 바꿔 `build_excel()`에 넘기므로 8종 서식이 그대로 쓰이며 마진 · 만원 올림은 없습니다. Excel · PDF 미리보기 · 보관함 · 메일 초안은 `POST /api/manual-quotes/excel`이 카드 견적과 같은 `_deliver_quote_excel()`(기존 `download_excel` 꼬리를 뽑아 낸 공용 함수)로 처리합니다.
+2. **🖨️ 인쇄 후 [닫기] 안내** — 브라우저 인쇄 창에는 버튼을 넣을 수 없으므로, 작업내역서 [인쇄 / PDF 출력] 뒤 `afterprint` 이벤트에서 "인쇄 창이 닫혔습니다" 안내와 빨간 [✕ 닫기](작업내역서 창만 닫음) · [계속 작업]을 10초 동안 띄웁니다(`showTrAfterPrintNotice`, 인쇄물에는 안 찍힘).
 
 ## Ver XI.04 주요 변경
 

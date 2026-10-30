@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 캐시 삭제만 | `.venv\Scripts\python.exe -c "from app.shutdown_service import clear_python_cache; clear_python_cache()"` |
 | 서식 썸네일 재생성 | `.venv\Scripts\python.exe tools\make_form_thumbnails.py` — 폼1~8 디자인을 고쳤을 때만. Excel(COM)이 필요하고 잠깐 Excel 창이 뜬다. 샘플 견적 + 기본(가짜) 견적처 정보로 `static/img/forms/formN.png`(목록용 480px)와 `formN_large.png`(크게 보기 1200px)를 만든다 |
 
-런타임 데이터 파일은 모두 `.gitignore`에 있다: `.excel_worker.pid`(미리보기용 상주 Excel PID), `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(예전 쿠팡 파트너스 API 키. 지금은 코드가 읽지 않는다 — `coupang_search.py`는 일반 쿠팡 검색 주소만 만든다. 남아 있어도 절대 커밋 금지), `quote_archive/`(견적서 보관함: 카드별 다운로드(`archive=1`)의 xlsx 사본 + `index.json`, `app/quote_archive.py`. 파일명은 `{거래처명}_{구분}_{모델}_…_{id}.xlsx`. 보관본은 `gallery=False`로 다시 만들어 서식 목록 시트를 뺀다), `customers.json`(거래처 목록, `app/customer_book.py`. [설정관리 → 견적정보] 탭의 생성·검색·삭제. 상호명 기준 upsert), `app_settings.json`(작업내역서·보관함 공용 백업 폴더, 견적 메일용 Gmail 계정 `mail_smtp` — 앱 비밀번호는 Windows DPAPI 로 암호화, `app/mail_send.py` — 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
+런타임 데이터 파일은 모두 `.gitignore`에 있다: `.excel_worker.pid`(미리보기용 상주 Excel PID), `quote_info.json`(견적처/공급자/계좌), `task_reports.json`(작업내역서 DB), `manual_quotes.json`(📝 새 견적 만들기로 직접 작성한 견적, `app/manual_quote.py`. 폼1~8 중 하나 + 품목(부가세 포함 단가, 최대 20행). `to_result()`가 `TodayQuotesResult` 한 건으로 바꿔 `build_excel()`에 넘기며 마진 · 올림 없음), `apple_catalog_cache.json`(Apple 스냅샷), `coupang_config.json`(예전 쿠팡 파트너스 API 키. 지금은 코드가 읽지 않는다 — `coupang_search.py`는 일반 쿠팡 검색 주소만 만든다. 남아 있어도 절대 커밋 금지), `quote_archive/`(견적서 보관함: 카드별 다운로드(`archive=1`)의 xlsx 사본 + `index.json`, `app/quote_archive.py`. 파일명은 `{거래처명}_{구분}_{모델}_…_{id}.xlsx`. 보관본은 `gallery=False`로 다시 만들어 서식 목록 시트를 뺀다), `customers.json`(거래처 목록, `app/customer_book.py`. [설정관리 → 견적정보] 탭의 생성·검색·삭제. 상호명 기준 upsert), `app_settings.json`(작업내역서·보관함 공용 백업 폴더, 견적 메일용 Gmail 계정 `mail_smtp` — 앱 비밀번호는 Windows DPAPI 로 암호화, `app/mail_send.py` — 등 모달 밖 설정. `quote_info.save_quote_info()`는 모달이 안 보낸 키를 기본값으로 되돌리므로 거기에 넣지 않는다).
 
 ## 아키텍처
 
@@ -73,7 +73,7 @@ Mac 계열(`MAC_TIER_PREFIXES`)은 공식몰 구성하기 API로 **실시간 CTO
 
 1. **버전 올리기는 정확히 5개 파일**: `README.md`(맨 위에 "Ver XI.NN 주요 변경" 절 추가), `app/main.py`의 `FastAPI(version=...)`, `app/daangn_search.py`의 `NOMINATIM_UA`, `templates/index.html`(`<title>`과 헤더 문구, 2곳), `templates/사용설명서.html`(제목 · 헤더 · 개요 · 변경 절 · 푸터). 커밋 메시지는 `chore: Bump version to XI.NN`. 프로젝트 폴더 이름(`Computer_Quote_XI.NN`, `rename_folder.bat`)도 버전을 따른다. 버전 체계는 X.42 다음부터 `XI.NN`(XI.01 부터)이다.
 2. **GitHub 저장소 이름은 `Computer_Quote_X.16`으로 고정**이다. `update_service.REPO_NAME`과 `update.bat :fixremote`가 X.16을 가리키는 것은 버그가 아니다. 버전을 올려도 바꾸지 않는다.
-3. **`CTO_BASE_ROW`는 `app/main.py`와 `static/js/app.js`에 중복 정의**돼 있고 반드시 동일해야 한다(양쪽 주석에 명시).
+3. **`CTO_BASE_ROW`는 `app/main.py`와 `static/js/app.js`에 중복 정의**돼 있고 반드시 동일해야 한다(양쪽 주석에 명시). 새 견적 만들기의 최대 품목 행 수도 `app/manual_quote.py`의 `MAX_ITEMS`와 `app.js`의 `MQ_MAX_ROWS`로 중복돼 있어 같이 바꾼다.
 4. **종료 시 자기 자신을 taskkill하지 않는다.** `shutdown_service.protected_pids()`로 자신과 부모를 제외하고, 자신은 `os._exit(0)`로만 끝낸다. 콘솔에 붙은 프로세스를 강제 종료하면 conhost가 크래시한다. 브라우저도 `--app=http://127.0.0.1:8090` 창과 `AI-PC-Quote-Calc` 프로필만 닫는다.
 5. **기능이 바뀌면 `templates/사용설명서.html`을 같이 갱신**한다(README의 버전 변경 절과 짝을 이룬다).
 6. Windows 전용이다. 서브프로세스는 PowerShell/`cmd`를 호출하며 `CREATE_NO_WINDOW`를 쓴다. POSIX 호환을 위한 리팩터링은 하지 않는다.

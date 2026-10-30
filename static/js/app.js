@@ -1023,6 +1023,11 @@ async function emailFormFromGallery(n) {
   } finally {
     hideBusy();
   }
+  openMailDraft(data);
+}
+
+/** 서버가 만든 메일 초안(email=1 응답)으로 발송 창을 채워 연다. 카드 견적 · 직접 만든 견적이 함께 쓴다. */
+function openMailDraft(data) {
   if (data.archive_id) loadQuoteArchive();
   mailDraftId = data.draft_id;
   $("#mailTo").value = data.to || "";
@@ -1662,6 +1667,12 @@ document.addEventListener("keydown", (e) => {
     hide(pwHelp);
     return;
   }
+  // 새 견적 작성 창: 위에 메일 발송 창이 떠 있으면 그대로 두고, 아니면 이 창만 닫는다(아래 설정관리는 그대로)
+  const mqOpen = mqModal && !mqModal.classList.contains("hidden");
+  if (mqOpen) {
+    if (mailModal.classList.contains("hidden")) closeMqEditor();
+    return;
+  }
   if (ctoModal && !ctoModal.classList.contains("hidden")) closeCtoModal();
   if (trModal && !trModal.classList.contains("hidden")) closeTrModal();
   else if (settingsModal && !settingsModal.classList.contains("hidden")) closeSettings();
@@ -1870,6 +1881,9 @@ function switchSettingsTab(tab) {
   } else if (tab === "taskreport") {
     loadTrReportsList();
     loadTrBackupDir();
+  } else if (tab === "manualquote") {
+    renderMqFormGrid();
+    loadMqList();
   }
 }
 
@@ -4034,12 +4048,344 @@ function runSettingsSearch(inputId, clear = false) {
 }
 document.querySelectorAll(".set-search-go").forEach((b) => b.addEventListener("click", () => runSettingsSearch(b.dataset.for)));
 document.querySelectorAll(".set-search-clear").forEach((b) => b.addEventListener("click", () => runSettingsSearch(b.dataset.for, true)));
-["custSearch", "qaSearch", "trSearchInput"].forEach((id) => {
+["custSearch", "qaSearch", "trSearchInput", "mqSearch"].forEach((id) => {
   document.getElementById(id)?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); runSettingsSearch(id); }
     else if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.stopPropagation(); runSettingsSearch(id, true); }
   });
 });
+// ---------- 📝 새 견적 만들기 (직접 작성 견적, app/manual_quote.py) ----------
+// 설정관리 [📝 새 견적 만들기] 탭에서 폼1~8 중 하나를 고르면 빈 견적 작성 창이 열린다.
+// 단가는 부가세 포함 금액 그대로 쓴다(마진 · 만원 올림 없음). Excel · PDF · 메일은 카드 견적과 같은 서버 코드를 쓴다.
+const mqModal = $("#manualQuoteModal");
+const MQ_MIN_ROWS = 5;
+const MQ_MAX_ROWS = 20; // 서버 manual_quote.MAX_ITEMS 와 같게
+let mqCurrentId = "";
+let mqList = [];
+let mqPreviewUrl = "";
+let mqPreviewSeq = 0;
+
+function mqDigits(v) {
+  return String(v ?? "").replace(/[^\d]/g, "");
+}
+
+function mqFmt(n) {
+  return (Number(n) || 0).toLocaleString("ko-KR");
+}
+
+/** 설정관리 탭의 서식 8개 고르기 칸 */
+function renderMqFormGrid() {
+  const grid = $("#mqFormGrid");
+  if (!grid || grid.childElementCount) return;
+  grid.innerHTML = Object.entries(EXCEL_FORM_LABELS).map(([n, label]) => `
+    <button type="button" class="mq-form-card" data-form="${n}" title="폼${n} (${label}) 서식으로 빈 견적을 만듭니다">
+      <img src="/static/img/forms/form${n}.png" alt="폼${n} ${label} 서식" loading="lazy" />
+      <span>폼${n} · ${label}</span>
+    </button>`).join("");
+  grid.querySelectorAll(".mq-form-card").forEach((b) =>
+    b.addEventListener("click", () => openMqEditor(null, Number(b.dataset.form))));
+}
+
+async function loadMqList() {
+  try {
+    const res = await fetch("/api/manual-quotes");
+    const data = await res.json();
+    mqList = data.quotes || [];
+  } catch (_) {
+    mqList = [];
+  }
+  renderMqList();
+}
+
+function renderMqList() {
+  const tbody = $("#mqListTbody");
+  const badge = $("#mqListCount");
+  if (badge) {
+    badge.textContent = mqList.length;
+    badge.classList.toggle("hidden", !mqList.length);
+  }
+  if (!tbody) return;
+  const q = ($("#mqSearch")?.value || "").trim().toLowerCase();
+  const rows = mqList.filter((r) => !q || `${r.title} ${r.customer}`.toLowerCase().includes(q));
+  const stats = $("#mqStats");
+  if (stats) stats.textContent = q ? `${rows.length} / ${mqList.length}건` : `${mqList.length}건`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:32px; color:var(--muted);">${mqList.length ? "검색 결과가 없습니다." : "저장된 견적이 없습니다. 위에서 서식을 골라 새 견적을 만드세요."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml((r.updated_at || r.created_at || "").slice(0, 16))}</td>
+      <td>${escapeHtml(r.title || "(제목 없음)")}</td>
+      <td>${escapeHtml(r.customer || "-")}</td>
+      <td>폼${r.form} ${escapeHtml(EXCEL_FORM_LABELS[r.form] || "")}</td>
+      <td style="text-align:right; font-weight:700;">${mqFmt(r.total)} 원</td>
+      <td>
+        <div class="tr-list-actions">
+          <button type="button" class="btn btn-xs btn-primary" data-mq-open="${r.id}">📂 열기</button>
+          <button type="button" class="btn btn-xs btn-outline" data-mq-excel="${r.id}">📥 Excel</button>
+          <button type="button" class="btn btn-xs btn-shutdown" data-mq-del="${r.id}">✕ 삭제</button>
+        </div>
+      </td>
+    </tr>`).join("");
+  tbody.querySelectorAll("[data-mq-open]").forEach((b) => b.addEventListener("click", () => {
+    const rec = mqList.find((r) => r.id === b.dataset.mqOpen);
+    if (rec) openMqEditor(rec);
+  }));
+  tbody.querySelectorAll("[data-mq-excel]").forEach((b) => b.addEventListener("click", () => {
+    const rec = mqList.find((r) => r.id === b.dataset.mqExcel);
+    if (rec) downloadMqExcel(rec);
+  }));
+  tbody.querySelectorAll("[data-mq-del]").forEach((b) => b.addEventListener("click", () => deleteMq(b.dataset.mqDel)));
+}
+
+async function deleteMq(id) {
+  const rec = mqList.find((r) => r.id === id);
+  if (!confirm(`저장된 견적을 삭제할까요?\n${rec?.title || "(제목 없음)"}\n(견적서 보관함에 받아 둔 Excel 파일은 그대로 남습니다)`)) return;
+  const res = await fetch(`/api/manual-quotes/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
+  if (!res || !res.ok) {
+    alert("삭제하지 못했습니다.");
+    return;
+  }
+  if (mqCurrentId === id) mqCurrentId = "";
+  loadMqList();
+}
+
+// ----- 작성 창 -----
+function renderMqRows(items = []) {
+  const tbody = $("#mqItemsTbody");
+  if (!tbody) return;
+  const rows = items.map((it) => ({ ...it }));
+  while (rows.length < MQ_MIN_ROWS) rows.push({ category: "", name: "", qty: 1, unit_price: 0 });
+  tbody.innerHTML = "";
+  rows.slice(0, MQ_MAX_ROWS).forEach((it, idx) => {
+    const tr = document.createElement("tr");
+    tr.className = "mq-row";
+    tr.innerHTML = `
+      <td style="text-align:center;">${idx + 1}</td>
+      <td><input type="text" class="tr-inp mq-cat" value="${escapeHtml(it.category || "")}" placeholder="예: 본체" /></td>
+      <td><input type="text" class="tr-inp mq-name" value="${escapeHtml(it.name || "")}" placeholder="품명 / 상세 모델명" /></td>
+      <td><input type="text" inputmode="numeric" class="tr-inp mq-qty" style="text-align:center;" value="${it.name || it.unit_price ? (it.qty || 1) : ""}" placeholder="1" /></td>
+      <td class="tr-col-cost"><input type="text" inputmode="numeric" class="tr-inp mq-price" style="text-align:right;" value="${it.unit_price ? mqFmt(it.unit_price) : ""}" placeholder="0" /></td>
+      <td class="tr-col-cost mq-amount" style="text-align:right;">0</td>
+      <td class="tr-col-act"><button type="button" class="tr-task-del-btn" title="이 행 삭제">✕</button></td>`;
+    tr.querySelector(".mq-price").addEventListener("input", (e) => formatTrCostInput(e.target)); // 콤마 + calcTrTotal(무해)
+    tr.querySelector(".mq-price").addEventListener("input", calcMqTotal);
+    tr.querySelector(".mq-qty").addEventListener("input", (e) => {
+      e.target.value = mqDigits(e.target.value).slice(0, 4);
+      calcMqTotal();
+    });
+    tr.querySelector(".tr-task-del-btn").addEventListener("click", () => {
+      const cur = getMqItems({ keepEmpty: true });
+      cur.splice(idx, 1);
+      renderMqRows(cur);
+    });
+    tbody.appendChild(tr);
+  });
+  const addBtn = $("#mqBtnAddRow");
+  if (addBtn) addBtn.disabled = rows.length >= MQ_MAX_ROWS;
+  calcMqTotal();
+}
+
+function getMqItems({ keepEmpty = false } = {}) {
+  const items = [...document.querySelectorAll("#mqItemsTbody .mq-row")].map((tr) => ({
+    category: tr.querySelector(".mq-cat").value.trim(),
+    name: tr.querySelector(".mq-name").value.trim(),
+    qty: Math.max(1, Number(mqDigits(tr.querySelector(".mq-qty").value)) || 1),
+    unit_price: Number(mqDigits(tr.querySelector(".mq-price").value)) || 0,
+  }));
+  return keepEmpty ? items : items.filter((it) => it.name);
+}
+
+function calcMqTotal() {
+  let total = 0;
+  document.querySelectorAll("#mqItemsTbody .mq-row").forEach((tr) => {
+    const qty = Math.max(1, Number(mqDigits(tr.querySelector(".mq-qty").value)) || 1);
+    const price = Number(mqDigits(tr.querySelector(".mq-price").value)) || 0;
+    const named = tr.querySelector(".mq-name").value.trim();
+    const amount = named || price ? qty * price : 0;
+    tr.querySelector(".mq-amount").textContent = mqFmt(amount);
+    if (named) total += amount;
+  });
+  $("#mqTotal").textContent = mqFmt(total);
+  return total;
+}
+
+function getMqPayloadQuote() {
+  return {
+    id: mqCurrentId,
+    form: Number($("#mqForm").value) || 1,
+    title: $("#mqQuoteTitle").value.trim(),
+    quote_date: $("#mqQuoteDate").value,
+    items: getMqItems(),
+  };
+}
+
+function syncMqHeader() {
+  const n = Number($("#mqForm")?.value) || 1;
+  $("#mqTitle").textContent = `📝 새 견적 만들기 — 폼${n} (${EXCEL_FORM_LABELS[n]})`;
+  const badge = $("#mqStatusBadge");
+  if (badge) badge.textContent = mqCurrentId ? "저장된 견적 수정 중" : "새 견적";
+  $("#mqCustomer").textContent = (quoteInfo?.customer_name || "").trim() || "(견적처 미지정)";
+}
+
+/** rec 이 있으면 저장된 견적을 열고, 없으면 form 서식으로 빈 견적을 연다. */
+function openMqEditor(rec, form = 1) {
+  const sel = $("#mqForm");
+  if (sel && !sel.childElementCount) {
+    sel.innerHTML = Object.entries(EXCEL_FORM_LABELS).map(([n, l]) => `<option value="${n}">폼${n} · ${l}</option>`).join("");
+  }
+  mqCurrentId = rec?.id || "";
+  sel.value = String(rec?.form || form || 1);
+  $("#mqQuoteTitle").value = rec?.title || "";
+  $("#mqQuoteDate").value = rec?.quote_date || new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD (로컬 날짜)
+  $("#mqUnitPrice").checked = showUnitPrices;
+  renderMqRows(rec?.items || []);
+  showMqEdit();
+  syncMqHeader();
+  show(mqModal);
+  $("#mqQuoteTitle").focus();
+}
+
+function closeMqEditor() {
+  mqPreviewSeq += 1;
+  hide(mqModal);
+}
+
+async function saveMq() {
+  const quote = getMqPayloadQuote();
+  if (!quote.items.length) {
+    alert("품목을 한 줄 이상 입력하세요(품명이 빈 줄은 저장되지 않습니다).");
+    return;
+  }
+  showBusy("견적 저장 중…");
+  try {
+    const res = await postJsonRaw("/api/manual-quotes", quote);
+    if (!res.ok) throw new Error(res.data?.detail || `저장 실패 (${res.status})`);
+    mqCurrentId = res.data.quote.id;
+    syncMqHeader();
+    loadMqList();
+  } catch (e) {
+    alert("저장 오류: " + e.message);
+    return;
+  } finally {
+    hideBusy();
+  }
+  alert("✔ 견적을 저장했습니다. ⚙️ 설정관리 → 📝 새 견적 만들기 목록에서 다시 열 수 있습니다.");
+}
+
+function mqExcelBody(quote, extra = {}) {
+  return JSON.stringify({ quote, unitprice: $("#mqUnitPrice")?.checked === false ? 0 : 1, ...extra });
+}
+
+async function downloadMqExcel(rec) {
+  const quote = rec || getMqPayloadQuote();
+  if (!quote.items?.length) {
+    alert("품목을 한 줄 이상 입력하세요.");
+    return;
+  }
+  const n = quote.form || 1;
+  await downloadWithBusy("/api/manual-quotes/excel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: mqExcelBody(quote, { archive: 1 }),
+  }, `견적서_폼${n}.xlsx`, `폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 생성 중…`);
+}
+
+async function emailMq() {
+  const quote = getMqPayloadQuote();
+  if (!quote.items.length) {
+    alert("품목을 한 줄 이상 입력하세요.");
+    return;
+  }
+  showBusy("견적서를 첨부한 메일 준비 중…");
+  let data;
+  try {
+    const res = await fetch("/api/manual-quotes/excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: mqExcelBody(quote, { email: 1, archive: 1 }),
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `메일 준비 실패 (${res.status})`);
+  } catch (e) {
+    alert("이메일 오류: " + e.message);
+    return;
+  } finally {
+    hideBusy();
+  }
+  openMailDraft(data);
+}
+
+function showMqEdit() {
+  mqPreviewSeq += 1;
+  show($("#mqEditPane"));
+  hide($("#mqPreviewPane"));
+}
+
+/** 고른 서식으로 만든 견적서 PDF 를 이 창 안에 띄운다(새 창을 열지 않는다). */
+async function previewMq() {
+  const quote = getMqPayloadQuote();
+  if (!quote.items.length) {
+    alert("품목을 한 줄 이상 입력하세요.");
+    return;
+  }
+  const seq = ++mqPreviewSeq;
+  const n = quote.form;
+  $("#mqPreviewLabel").textContent = `폼${n} (${EXCEL_FORM_LABELS[n]}) 미리보기 — 인쇄는 미리보기 안의 🖨️ 버튼으로 합니다`;
+  const view = $("#mqPreviewView");
+  view.innerHTML = `<div class="fg-detail-msg">⏳ 견적서를 만드는 중… (Excel → PDF)</div>`;
+  hide($("#mqEditPane"));
+  show($("#mqPreviewPane"));
+  showBusy(`폼${n} ${EXCEL_FORM_LABELS[n]} 견적서 미리보기 만드는 중…`);
+  try {
+    const res = await fetch("/api/manual-quotes/excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: mqExcelBody(quote, { pdf: 1 }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `미리보기 실패 (${res.status})`);
+    }
+    const blob = await res.blob();
+    if (seq !== mqPreviewSeq) return; // 그 사이 편집으로 돌아갔거나 창을 닫았다
+    if (mqPreviewUrl) URL.revokeObjectURL(mqPreviewUrl);
+    mqPreviewUrl = URL.createObjectURL(blob);
+    view.innerHTML = `<iframe class="fg-pdf" src="${mqPreviewUrl}#view=FitH" title="견적서 미리보기"></iframe>`;
+  } catch (e) {
+    if (seq === mqPreviewSeq) {
+      view.innerHTML = `<div class="fg-detail-msg fg-detail-err">⚠️ 미리보기를 만들지 못했습니다: ${escapeHtml(e.message)}<br>📥 Excel 다운로드 · ✉️ 이메일은 그대로 쓸 수 있습니다.</div>`;
+    }
+  } finally {
+    hideBusy();
+  }
+}
+
+$("#mqForm")?.addEventListener("change", () => { syncMqHeader(); showMqEdit(); });
+$("#mqBtnAddRow")?.addEventListener("click", () => {
+  const cur = getMqItems({ keepEmpty: true });
+  if (cur.length >= MQ_MAX_ROWS) return;
+  cur.push({ category: "", name: "", qty: 1, unit_price: 0 });
+  renderMqRows(cur);
+});
+$("#mqBtnNew")?.addEventListener("click", () => {
+  if (confirm("지금 서식으로 빈 견적을 새로 쓸까요? (저장하지 않은 내용은 지워집니다)")) openMqEditor(null, Number($("#mqForm").value));
+});
+$("#mqBtnSave")?.addEventListener("click", saveMq);
+$("#mqBtnPreview")?.addEventListener("click", previewMq);
+$("#mqPreviewBack")?.addEventListener("click", showMqEdit);
+$("#mqBtnExcel")?.addEventListener("click", () => downloadMqExcel());
+$("#mqBtnEmail")?.addEventListener("click", emailMq);
+$("#mqClose")?.addEventListener("click", closeMqEditor);
+$("#mqBtnClose")?.addEventListener("click", closeMqEditor);
+$("#mqBtnRefresh")?.addEventListener("click", loadMqList);
+$("#mqSearch")?.addEventListener("input", renderMqList);
+mqModal?.addEventListener("click", (e) => {
+  if (e.target === mqModal) closeMqEditor();
+});
+loadMqList(); // 탭의 건수 표시
+
 // ---------- 독립 창 계산기 ----------
 const CALC_POPUP_NAME = "quoteCalcPopup";
 const CALC_POPUP_W = 280;

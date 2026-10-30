@@ -49,7 +49,7 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
-from app import customer_book, mail_send, pdf_export, quote_archive
+from app import customer_book, mail_send, manual_quote, pdf_export, quote_archive
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
@@ -847,7 +847,6 @@ def download_excel(
     if selected_forms:
         kr_label += "_" + "_".join(f"폼{n}{FORM_LABELS[n]}" for n in selected_forms)
         form_tag = "_form" + "-".join(str(n) for n in selected_forms)
-    single_title = SINGLE_SHEET_TITLE if len(selected_forms) == 1 else ""
     # 같은 카드 · 같은 서식 · 같은 견적정보면 PDF 를 다시 만들지 않는다(썸네일 → 크게 보기 → 메일 PDF 첨부 재사용)
     base_key = [
         sorted(
@@ -859,6 +858,55 @@ def download_excel(
         [picked.model, picked.total, [asdict(p) for p in picked.parts]],
     ]
 
+    return _deliver_quote_excel(
+        result,
+        picked,
+        selected_forms=selected_forms,
+        hide_prices=hide_prices,
+        kind_label=kind_label,
+        ascii_name=f"quote_{cat}_{index}{form_tag}_{result.quote_date}.xlsx",
+        display_name=f"{kr_label}_{result.quote_date}.xlsx",
+        base_key=base_key,
+        archive_meta={
+            "kind": "card",
+            "category": cat,
+            "margin": None if is_apple else margin_pct,
+        },
+        mail_model=model_head or picked.model or "",
+        archive=archive,
+        email=email,
+        pdf=pdf,
+        thumb=thumb,
+    )
+
+
+def _deliver_quote_excel(
+    result,
+    picked,
+    *,
+    selected_forms: list[int],
+    hide_prices: bool,
+    kind_label: str,
+    ascii_name: str,
+    display_name: str,
+    base_key: list,
+    archive_meta: dict,
+    mail_model: str,
+    archive: int = 0,
+    email: int = 0,
+    pdf: int = 0,
+    thumb: int = 0,
+    quote_date: str = "",
+):
+    """견적 한 건(result.quotes == [picked])을 Excel 로 만들어 파일 · PDF · 썸네일 · 보관 · 메일 초안 중 하나로 돌려준다.
+
+    카드 견적(/api/download/excel)과 직접 만든 견적(/api/manual-quotes/excel)이 함께 쓴다.
+    base_key 는 같은 견적 · 같은 견적정보면 PDF 를 다시 만들지 않게 하는 캐시 키의 바탕이다.
+    quote_date 를 주면(직접 만든 견적) 견적정보의 견적 기준일 대신 그 날짜가 견적서에 들어간다.
+    """
+    info = load_quote_info()
+    single_title = SINGLE_SHEET_TITLE if len(selected_forms) == 1 else ""
+
     def _pdf_key(form_list) -> str:
         return json.dumps([*base_key, list(form_list)], ensure_ascii=False, sort_keys=True, default=str)
 
@@ -869,11 +917,10 @@ def download_excel(
             quote_kind_label=kind_label,
             forms=selected_forms or None,
             single_sheet_title=single_title,
+            quote_date=quote_date,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    ascii_name = f"quote_{cat}_{index}{form_tag}_{result.quote_date}.xlsx"
-    display_name = f"{kr_label}_{result.quote_date}.xlsx"
     utf_name = quote(display_name)
     headers = {
         "Content-Disposition": (
@@ -917,21 +964,20 @@ def download_excel(
                 hide_unit_prices=hide_prices,
                 quote_kind_label=kind_label,
                 gallery=False,
+                quote_date=quote_date,
             ).getvalue()
         entry = quote_archive.add_entry(
             archive_bytes,
             filename=display_name,
             meta={
-                "kind": "card",
-                "category": cat,
                 "model": picked.model or "",
                 "tab_label": picked.tab_label or picked.tier or "",
                 "quotes": 1,
                 "forms": selected_forms,
-                "margin": None if is_apple else margin_pct,
                 "total": picked.total,
                 "customer": (info.get("customer_name") or "").strip(),
                 "quote_date": result.quote_date,
+                **archive_meta,
             },
         )
         headers["X-Archive-Id"] = entry["id"]
@@ -946,7 +992,7 @@ def download_excel(
             "pdf_available": pdf_export.excel_available(),
             "account": mail_send.get_account(),
             "archive_id": headers.get("X-Archive-Id", ""),
-            **mail_send.compose_fields(info, model_head or picked.model or "", picked.total, result.quote_date),
+            **mail_send.compose_fields(info, mail_model, picked.total, result.quote_date),
         }
     return Response(
         content=buf.getvalue(),
@@ -1181,6 +1227,68 @@ def api_delete_task_report(report_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="작업내역서를 찾을 수 없습니다.")
     return {"status": "ok", "message": "삭제되었습니다."}
+
+
+# ---------------------------------------------------------------------------
+# 📝 새 견적 만들기 (직접 작성 견적, app/manual_quote.py)
+# ---------------------------------------------------------------------------
+@app.get("/api/manual-quotes")
+def api_get_manual_quotes():
+    return {"quotes": manual_quote.load_manual_quotes()}
+
+
+@app.post("/api/manual-quotes")
+def api_save_manual_quote(data: dict = Body(...)):
+    """id 가 있으면 수정, 없으면 새로 저장."""
+    return {"status": "ok", "quote": manual_quote.save_manual_quote(data)}
+
+
+@app.delete("/api/manual-quotes/{quote_id}")
+def api_delete_manual_quote(quote_id: str):
+    if not manual_quote.delete_manual_quote(quote_id):
+        raise HTTPException(status_code=404, detail="저장된 견적을 찾을 수 없습니다.")
+    return {"status": "ok"}
+
+
+@app.post("/api/manual-quotes/excel")
+def api_manual_quote_excel(payload: dict = Body(...)):
+    """작성 중인 직접 견적(payload.quote)을 고른 서식(payload.form) 하나로 내보낸다.
+
+    unitprice=0 이면 단가 미표시, archive=1 이면 견적서 보관함에도 저장, email=1 이면 메일 초안,
+    pdf=1 이면 PDF 미리보기. 마진 · 만원 올림은 적용하지 않는다(입력한 부가세 포함 단가 그대로).
+    """
+    record = manual_quote.clean_record(payload.get("quote") or {})
+    form = record["form"]
+    hide_prices = not bool(payload.get("unitprice", 1))
+    try:
+        result = manual_quote.to_result(record)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    picked = result.quotes[0]
+    info = load_quote_info()
+    customer_name = quote_archive.safe_filename_part(info.get("customer_name") or "", 40) or "거래처미지정"
+    title = quote_archive.safe_filename_part(record["title"], 40)
+    name_parts = [p for p in (customer_name, manual_quote.TAB_LABEL, title) if p]
+    kr_label = "_".join(name_parts) + f"_폼{form}{FORM_LABELS[form]}"
+    if hide_prices:
+        kr_label += "_단가미표시"
+    return _deliver_quote_excel(
+        result,
+        picked,
+        selected_forms=[form],
+        hide_prices=hide_prices,
+        kind_label="",
+        ascii_name=f"quote_manual_form{form}_{result.quote_date}.xlsx",
+        display_name=f"{kr_label}_{result.quote_date}.xlsx",
+        # 같은 품목 · 같은 서식 · 같은 견적정보면 미리보기 PDF 를 다시 만들지 않는다
+        base_key=["manual", hide_prices, info, record],
+        archive_meta={"kind": "manual", "category": "manual", "margin": None},
+        mail_model=record["title"] or picked.model,
+        archive=int(bool(payload.get("archive"))),
+        email=int(bool(payload.get("email"))),
+        pdf=int(bool(payload.get("pdf"))),
+        quote_date=record["quote_date"],
+    )
 
 
 @app.post("/api/task-reports/download/excel")

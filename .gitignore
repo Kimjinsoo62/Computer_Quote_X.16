@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 quote_info.json
 task_reports.json
+manual_quotes.json
 app_settings.json
 quote_archive/
 .excel_worker.pid

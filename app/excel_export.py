@@ -583,6 +583,7 @@ def build_excel(
     forms: list[int] | None = None,
     single_sheet_title: str = "",
     gallery: bool = True,
+    quote_date: str = "",
 ) -> BytesIO:
     """hide_unit_prices=True 면 품목별 단가·금액을 비우고 합계만 남긴다.
 
@@ -598,7 +599,8 @@ def build_excel(
 
     # 저장된 견적처/공급자 정보 (모든 폼 시트에 적용)
     info = load_quote_info()
-    quote_date = info["quote_date"] or result.quote_date
+    # 견적일: 직접 만든 견적은 작성 창의 날짜(quote_date 인자)가 우선, 그 밖은 견적정보의 견적 기준일 → 수집일
+    quote_date = quote_date or info["quote_date"] or result.quote_date
 
     wb = Workbook()
     wb.remove(wb.active)
