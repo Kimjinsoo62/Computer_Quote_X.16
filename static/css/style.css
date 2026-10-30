@@ -988,7 +988,12 @@ a:hover { text-decoration: underline; }
   align-items: center;
   margin-bottom: 6px;
   padding: 4px 10px;
-  background: rgba(15, 23, 42, 0.7);
+  /* 내역서를 아래로 스크롤해도 도구줄(저장 · 인쇄 · 닫기)은 위에 고정. 뒤 내용이 비치지 않게 불투명 배경 */
+  position: sticky;
+  top: -8px; /* .tr-modal-body 위 여백(8px)만큼 올려 맨 위에 붙인다 */
+  z-index: 5;
+  background: #0f172a;
+  box-shadow: 0 6px 10px -4px rgba(0, 0, 0, 0.6);
   border: 1px solid var(--border);
   border-radius: 8px;
   flex-wrap: wrap;
