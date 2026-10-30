@@ -3333,6 +3333,32 @@ function getTrTasksFromForm({ keepEmpty = false } = {}) {
   return tasks;
 }
 
+/** 보증 기간: 1 · 3 · 6개월 중 고르거나 ( N 개월) 에 직접 적는다. 저장 값은 예전처럼 "N개월" 글자. */
+const TR_WARRANTY_PRESETS = ["1개월", "3개월", "6개월"];
+
+function getTrWarranty() {
+  const picked = document.querySelector('input[name="trWarranty"]:checked')?.value || "3개월";
+  if (picked !== "custom") return picked;
+  const v = ($("#trWarrantyCustom")?.value || "").trim();
+  if (!v) return "3개월";
+  return /^\d+$/.test(v) ? `${v}개월` : v; // "1년" 처럼 숫자가 아니면 적은 그대로
+}
+
+function setTrWarranty(value) {
+  const v = String(value || "3개월").trim();
+  const custom = $("#trWarrantyCustom");
+  const isPreset = TR_WARRANTY_PRESETS.includes(v);
+  const radio = document.querySelector(`input[name="trWarranty"][value="${isPreset ? v : "custom"}"]`);
+  if (radio) radio.checked = true;
+  if (custom) custom.value = isPreset ? "" : (v.match(/^(\d+)\s*개월$/)?.[1] ?? v);
+}
+
+// ( N 개월) 칸에 적으면 그 항목이 저절로 선택된다
+$("#trWarrantyCustom")?.addEventListener("input", () => {
+  const r = document.querySelector('input[name="trWarranty"][value="custom"]');
+  if (r) r.checked = true;
+});
+
 /** 비용 칸: 입력하는 동안 숫자만 남기고 천 단위 콤마를 넣는다(커서는 뒤에서부터 같은 숫자 위치에 둔다). */
 window.formatTrCostInput = function(inp) {
   const pos = inp.selectionStart ?? inp.value.length;
@@ -3387,7 +3413,7 @@ function getTrFormData() {
   const status = document.querySelector('input[name="trStatus"]:checked')?.value || "완료";
   const expectedDate = $("#trExpectedDate")?.value || receiptDate;
   const technician = $("#trTechnician")?.value.trim() || "김대건";
-  const warrantyPeriod = $("#trWarrantyPeriod")?.value.trim() || "3개월";
+  const warrantyPeriod = getTrWarranty();
 
   const customerSign = $("#trSignTextCust")?.value.trim() || "";
   const technicianSign = $("#trSignTextTech")?.value.trim() || "";
@@ -3524,7 +3550,7 @@ function fillTrForm(data) {
 
   if ($("#trExpectedDate")) $("#trExpectedDate").value = data?.expected_date || todayStr;
   if ($("#trTechnician")) $("#trTechnician").value = data?.technician || "김대건";
-  if ($("#trWarrantyPeriod")) $("#trWarrantyPeriod").value = data?.warranty_period || "3개월";
+  setTrWarranty(data?.warranty_period || "3개월");
 
   if ($("#trSignTextCust")) $("#trSignTextCust").value = data?.customer_sign || "";
   if ($("#trSignTextTech")) $("#trSignTextTech").value = data?.technician_sign || "";

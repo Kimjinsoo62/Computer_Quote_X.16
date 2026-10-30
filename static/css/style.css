@@ -1245,6 +1245,8 @@ a:hover { text-decoration: underline; }
 .tr-table .tr-col-act { text-align: center; padding: 1px 3px; }
 /* 비용: 천만 원 단위(99,999,999)까지 잘리지 않는 폭 */
 .tr-table .tr-col-cost { min-width: 12ch; white-space: nowrap; }
+.tr-warranty-group { gap: 10px; }
+.tr-warranty-group .tr-warranty-custom { width: 4em; text-align: center; border-bottom: 1px solid #94a3b8; }
 .btn-xs { padding: 1px 6px; font-size: 0.95rem; white-space: nowrap; }
 /* 표 머리글은 밝은 배경이라 어두운 글자·테두리로 보이게 한다 */
 .tr-table .tr-col-act .btn-outline { color: #1e3a8a; border-color: #64748b; background: #ffffff; }
@@ -1289,20 +1291,12 @@ a:hover { text-decoration: underline; }
 .tr-sign-canvas {
   display: block;
   width: 100%;
-  height: 48px;
+  height: 80px;
   touch-action: none;
   border: 1px dashed #cbd5e1;
   border-radius: 3px;
   background: #ffffff;
   cursor: crosshair;
-}
-.tr-inp-sign-text {
-  width: 100%;
-  margin-top: 4px;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 1rem;
 }
 
 /* ?�의?�항 */

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261031a" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20261031b" />
 </head>
 <body>
   <nav class="nav">
@@ -847,7 +847,14 @@
                   <th>담당 기술자</th>
                   <td><input type="text" id="trTechnician" class="tr-inp" value="김대건" placeholder="담당 기사명" /></td>
                   <th>보증 기간</th>
-                  <td><input type="text" id="trWarrantyPeriod" class="tr-inp" value="3개월" /></td>
+                  <td>
+                    <div class="tr-radio-group tr-warranty-group">
+                      <label><input type="radio" name="trWarranty" value="1개월" /> 1개월</label>
+                      <label><input type="radio" name="trWarranty" value="3개월" checked /> 3개월</label>
+                      <label><input type="radio" name="trWarranty" value="6개월" /> 6개월</label>
+                      <label title="직접 입력 (예: 12)"><input type="radio" name="trWarranty" value="custom" /> (<input type="text" id="trWarrantyCustom" class="tr-inp tr-inp-inline tr-warranty-custom" inputmode="numeric" /> 개월)</label>
+                    </div>
+                  </td>
                 </tr>
               </table>
             </div>
@@ -861,16 +868,17 @@
                     <span>고객 서명 (또는 인)</span>
                     <button type="button" class="btn-clear-sign no-print" onclick="clearSignCanvas('cust')">지우기</button>
                   </div>
-                  <canvas id="trSignCanvasCust" class="tr-sign-canvas" width="280" height="48"></canvas>
-                  <input type="text" id="trSignTextCust" class="tr-inp-sign-text" placeholder="서명 입력 또는 위 캔버스 서명" />
+                  <canvas id="trSignCanvasCust" class="tr-sign-canvas" width="280" height="80"></canvas>
+                  <!-- 예전에 글자로 저장한 서명은 화면에 안 보이게 그대로 보존(저장 · Excel 용) -->
+                  <input type="hidden" id="trSignTextCust" />
                 </div>
                 <div class="tr-sign-card">
                   <div class="tr-sign-header">
                     <span>담당자 서명 (또는 인)</span>
                     <button type="button" class="btn-clear-sign no-print" onclick="clearSignCanvas('tech')">지우기</button>
                   </div>
-                  <canvas id="trSignCanvasTech" class="tr-sign-canvas" width="280" height="48"></canvas>
-                  <input type="text" id="trSignTextTech" class="tr-inp-sign-text" placeholder="담당자 서명 입력" />
+                  <canvas id="trSignCanvasTech" class="tr-sign-canvas" width="280" height="80"></canvas>
+                  <input type="hidden" id="trSignTextTech" />
                 </div>
               </div>
             </div>
@@ -902,6 +910,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261030b"></script>
+  <script src="/static/js/app.js?v=20261031b"></script>
 </body>
 </html>
