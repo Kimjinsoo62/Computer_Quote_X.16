@@ -20,6 +20,9 @@ DATA_FILE = Path(__file__).resolve().parent.parent / "manual_quotes.json"
 TAB_LABEL = "직접견적"
 # 폼 시트는 A4 세로 1페이지로 강제되므로 행이 너무 많으면 글자가 읽기 어려울 만큼 줄어든다.
 MAX_ITEMS = 20
+# 견적서 품목 표의 최소 행 수. 품목이 한두 개여도 표 · 여백이 그대로 남아 견적서 모양이 유지된다(빈 행은 서식 모양 그대로).
+# 입력 상한과 같게 두면 품목 수와 상관없이 늘 같은 크기의 견적서가 된다(20행이어도 폼1~8 모두 A4 한 장).
+MIN_ITEM_ROWS = MAX_ITEMS
 FORM_NUMBERS = range(1, 9)
 # 견적마다 따로 두는 견적처(거래처) 정보. 비어 있으면(예전 저장본) 견적정보(quote_info.json)의 견적처를 쓴다.
 CUSTOMER_FIELDS = ("name", "manager", "phone", "email", "address")

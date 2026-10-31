@@ -910,6 +910,7 @@ def _deliver_quote_excel(
     thumb: int = 0,
     quote_date: str = "",
     info_override: dict | None = None,
+    min_item_rows: int = 0,
 ):
     """견적 한 건(result.quotes == [picked])을 Excel 로 만들어 파일 · PDF · 썸네일 · 보관 · 메일 초안 중 하나로 돌려준다.
 
@@ -917,6 +918,7 @@ def _deliver_quote_excel(
     base_key 는 같은 견적 · 같은 견적정보면 PDF 를 다시 만들지 않게 하는 캐시 키의 바탕이다.
     quote_date 를 주면(직접 만든 견적) 견적정보의 견적 기준일 대신 그 날짜가 견적서에 들어간다.
     info_override 를 주면(직접 만든 견적의 견적처) 견적서 · 보관함 · 메일 받는 사람이 그 값을 쓴다.
+    min_item_rows 를 주면(직접 만든 견적) 품목 표를 그 행 수까지 빈 행으로 채워 견적서 모양을 유지한다.
     """
     info = {**load_quote_info(), **(info_override or {})}
     single_title = SINGLE_SHEET_TITLE if len(selected_forms) == 1 else ""
@@ -933,6 +935,7 @@ def _deliver_quote_excel(
             single_sheet_title=single_title,
             quote_date=quote_date,
             info_override=info_override,
+            min_item_rows=min_item_rows,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -981,6 +984,7 @@ def _deliver_quote_excel(
                 gallery=False,
                 quote_date=quote_date,
                 info_override=info_override,
+                min_item_rows=min_item_rows,
             ).getvalue()
         entry = quote_archive.add_entry(
             archive_bytes,
@@ -1310,6 +1314,7 @@ def api_manual_quote_excel(payload: dict = Body(...)):
         pdf=int(bool(payload.get("pdf"))),
         quote_date=record["quote_date"],
         info_override=override,
+        min_item_rows=manual_quote.MIN_ITEM_ROWS,
     )
 
 

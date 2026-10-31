@@ -585,6 +585,7 @@ def build_excel(
     gallery: bool = True,
     quote_date: str = "",
     info_override: dict | None = None,
+    min_item_rows: int = 0,
 ) -> BytesIO:
     """hide_unit_prices=True 면 품목별 단가·금액을 비우고 합계만 남긴다.
 
@@ -592,12 +593,18 @@ def build_excel(
     single_sheet_title 은 시트가 하나만 남을 때 그 시트의 이름이다.
     gallery=True 면(서식 선택이 없는 전체 파일일 때만) 맨 앞에 폼1~8 썸네일 '서식 목록' 시트를 넣는다.
     info_override 는 견적정보 위에 덮어쓸 값(직접 만든 견적의 견적처: customer_name 등)이다.
+    min_item_rows 를 주면(직접 만든 견적) 모든 폼의 품목 표를 최소 그 행 수까지 서식 모양 그대로 빈 행으로 채운다.
+    품목이 한두 개여도 견적서 틀(표 · 여백)이 유지된다. 0 이면 수집 견적처럼 예전 그대로.
     """
     if result is None:
         result = fetch_today_quotes()
 
     def _maybe_price(value):
         return None if hide_unit_prices else value
+
+    def _pad_count(n_parts: int, base: int = 0) -> int:
+        """품목 뒤에 붙일 빈 행 수: 폼 고유의 기본 빈 행(base)과 최소 행 수까지 모자란 수 중 큰 값."""
+        return max(base, min_item_rows - n_parts, 0)
 
     # 저장된 견적처/공급자 정보 (모든 폼 시트에 적용)
     info = {**load_quote_info(), **(info_override or {})}
@@ -781,7 +788,7 @@ def build_excel(
             r += 1
 
         next_no = len(q.parts) + 1
-        for blank_i in range(USER_BLANK_ROWS):
+        for blank_i in range(_pad_count(len(q.parts), USER_BLANK_ROWS)):
             for col in range(1, 7):
                 c = ws.cell(row=r, column=col, value=next_no + blank_i if col == 1 else None)
                 align = center if col in (1, 2, 4) else (left if col == 3 else right)
@@ -962,7 +969,11 @@ def build_excel(
             _set_cell(ws2.cell(row=r, column=6), font=normal, alignment=right, number_format="#,##0")
             sub_total += p.amount
             r += 1
-            
+        for _ in range(_pad_count(len(q.parts))):
+            for cc in range(1, 7):
+                ws2.cell(row=r, column=cc).border = inv_border
+            r += 1
+
         r += 1
         ws2.merge_cells(f"D{r}:E{r}")
         ws2[f"D{r}"] = "SUBTOTAL"
@@ -1061,7 +1072,13 @@ def build_excel(
             for cc in range(1, 7):
                 ws3.cell(row=r, column=cc).border = row_line
             r += 1
-            
+        for _ in range(_pad_count(len(q.parts))):
+            ws3.merge_cells(f"A{r}:B{r}")
+            ws3.merge_cells(f"E{r}:F{r}")
+            for cc in range(1, 7):
+                ws3.cell(row=r, column=cc).border = row_line
+            r += 1
+
         ws3.merge_cells(f"A{r+1}:F{r+1}")
         ws3[f"A{r+1}"] = QUOTE_DISCLAIMER
         _set_cell(ws3[f"A{r+1}"], font=Font(name=FONT_NAME, size=9, color="888888"), alignment=left)
@@ -1143,6 +1160,10 @@ def build_excel(
             _set_cell(ws4.cell(row=r, column=5), font=normal, alignment=right, number_format="#,##0")
             _set_cell(ws4.cell(row=r, column=6), font=bold, alignment=right, number_format="#,##0")
             r += 1
+        for _ in range(_pad_count(len(q.parts))):
+            for cc in range(1, 7):
+                ws4.cell(row=r, column=cc).border = dash_border
+            r += 1
 
         # =====================================================================
         # [폼 5] 퀵 리테일 영수증형 (Quick Receipt) - 매우 심플, 테두리 최소화
@@ -1201,7 +1222,13 @@ def build_excel(
             _set_cell(ws5[f"D{r}"], font=normal, alignment=center)
             _set_cell(ws5[f"F{r}"], font=normal, alignment=right, number_format="#,##0")
             r += 1
-            
+        for _ in range(_pad_count(len(q.parts))):
+            ws5.merge_cells(f"A{r}:C{r}")
+            ws5.merge_cells(f"D{r}:E{r}")
+            for c in range(1, 7):
+                ws5.cell(row=r, column=c).border = thin_bot
+            r += 1
+
         r += 1
         ws5.merge_cells(f"D{r}:E{r}")
         ws5[f"D{r}"] = "TOTAL"
@@ -1305,8 +1332,8 @@ def build_excel(
             ws6.row_dimensions[r6].height = 20.0
             r6 += 1
 
-        # 사용자 빈 행 추가
-        for _ in range(USER_BLANK_ROWS):
+        # 사용자 빈 행 추가 (직접 만든 견적은 최소 행 수까지)
+        for _ in range(_pad_count(len(q.parts), USER_BLANK_ROWS)):
             for col in range(1, 8):
                 c = ws6.cell(row=r6, column=col)
                 _set_cell(c, font=normal, border=border, alignment=center)
@@ -1477,6 +1504,12 @@ def build_excel(
             _set_cell(ws7.cell(row=r7, column=6), font=normal, border=border, alignment=center)
             ws7.row_dimensions[r7].height = 20.0
             r7 += 1
+        for blank_i in range(_pad_count(len(q.parts))):
+            for col in range(1, 7):
+                c = ws7.cell(row=r7, column=col, value=len(q.parts) + blank_i + 1 if col == 1 else None)
+                _set_cell(c, font=normal, border=border, alignment=center)
+            ws7.row_dimensions[r7].height = 20.0
+            r7 += 1
 
         # 발주확인란
         r7 += 1
@@ -1602,7 +1635,7 @@ def build_excel(
             r8 += 1
 
         # 최소 12행까지 빈 그리드 행 채우기 (클래식 양식) — 15행이면 부품이 많을 때 두 장으로 넘어간다
-        target_grid_rows = max(len(q.parts) + USER_BLANK_ROWS, 12)
+        target_grid_rows = max(len(q.parts) + USER_BLANK_ROWS, 12, min_item_rows)
         for blank_idx in range(len(q.parts) + 1, target_grid_rows + 1):
             for col in range(1, 7):
                 c = ws8.cell(row=r8, column=col)
