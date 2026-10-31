@@ -236,9 +236,8 @@
           <h3 id="settingsTitle">⚙️ 설정관리</h3>
           <div class="settings-tabs" role="tablist">
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="info" role="tab">📇 견적정보 · 거래처</button>
-            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab">🗃️ 견적보관함 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab" title="직접 작성한 견적(작성본)과 내려받은 Excel 견적서(보관 파일)를 한 목록에서 관리하고, 새 견적을 만듭니다">🗂️ 견적서 관리 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
             <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="taskreport" role="tab">📋 작업내역서 <span id="trListCount" class="archive-count">0</span></button>
-            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="manualquote" role="tab" title="폼1~8 중 하나를 골라 빈 견적에 품목을 직접 적어 견적서를 만듭니다">📝 새 견적 만들기 <span id="mqListCount" class="archive-count hidden">0</span></button>
           </div>
         </div>
         <button type="button" class="modal-close btn-modal-close" id="settingsClose" aria-label="닫기">✕ 닫기</button>
@@ -360,33 +359,50 @@
           </div>
         </section>
 
-        <!-- 2. 견적보관함 -->
+        <!-- 2. 견적서 관리: 직접 작성한 견적(작성본, manual_quotes.json) + 내려받은 Excel(보관 파일, quote_archive/) 통합 목록 -->
         <section class="settings-panel hidden" data-panel="archive">
           <div class="qa-toolbar">
+            <button type="button" id="mqBtnToggleForms" class="btn btn-primary btn-sm" aria-expanded="false" title="폼1~8 중 하나를 골라 빈 견적에 품목을 직접 적어 견적서를 만듭니다">➕ 새 견적 만들기</button>
             <div class="set-search">
-              <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="거래처명 · 모델 검색" />
+              <input type="text" id="qaSearch" class="tr-inp qa-search" placeholder="거래처 · 제목 · 모델 · 파일명 검색" />
               <button type="button" class="btn btn-primary btn-sm set-search-go" data-for="qaSearch" title="입력한 단어로 목록을 걸러 봅니다 (Enter)">🔍 검색</button><button type="button" class="btn btn-outline btn-sm set-search-clear" data-for="qaSearch" title="검색어를 지우고 전체 목록을 봅니다">✕</button>
+            </div>
+            <div class="hub-filter" role="group" aria-label="구분">
+              <button type="button" class="btn btn-sm btn-primary hub-filter-btn" data-kind="all">전체 <span data-hub-count="all">0</span></button>
+              <button type="button" class="btn btn-sm btn-outline hub-filter-btn" data-kind="manual" title="📝 새 견적 만들기로 직접 작성해 저장한 견적 (다시 열어 고칠 수 있음)">📝 작성본 <span data-hub-count="manual">0</span></button>
+              <button type="button" class="btn btn-sm btn-outline hub-filter-btn" data-kind="archive" title="📥 Excel 다운로드 · 이메일로 만든 견적서 파일 사본 (quote_archive 폴더)">📥 보관 파일 <span data-hub-count="archive">0</span></button>
             </div>
             <span id="qaStats" class="qa-stats"></span>
             <div class="qa-toolbar-right">
               <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
-              <button type="button" id="qaBtnBackup" class="btn btn-outline btn-sm" title="보관함 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
-              <button type="button" id="qaBtnRefresh" class="btn btn-outline btn-sm">🔄 새로고침</button>
+              <button type="button" id="qaBtnBackup" class="btn btn-outline btn-sm" title="보관 파일 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
+              <button type="button" id="qaBtnRefresh" class="btn btn-outline btn-sm" title="작성본 · 보관 파일 목록을 다시 읽습니다">🔄 새로고침</button>
             </div>
           </div>
-          <p class="qa-hint">카드별 <strong>📥 엑셀 견적서</strong>로 내려받은 파일이 자동으로 여기에 보관됩니다. 파일 이름은 <strong>거래처명</strong>(견적정보의 견적처 상호)으로 시작합니다.</p>
-          <div class="tr-list-table-wrap qa-table-wrap settings-table-wrap">
-            <table class="tr-list-table qa-table">
+          <!-- 새 견적 만들기: 서식 8개 중 하나를 고르면 빈 견적 작성 창이 열린다 (➕ 버튼으로 펼침) -->
+          <div id="mqFormStrip" class="mq-form-strip hidden">
+            <p class="qa-hint mq-pick-hint">서식을 고르면 빈 견적 작성 창이 열립니다. 품목 · 수량 · 단가(부가세 포함)를 적고 💾 저장하면 <strong>📝 작성본</strong>으로, 📥 Excel · ✉️ 이메일로 보내면 그 파일이 <strong>📥 보관 파일</strong>로 이 목록에 들어갑니다. 견적처 기본값은 📇 견적정보의 거래처입니다.</p>
+            <div id="mqFormGrid" class="mq-form-grid"></div>
+          </div>
+          <div class="tr-list-table-wrap qa-table-wrap settings-table-wrap hub-table-wrap">
+            <table class="tr-list-table qa-table hub-table">
               <thead>
                 <tr>
-                  <th style="width: 30%;">거래처명</th>
-                  <th>모델 / 구분</th>
+                  <th style="width: 118px;">날짜</th>
+                  <th style="width: 150px;">구분</th>
+                  <th style="width: 22%;">거래처</th>
+                  <th>제목 · 모델</th>
+                  <th style="width: 120px;">서식</th>
                   <th style="width: 110px;">금액</th>
-                  <th style="width: 150px;">관리</th>
+                  <th style="width: 196px;">관리</th>
                 </tr>
               </thead>
               <tbody id="qaTbody"></tbody>
             </table>
+          </div>
+          <div class="hub-foot">
+            <p class="qa-hint">📝 작성본은 <strong>✏️ 열기</strong>로 고쳐 다시 보냅니다. 카드의 📥 엑셀 견적서 · 작성 창의 📥 Excel · ✉️ 이메일로 만든 파일은 자동으로 보관됩니다(파일명은 거래처명으로 시작). 작성본에서 만든 보관 파일은 <strong>📝 원본</strong>으로 그 작성본을 엽니다.</p>
+            <div id="qaPager" class="hub-pager"></div>
           </div>
         </section>
 
@@ -427,36 +443,6 @@
           <p class="qa-hint">📂 열기를 누르면 작업내역서 창에서 수정 · 인쇄할 수 있습니다. 백업 폴더는 견적보관함 백업과 같은 폴더를 씁니다.</p>
         </section>
 
-        <!-- 4. 새 견적 만들기: 서식 8개 중 하나를 고르면 빈 견적 작성 창이 열린다 -->
-        <section class="settings-panel hidden" data-panel="manualquote">
-          <p class="qa-hint mq-pick-hint">① 서식을 고르면 빈 견적 작성 창이 열립니다. 품목 · 수량 · 단가(부가세 포함)를 직접 적고 저장하거나 Excel · 이메일로 보냅니다. 견적처는 <strong>📇 견적정보</strong>에 지정된 거래처가 기본으로 들어가며, 작성 창에서 직접 고치거나 저장된 거래처 목록에서 불러올 수 있습니다. 공급자는 견적정보의 값을 씁니다.</p>
-          <div id="mqFormGrid" class="mq-form-grid"></div>
-          <div class="qa-toolbar mq-list-toolbar">
-            <div class="set-search">
-              <input type="text" id="mqSearch" class="tr-inp qa-search" placeholder="제목 · 거래처 검색" />
-              <button type="button" class="btn btn-primary btn-sm set-search-go" data-for="mqSearch" title="입력한 단어로 목록을 걸러 봅니다 (Enter)">🔍 검색</button><button type="button" class="btn btn-outline btn-sm set-search-clear" data-for="mqSearch" title="검색어를 지우고 전체 목록을 봅니다">✕</button>
-            </div>
-            <span id="mqStats" class="qa-stats"></span>
-            <div class="qa-toolbar-right">
-              <button type="button" id="mqBtnRefresh" class="btn btn-outline btn-sm">🔄 새로고침</button>
-            </div>
-          </div>
-          <div class="tr-list-table-wrap settings-table-wrap">
-            <table class="tr-list-table">
-              <thead>
-                <tr>
-                  <th style="width: 140px;">수정일</th>
-                  <th>제목</th>
-                  <th style="width: 22%;">거래처</th>
-                  <th style="width: 110px;">서식</th>
-                  <th style="width: 120px;">합계</th>
-                  <th style="width: 190px;">관리</th>
-                </tr>
-              </thead>
-              <tbody id="mqListTbody"></tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </div>
   </div>

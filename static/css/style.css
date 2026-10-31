@@ -1883,7 +1883,23 @@ html.calc-html body {
 }
 .mq-form-card img { width: 100%; aspect-ratio: 210 / 297; object-fit: cover; object-position: top; background: #fff; border-radius: 4px; }
 .mq-form-card:hover { border-color: var(--primary); transform: translateY(-2px); }
-.mq-list-toolbar { margin-top: 4px; }
+/* 🗂️ 견적서 관리: 작성본 + 보관 파일 통합 목록 */
+.mq-form-strip { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px 0; margin-bottom: 6px; background: var(--card2); }
+.mq-form-strip .mq-form-card img { aspect-ratio: auto; height: 150px; }
+.hub-filter { display: inline-flex; gap: 2px; }
+.hub-filter-btn span { font-weight: 700; margin-left: 2px; }
+.hub-table td { vertical-align: middle; }
+.hub-kind { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 0.9em; font-weight: 700; white-space: nowrap; }
+.hub-kind-manual { background: rgba(59, 130, 246, 0.18); color: #60a5fa; }
+.hub-kind-archive { background: rgba(148, 163, 184, 0.18); color: var(--muted); }
+.hub-src { display: inline-block; margin-left: 4px; font-size: 0.85em; color: var(--muted); white-space: nowrap; }
+.hub-files { font-size: 0.85em; color: var(--muted); margin-left: 4px; }
+.hub-table .tr-list-actions { flex-wrap: nowrap; }
+.hub-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.hub-foot .qa-hint { flex: 1; margin: 0; }
+.hub-pager { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+.hub-pager .btn { min-width: 26px; }
+.hub-pager-gap { color: var(--muted); padding: 0 2px; }
 /* 작성 창 */
 .mq-modal { max-width: 1280px; }
 .mq-body { display: flex; flex-direction: column; gap: 8px; }

@@ -993,6 +993,7 @@ def _deliver_quote_excel(
                 "total": picked.total,
                 "customer": (info.get("customer_name") or "").strip(),
                 "quote_date": result.quote_date,
+                # None 값(예: 저장 전 직접 견적의 manual_id)은 add_entry 가 빼고 저장한다
                 **archive_meta,
             },
         )
@@ -1273,7 +1274,10 @@ def api_manual_quote_excel(payload: dict = Body(...)):
     unitprice=0 이면 단가 미표시, archive=1 이면 견적서 보관함에도 저장, email=1 이면 메일 초안,
     pdf=1 이면 PDF 미리보기. 마진 · 만원 올림은 적용하지 않는다(입력한 부가세 포함 단가 그대로).
     """
-    record = manual_quote.clean_record(payload.get("quote") or {})
+    raw_quote = payload.get("quote") or {}
+    # 보관본을 원본 작성 견적과 잇는 id (clean_record 가 모르는 키는 버리므로 먼저 꺼낸다. 저장 전이면 "")
+    manual_id = str(raw_quote.get("id") or "").strip()[:40]
+    record = manual_quote.clean_record(raw_quote)
     form = record["form"]
     hide_prices = not bool(payload.get("unitprice", 1))
     try:
@@ -1299,7 +1303,7 @@ def api_manual_quote_excel(payload: dict = Body(...)):
         display_name=f"{kr_label}_{result.quote_date}.xlsx",
         # 같은 품목 · 같은 서식 · 같은 견적정보면 미리보기 PDF 를 다시 만들지 않는다
         base_key=["manual", hide_prices, info, record],
-        archive_meta={"kind": "manual", "category": "manual", "margin": None},
+        archive_meta={"kind": "manual", "category": "manual", "margin": None, "manual_id": manual_id or None},
         mail_model=record["title"] or picked.model,
         archive=int(bool(payload.get("archive"))),
         email=int(bool(payload.get("email"))),

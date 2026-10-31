@@ -1137,12 +1137,23 @@ $("#formGalleryModal")?.addEventListener("click", (e) => {
   if (e.target === $("#formGalleryModal")) closeFormGallery();
 });
 
-// ---------- 견적서 보관함 (카드별로 내려받은 최종 견적서 저장 · 관리 · 백업) ----------
+// ---------- 🗂️ 견적서 관리 (설정관리 탭) ----------
+// 두 저장소를 한 목록으로 보여 준다(최신순 · 15개씩 페이지).
+//   📝 작성본  : 새 견적 만들기로 직접 작성해 저장한 견적(manual_quotes.json) — 다시 열어 고칠 수 있다
+//   📥 보관 파일: 카드 · 작성 창에서 Excel 다운로드 · 이메일로 만든 xlsx 사본(quote_archive/)
+// 작성본에서 만든 보관 파일은 manual_id 로 원본 작성본과 이어진다(📝 원본 버튼).
 let qaEntries = [];
+let qaArchiveStats = { count: 0, size: 0, dir: "" };
+let mqList = []; // 작성본 목록 (아래 📝 새 견적 만들기 코드와 함께 쓴다)
+const HUB_PAGE_SIZE = 15;
+let hubPage = 1;
+let hubKind = "all"; // all | manual | archive
 
 function qaFormsLabel(e) {
   const forms = Array.isArray(e.forms) ? e.forms : [];
-  const formText = forms.length ? forms.map((n) => `폼${n}`).join("·") : "전체";
+  const formText = forms.length === 1
+    ? `폼${forms[0]} ${EXCEL_FORM_LABELS[forms[0]] || ""}`.trim()
+    : (forms.length ? forms.map((n) => `폼${n}`).join("·") : "전체");
   const marginText = e.margin === null || e.margin === undefined ? "" : (e.margin === 0 ? " · 원가" : ` · ${e.margin}%`);
   return formText + marginText;
 }
@@ -1152,60 +1163,180 @@ function qaFmtSize(bytes) {
   return kb >= 1024 ? `${(kb / 1024).toFixed(1)}MB` : `${kb}KB`;
 }
 
-function renderQuoteArchive() {
-  const tbody = $("#qaTbody");
-  if (!tbody) return;
-  const q = ($("#qaSearch")?.value || "").trim().toLowerCase();
-  const rows = qaEntries.filter((e) => {
-    if (!q) return true;
-    return [e.customer, e.model, e.filename, e.note, e.tab_label].some((v) => String(v || "").toLowerCase().includes(q));
-  });
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:14px;">${qaEntries.length ? "검색 결과가 없습니다." : "보관된 견적서가 없습니다. 카드의 📥 엑셀 견적서를 내려받으면 여기에 쌓입니다."}</td></tr>`;
-    return;
-  }
-  // 표에는 거래처명 · 모델/구분 · 금액만 보이고, 저장 시각 · 서식 · 파일명은 행 툴팁으로 확인한다
-  tbody.innerHTML = rows.map((e) => {
-    const modelText = (e.tab_label ? `${e.tab_label} · ` : "") + (e.model || "");
-    const tip = [
-      e.saved_at && `저장: ${e.saved_at}`,
-      `서식: ${qaFormsLabel(e)}`,
-      e.filename && `파일: ${e.filename} (${qaFmtSize(e.size)})`,
-      e.note && `메모: ${e.note}`,
-      e.missing && "※ 보관 파일 없음",
-    ].filter(Boolean).join("\n");
+/** 보관 파일의 출처 배지: 직접 작성 / Apple / 컴퓨존 */
+function hubSourceBadge(e) {
+  if (e.kind === "manual") return `<span class="hub-src hub-src-manual">📝 직접작성</span>`;
+  if (String(e.category || "").startsWith("apple")) return `<span class="hub-src hub-src-apple">🍎 Apple</span>`;
+  return `<span class="hub-src hub-src-cz">💻 컴퓨존</span>`;
+}
+
+/** 보관 파일을 만든 작성본. manual_id 가 있으면 그것으로, 예전 보관본(manual_id 없음)은 제목 · 거래처 · 금액이 같은 작성본으로 찾는다. */
+function hubOriginOf(e) {
+  if (e.kind !== "manual") return null;
+  if (e.manual_id) return mqList.find((m) => m.id === e.manual_id) || null;
+  return mqList.find((m) => (m.title || "컴퓨터 견적") === e.model && (m.customer || "") === (e.customer || "") && m.total === e.total) || null;
+}
+
+/** 작성본 · 보관 파일을 같은 모양의 행으로 합친다(날짜 문자열 YYYY-MM-DD HH:MM:SS 내림차순). */
+function hubAllRows() {
+  const manual = mqList.map((r) => ({
+    kind: "manual",
+    id: r.id,
+    date: r.updated_at || r.created_at || "",
+    customer: r.customer || "",
+    title: r.title || "(제목 없음)",
+    form: `폼${r.form} ${EXCEL_FORM_LABELS[r.form] || ""}`.trim(),
+    total: r.total || 0,
+    files: qaEntries.filter((e) => hubOriginOf(e)?.id === r.id).length,
+    search: [r.title, r.customer, r.customer_info?.manager, r.customer_info?.phone],
+  }));
+  const archive = qaEntries.map((e) => ({
+    kind: "archive",
+    id: e.id,
+    date: e.saved_at || "",
+    customer: e.customer || "",
+    title: (e.kind !== "manual" && e.tab_label ? `${e.tab_label} · ` : "") + (e.model || ""),
+    form: qaFormsLabel(e),
+    total: e.total || 0,
+    entry: e,
+    search: [e.customer, e.model, e.filename, e.note, e.tab_label],
+  }));
+  return [...manual, ...archive].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+function hubRowHtml(r) {
+  const id = escapeHtml(r.id);
+  const date = escapeHtml(String(r.date).slice(0, 16));
+  if (r.kind === "manual") {
+    const tip = `작성본 · 수정: ${r.date}${r.files ? `\n이 작성본에서 만든 보관 파일 ${r.files}건` : ""}`;
     return `
-    <tr class="${e.missing ? "is-missing" : ""}" data-id="${escapeHtml(e.id)}" title="${escapeHtml(tip)}">
-      <td class="qa-ellip">${escapeHtml(e.customer || "-")}</td>
-      <td class="qa-ellip">${escapeHtml(modelText)}</td>
-      <td class="qa-num">${e.total ? fmt(e.total) : "-"}</td>
+    <tr class="hub-row-manual" title="${escapeHtml(tip)}">
+      <td>${date}</td>
+      <td><span class="hub-kind hub-kind-manual">📝 작성본</span></td>
+      <td class="qa-ellip">${escapeHtml(r.customer || "-")}</td>
+      <td class="qa-ellip">${escapeHtml(r.title)}${r.files ? ` <span class="hub-files" title="이 작성본에서 만든 보관 파일 수">📥${r.files}</span>` : ""}</td>
+      <td class="qa-ellip">${escapeHtml(r.form)}</td>
+      <td class="qa-num">${r.total ? fmt(r.total) : "-"}</td>
       <td>
-        <div class="qa-actions">
-          <button type="button" class="btn btn-sm btn-primary qa-dl" data-id="${escapeHtml(e.id)}" ${e.missing ? "disabled" : ""} title="보관된 파일을 다시 내려받습니다">📥 받기</button>
-          <button type="button" class="btn btn-sm btn-outline qa-open" data-id="${escapeHtml(e.id)}" ${e.missing ? "disabled" : ""} title="서버 PC 탐색기에서 이 파일을 선택해 보여 줍니다">📂</button>
-          <button type="button" class="btn btn-sm btn-outline qa-del" data-id="${escapeHtml(e.id)}" title="보관함에서 삭제">✕</button>
+        <div class="tr-list-actions">
+          <button type="button" class="btn btn-xs btn-primary" data-act="edit" data-kind="manual" data-id="${id}" title="작성 창에서 열어 고치거나 미리보기 · 이메일로 보냅니다">✏️ 열기</button>
+          <button type="button" class="btn btn-xs btn-outline" data-act="excel" data-kind="manual" data-id="${id}" title="저장된 서식으로 Excel 을 받고 보관 파일로도 남깁니다">📥 Excel</button>
+          <button type="button" class="btn btn-xs btn-shutdown" data-act="del" data-kind="manual" data-id="${id}" title="작성본 삭제 (보관 파일은 남습니다)">✕ 삭제</button>
         </div>
       </td>
     </tr>`;
-  }).join("");
+  }
+  const e = r.entry;
+  const src = hubOriginOf(e);
+  const tip = [
+    e.saved_at && `저장: ${e.saved_at}`,
+    `서식: ${qaFormsLabel(e)}`,
+    e.filename && `파일: ${e.filename} (${qaFmtSize(e.size)})`,
+    e.note && `메모: ${e.note}`,
+    e.manual_id && !src && "※ 원본 작성본이 삭제됨",
+    e.missing && "※ 보관 파일 없음",
+  ].filter(Boolean).join("\n");
+  const dis = e.missing ? "disabled" : "";
+  const origin = e.manual_id || src
+    ? `<button type="button" class="btn btn-xs btn-outline" data-act="origin" data-kind="archive" data-id="${id}" ${src ? "" : "disabled"} title="${src ? "이 파일을 만든 작성본을 작성 창에서 엽니다" : "원본 작성본이 삭제되었습니다"}">📝 원본</button>`
+    : "";
+  return `
+    <tr class="${e.missing ? "is-missing" : ""}" title="${escapeHtml(tip)}">
+      <td>${date}</td>
+      <td><span class="hub-kind hub-kind-archive">📥 보관</span>${hubSourceBadge(e)}</td>
+      <td class="qa-ellip">${escapeHtml(r.customer || "-")}</td>
+      <td class="qa-ellip">${escapeHtml(r.title)}</td>
+      <td class="qa-ellip">${escapeHtml(r.form)}</td>
+      <td class="qa-num">${r.total ? fmt(r.total) : "-"}</td>
+      <td>
+        <div class="tr-list-actions">
+          <button type="button" class="btn btn-xs btn-primary" data-act="dl" data-kind="archive" data-id="${id}" ${dis} title="보관된 파일을 다시 내려받습니다">📥 받기</button>
+          ${origin}
+          <button type="button" class="btn btn-xs btn-outline" data-act="dir" data-kind="archive" data-id="${id}" ${dis} title="서버 PC 탐색기에서 이 파일을 선택해 보여 줍니다">📂</button>
+          <button type="button" class="btn btn-xs btn-shutdown" data-act="del" data-kind="archive" data-id="${id}" title="보관 파일 삭제">✕ 삭제</button>
+        </div>
+      </td>
+    </tr>`;
 }
 
+/** ◀ 1 2 … N ▶ (페이지가 많으면 현재 앞뒤 2쪽 + 처음/끝만) */
+function renderHubPager(pages) {
+  const box = $("#qaPager");
+  if (!box) return;
+  if (pages <= 1) {
+    box.innerHTML = "";
+    return;
+  }
+  const nums = [];
+  for (let p = 1; p <= pages; p += 1) {
+    if (p === 1 || p === pages || Math.abs(p - hubPage) <= 2) nums.push(p);
+    else if (nums[nums.length - 1] !== "…") nums.push("…");
+  }
+  box.innerHTML = [
+    `<button type="button" class="btn btn-xs btn-outline" data-page="${hubPage - 1}" ${hubPage <= 1 ? "disabled" : ""}>◀</button>`,
+    ...nums.map((p) => (p === "…"
+      ? `<span class="hub-pager-gap">…</span>`
+      : `<button type="button" class="btn btn-xs ${p === hubPage ? "btn-primary" : "btn-outline"}" data-page="${p}">${p}</button>`)),
+    `<button type="button" class="btn btn-xs btn-outline" data-page="${hubPage + 1}" ${hubPage >= pages ? "disabled" : ""}>▶</button>`,
+  ].join("");
+}
+
+function renderQuoteHub() {
+  const all = hubAllRows();
+  const nManual = mqList.length;
+  const nArchive = qaEntries.length;
+  const badge = $("#quoteArchiveCount");
+  if (badge) {
+    badge.textContent = String(nManual + nArchive);
+    badge.classList.toggle("hidden", !(nManual + nArchive));
+  }
+  const counts = { all: nManual + nArchive, manual: nManual, archive: nArchive };
+  document.querySelectorAll("[data-hub-count]").forEach((el) => { el.textContent = counts[el.dataset.hubCount] ?? 0; });
+  document.querySelectorAll(".hub-filter-btn").forEach((b) => {
+    const on = b.dataset.kind === hubKind;
+    b.classList.toggle("btn-primary", on);
+    b.classList.toggle("btn-outline", !on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const tbody = $("#qaTbody");
+  if (!tbody) return;
+  const q = ($("#qaSearch")?.value || "").trim().toLowerCase();
+  const rows = all.filter((r) => (hubKind === "all" || r.kind === hubKind)
+    && (!q || r.search.some((v) => String(v || "").toLowerCase().includes(q))));
+  const pages = Math.max(1, Math.ceil(rows.length / HUB_PAGE_SIZE));
+  hubPage = Math.min(Math.max(1, hubPage), pages);
+  const stats = $("#qaStats");
+  if (stats) {
+    const shown = rows.length !== counts[hubKind] ? `${rows.length} / ${counts[hubKind]}건` : `${rows.length}건`;
+    stats.textContent = `${shown} · ${hubPage}/${pages}쪽 · 보관 파일 ${qaFmtSize(qaArchiveStats.size)}`;
+    stats.title = `보관 폴더: ${qaArchiveStats.dir || ""}`;
+  }
+  renderHubPager(pages);
+  if (!rows.length) {
+    const empty = counts[hubKind]
+      ? "검색 결과가 없습니다."
+      : "견적서가 없습니다. ➕ 새 견적 만들기로 작성하거나, 카드의 📥 엑셀 견적서를 내려받으면 여기에 쌓입니다.";
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:14px;">${empty}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.slice((hubPage - 1) * HUB_PAGE_SIZE, hubPage * HUB_PAGE_SIZE).map(hubRowHtml).join("");
+}
+
+// 예전 이름으로 부르는 곳(작성 창 · 다운로드 후 갱신)이 그대로 동작하도록 남겨 둔다
+const renderQuoteArchive = renderQuoteHub;
+
 async function loadQuoteArchive() {
+  const before = qaEntries.length;
   try {
     const res = await fetch("/api/quotes/archive", { cache: "no-store" });
     const data = await res.json();
     qaEntries = data.entries || [];
-    const stats = $("#qaStats");
-    if (stats) stats.textContent = `${data.count || 0}건 · ${qaFmtSize(data.size)} · 보관 폴더: ${data.dir || ""}`;
-    const badge = $("#quoteArchiveCount");
-    if (badge) {
-      badge.textContent = String(data.count || 0);
-      badge.classList.toggle("hidden", !(data.count > 0));
-    }
+    qaArchiveStats = { count: data.count || 0, size: data.size || 0, dir: data.dir || "" };
   } catch (_) {
     qaEntries = [];
   }
-  renderQuoteArchive();
+  if (qaEntries.length > before && before) hubPage = 1; // 새 보관 파일은 맨 앞(1쪽)에 들어간다
+  renderQuoteHub();
 }
 
 async function qaDownload(id) {
@@ -1289,19 +1420,59 @@ function qaBackup() {
   });
 }
 
-$("#qaSearch")?.addEventListener("input", renderQuoteArchive);
-$("#qaBtnRefresh")?.addEventListener("click", loadQuoteArchive);
+function refreshQuoteHub() {
+  return Promise.all([loadMqList(), loadQuoteArchive()]);
+}
+
+$("#qaSearch")?.addEventListener("input", () => {
+  hubPage = 1;
+  renderQuoteHub();
+});
+$("#qaBtnRefresh")?.addEventListener("click", refreshQuoteHub);
 $("#qaBtnOpenDir")?.addEventListener("click", () => qaOpenDir());
 $("#qaBtnBackup")?.addEventListener("click", qaBackup);
-$("#qaTbody")?.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-id]");
-  if (!btn) return;
-  const id = btn.dataset.id;
-  if (btn.classList.contains("qa-dl")) qaDownload(id);
-  else if (btn.classList.contains("qa-open")) qaOpenDir(id);
-  else if (btn.classList.contains("qa-del")) qaDelete(id);
+document.querySelectorAll(".hub-filter-btn").forEach((b) => b.addEventListener("click", () => {
+  hubKind = b.dataset.kind || "all";
+  hubPage = 1;
+  renderQuoteHub();
+}));
+$("#qaPager")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-page]");
+  if (!btn || btn.disabled) return;
+  hubPage = Number(btn.dataset.page) || 1;
+  renderQuoteHub();
+  $("#qaTbody")?.closest(".tr-list-table-wrap")?.scrollTo({ top: 0 });
 });
-// 시작 시 보관 건수 배지
+$("#mqBtnToggleForms")?.addEventListener("click", (e) => {
+  const strip = $("#mqFormStrip");
+  if (!strip) return;
+  renderMqFormGrid();
+  const open = strip.classList.contains("hidden");
+  strip.classList.toggle("hidden", !open);
+  e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  e.currentTarget.textContent = open ? "▲ 서식 접기" : "➕ 새 견적 만들기";
+});
+$("#qaTbody")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn || btn.disabled) return;
+  const { act, kind, id } = btn.dataset;
+  if (kind === "manual") {
+    const rec = mqList.find((r) => r.id === id);
+    if (act === "edit" && rec) openMqEditor(rec);
+    else if (act === "excel" && rec) downloadMqExcel(rec);
+    else if (act === "del") deleteMq(id);
+    return;
+  }
+  if (act === "dl") qaDownload(id);
+  else if (act === "dir") qaOpenDir(id);
+  else if (act === "del") qaDelete(id);
+  else if (act === "origin") {
+    const entry = qaEntries.find((x) => x.id === id);
+    const rec = entry && hubOriginOf(entry);
+    if (rec) openMqEditor(rec);
+  }
+});
+// 시작 시 견적서 관리 탭의 건수 배지 (작성본은 아래 새 견적 만들기 코드 끝에서 읽는다)
 loadQuoteArchive();
 
 /** 모니터·무선키보드 공통 표시: "{이름} (포함됨|제외됨)" */
@@ -1876,14 +2047,11 @@ function switchSettingsTab(tab) {
   });
   if (tab === "info") loadCustomers();
   else if (tab === "archive") {
-    loadQuoteArchive();
+    refreshQuoteHub();
     loadTrBackupDir();
   } else if (tab === "taskreport") {
     loadTrReportsList();
     loadTrBackupDir();
-  } else if (tab === "manualquote") {
-    renderMqFormGrid();
-    loadMqList();
   }
 }
 
@@ -4048,7 +4216,7 @@ function runSettingsSearch(inputId, clear = false) {
 }
 document.querySelectorAll(".set-search-go").forEach((b) => b.addEventListener("click", () => runSettingsSearch(b.dataset.for)));
 document.querySelectorAll(".set-search-clear").forEach((b) => b.addEventListener("click", () => runSettingsSearch(b.dataset.for, true)));
-["custSearch", "qaSearch", "trSearchInput", "mqSearch"].forEach((id) => {
+["custSearch", "qaSearch", "trSearchInput"].forEach((id) => {
   document.getElementById(id)?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); runSettingsSearch(id); }
     else if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.stopPropagation(); runSettingsSearch(id, true); }
@@ -4061,7 +4229,7 @@ const mqModal = $("#manualQuoteModal");
 const MQ_MIN_ROWS = 8; // 종이에 처음 보이는 빈 행 수
 const MQ_MAX_ROWS = 20; // 서버 manual_quote.MAX_ITEMS 와 같게
 let mqCurrentId = "";
-let mqList = [];
+// mqList(작성본 목록)는 위 🗂️ 견적서 관리 코드에 선언돼 있다
 let mqPreviewUrl = "";
 let mqPreviewSeq = 0;
 
@@ -4073,7 +4241,7 @@ function mqFmt(n) {
   return (Number(n) || 0).toLocaleString("ko-KR");
 }
 
-/** 설정관리 탭의 서식 8개 고르기 칸 */
+/** 🗂️ 견적서 관리 탭 [➕ 새 견적 만들기]로 펼치는 서식 8개 고르기 칸 */
 function renderMqFormGrid() {
   const grid = $("#mqFormGrid");
   if (!grid || grid.childElementCount) return;
@@ -4086,62 +4254,23 @@ function renderMqFormGrid() {
     b.addEventListener("click", () => openMqEditor(null, Number(b.dataset.form))));
 }
 
+/** 작성본 목록을 읽어 🗂️ 견적서 관리 목록에 합쳐 그린다. */
 async function loadMqList() {
+  const before = mqList.length;
   try {
-    const res = await fetch("/api/manual-quotes");
+    const res = await fetch("/api/manual-quotes", { cache: "no-store" });
     const data = await res.json();
     mqList = data.quotes || [];
   } catch (_) {
     mqList = [];
   }
-  renderMqList();
-}
-
-function renderMqList() {
-  const tbody = $("#mqListTbody");
-  const badge = $("#mqListCount");
-  if (badge) {
-    badge.textContent = mqList.length;
-    badge.classList.toggle("hidden", !mqList.length);
-  }
-  if (!tbody) return;
-  const q = ($("#mqSearch")?.value || "").trim().toLowerCase();
-  const rows = mqList.filter((r) => !q || `${r.title} ${r.customer}`.toLowerCase().includes(q));
-  const stats = $("#mqStats");
-  if (stats) stats.textContent = q ? `${rows.length} / ${mqList.length}건` : `${mqList.length}건`;
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:32px; color:var(--muted);">${mqList.length ? "검색 결과가 없습니다." : "저장된 견적이 없습니다. 위에서 서식을 골라 새 견적을 만드세요."}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = rows.map((r) => `
-    <tr>
-      <td>${escapeHtml((r.updated_at || r.created_at || "").slice(0, 16))}</td>
-      <td>${escapeHtml(r.title || "(제목 없음)")}</td>
-      <td>${escapeHtml(r.customer || "-")}</td>
-      <td>폼${r.form} ${escapeHtml(EXCEL_FORM_LABELS[r.form] || "")}</td>
-      <td style="text-align:right; font-weight:700;">${mqFmt(r.total)} 원</td>
-      <td>
-        <div class="tr-list-actions">
-          <button type="button" class="btn btn-xs btn-primary" data-mq-open="${r.id}">📂 열기</button>
-          <button type="button" class="btn btn-xs btn-outline" data-mq-excel="${r.id}">📥 Excel</button>
-          <button type="button" class="btn btn-xs btn-shutdown" data-mq-del="${r.id}">✕ 삭제</button>
-        </div>
-      </td>
-    </tr>`).join("");
-  tbody.querySelectorAll("[data-mq-open]").forEach((b) => b.addEventListener("click", () => {
-    const rec = mqList.find((r) => r.id === b.dataset.mqOpen);
-    if (rec) openMqEditor(rec);
-  }));
-  tbody.querySelectorAll("[data-mq-excel]").forEach((b) => b.addEventListener("click", () => {
-    const rec = mqList.find((r) => r.id === b.dataset.mqExcel);
-    if (rec) downloadMqExcel(rec);
-  }));
-  tbody.querySelectorAll("[data-mq-del]").forEach((b) => b.addEventListener("click", () => deleteMq(b.dataset.mqDel)));
+  if (mqList.length > before && before) hubPage = 1; // 새로 저장한 작성본은 맨 앞(1쪽)에 들어간다
+  renderQuoteHub();
 }
 
 async function deleteMq(id) {
   const rec = mqList.find((r) => r.id === id);
-  if (!confirm(`저장된 견적을 삭제할까요?\n${rec?.title || "(제목 없음)"}\n(견적서 보관함에 받아 둔 Excel 파일은 그대로 남습니다)`)) return;
+  if (!confirm(`작성본을 삭제할까요?\n${rec?.title || "(제목 없음)"}\n(이 작성본으로 만든 📥 보관 파일은 그대로 남습니다)`)) return;
   const res = await fetch(`/api/manual-quotes/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
   if (!res || !res.ok) {
     alert("삭제하지 못했습니다.");
@@ -4600,7 +4729,7 @@ async function saveMq() {
   } finally {
     hideBusy();
   }
-  alert("✔ 견적을 저장했습니다. ⚙️ 설정관리 → 📝 새 견적 만들기 목록에서 다시 열 수 있습니다.");
+  alert("✔ 견적을 저장했습니다. ⚙️ 설정관리 → 🗂️ 견적서 관리 목록(📝 작성본)에서 다시 열 수 있습니다.");
 }
 
 function mqExcelBody(quote, extra = {}) {
@@ -4708,12 +4837,10 @@ $("#mqBtnExcel")?.addEventListener("click", () => downloadMqExcel());
 $("#mqBtnEmail")?.addEventListener("click", emailMq);
 $("#mqClose")?.addEventListener("click", closeMqEditor);
 $("#mqBtnClose")?.addEventListener("click", closeMqEditor);
-$("#mqBtnRefresh")?.addEventListener("click", loadMqList);
-$("#mqSearch")?.addEventListener("input", renderMqList);
 mqModal?.addEventListener("click", (e) => {
   if (e.target === mqModal) closeMqEditor();
 });
-loadMqList(); // 탭의 건수 표시
+loadMqList(); // 🗂️ 견적서 관리 탭의 건수 표시
 
 // ---------- 독립 창 계산기 ----------
 const CALC_POPUP_NAME = "quoteCalcPopup";
