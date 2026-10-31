@@ -4226,8 +4226,9 @@ document.querySelectorAll(".set-search-clear").forEach((b) => b.addEventListener
 // 설정관리 [📝 새 견적 만들기] 탭에서 폼1~8 중 하나를 고르면 빈 견적 작성 창이 열린다.
 // 단가는 부가세 포함 금액 그대로 쓴다(마진 · 만원 올림 없음). Excel · PDF · 메일은 카드 견적과 같은 서버 코드를 쓴다.
 const mqModal = $("#manualQuoteModal");
-const MQ_MIN_ROWS = 8; // 종이에 처음 보이는 빈 행 수
 const MQ_MAX_ROWS = 20; // 서버 manual_quote.MAX_ITEMS 와 같게
+// 종이에 처음 보이는 행 수. 실제 견적서(manual_quote.MIN_ITEM_ROWS = 20행)와 같은 칸 수로 보여 준다.
+const MQ_MIN_ROWS = MQ_MAX_ROWS;
 let mqCurrentId = "";
 // mqList(작성본 목록)는 위 🗂️ 견적서 관리 코드에 선언돼 있다
 let mqPreviewUrl = "";
