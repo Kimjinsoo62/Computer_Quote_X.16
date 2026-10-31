@@ -1,10 +1,14 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.10
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.11
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver XI.10 주요 변경
+## 🆕 Ver XI.11 주요 변경
+
+1. **📝 작성 창 품목 칸 20행** — 새 견적 작성 창의 견적서 모양 종이(`#mqPaper`)가 빈 행 8개 대신 처음부터 20행으로 열립니다(`app.js` `MQ_MIN_ROWS = MQ_MAX_ROWS`). 실제 견적서의 고정 20행 품목 표(XI.10, `manual_quote.MIN_ITEM_ROWS`)와 칸 수가 같아집니다. 저장된 견적을 열거나 행을 ✕로 지워도 20행으로 다시 채워집니다.
+
+## Ver XI.10 주요 변경
 
 1. **📐 직접 견적서 모양 유지** — 새 견적 만들기로 만든 견적서는 품목이 한두 개면 폼2 · 3 · 4 · 5 · 7 의 품목 표가 그 줄 수에서 끝나 A4 대부분이 비었습니다. `build_excel(min_item_rows=N)`이 폼1~8 품목 표를 각 서식의 행 모양(번호 · 테두리 · 점선 · 줄선) 그대로 빈 행으로 N행까지 채우고, `/api/manual-quotes/excel`이 `manual_quote.MIN_ITEM_ROWS`(= `MAX_ITEMS`, 20)를 `_deliver_quote_excel(min_item_rows=…)`로 넘깁니다. 품목 수와 상관없이 늘 같은 크기의 견적서가 되며, 20행이어도 폼1~8 모두 A4 한 장입니다. 수집 견적(컴퓨존 · Apple)은 기본값 0 으로 예전과 같습니다.
 
