@@ -132,6 +132,18 @@ def _shared_fetch(fresh: bool, fn, *args, **kwargs):
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+def asset_v(rel_path: str) -> str:
+    """정적 파일 캐시 무효화용 버전(?v=). 파일 수정 시각을 쓰므로 JS · CSS 를 고치면 자동으로 바뀐다.
+    손으로 적던 ?v= 값을 안 올려 앱 창이 예전 app.js 를 계속 쓰던 문제를 막는다."""
+    try:
+        return str(int((BASE_DIR / "static" / rel_path).stat().st_mtime))
+    except OSError:
+        return "0"
+
+
+templates.env.globals["asset_v"] = asset_v
+
+
 def get_lan_ip() -> str:
     """실행 중인 컴퓨터의 로컬 네트워크(LAN) IPv4 주소 반환"""
     try:

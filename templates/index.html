@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261031g" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{ asset_v("css/style.css") }}" />
 </head>
 <body>
   <nav class="nav">
@@ -1001,6 +1001,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=20261031g"></script>
+  <script src="/static/js/app.js?v={{ asset_v("js/app.js") }}"></script>
 </body>
 </html>

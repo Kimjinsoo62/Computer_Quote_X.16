@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20261030a" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{ asset_v("css/style.css") }}" />
 </head>
 <body>
   <div id="calcPanel" class="calc-panel calc-window" role="application" aria-label="계산기">
@@ -69,6 +69,6 @@
       </div>
     </div>
   </div>
-  <script src="/static/js/calc.js?v=20260901g"></script>
+  <script src="/static/js/calc.js?v={{ asset_v("js/calc.js") }}"></script>
 </body>
 </html>
