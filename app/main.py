@@ -897,14 +897,16 @@ def _deliver_quote_excel(
     pdf: int = 0,
     thumb: int = 0,
     quote_date: str = "",
+    info_override: dict | None = None,
 ):
     """견적 한 건(result.quotes == [picked])을 Excel 로 만들어 파일 · PDF · 썸네일 · 보관 · 메일 초안 중 하나로 돌려준다.
 
     카드 견적(/api/download/excel)과 직접 만든 견적(/api/manual-quotes/excel)이 함께 쓴다.
     base_key 는 같은 견적 · 같은 견적정보면 PDF 를 다시 만들지 않게 하는 캐시 키의 바탕이다.
     quote_date 를 주면(직접 만든 견적) 견적정보의 견적 기준일 대신 그 날짜가 견적서에 들어간다.
+    info_override 를 주면(직접 만든 견적의 견적처) 견적서 · 보관함 · 메일 받는 사람이 그 값을 쓴다.
     """
-    info = load_quote_info()
+    info = {**load_quote_info(), **(info_override or {})}
     single_title = SINGLE_SHEET_TITLE if len(selected_forms) == 1 else ""
 
     def _pdf_key(form_list) -> str:
@@ -918,6 +920,7 @@ def _deliver_quote_excel(
             forms=selected_forms or None,
             single_sheet_title=single_title,
             quote_date=quote_date,
+            info_override=info_override,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -965,6 +968,7 @@ def _deliver_quote_excel(
                 quote_kind_label=kind_label,
                 gallery=False,
                 quote_date=quote_date,
+                info_override=info_override,
             ).getvalue()
         entry = quote_archive.add_entry(
             archive_bytes,
@@ -1265,7 +1269,8 @@ def api_manual_quote_excel(payload: dict = Body(...)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     picked = result.quotes[0]
-    info = load_quote_info()
+    override = manual_quote.info_override(record)
+    info = {**load_quote_info(), **override}
     customer_name = quote_archive.safe_filename_part(info.get("customer_name") or "", 40) or "거래처미지정"
     title = quote_archive.safe_filename_part(record["title"], 40)
     name_parts = [p for p in (customer_name, manual_quote.TAB_LABEL, title) if p]
@@ -1288,6 +1293,7 @@ def api_manual_quote_excel(payload: dict = Body(...)):
         email=int(bool(payload.get("email"))),
         pdf=int(bool(payload.get("pdf"))),
         quote_date=record["quote_date"],
+        info_override=override,
     )
 
 

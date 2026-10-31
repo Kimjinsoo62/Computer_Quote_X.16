@@ -4058,7 +4058,7 @@ document.querySelectorAll(".set-search-clear").forEach((b) => b.addEventListener
 // 설정관리 [📝 새 견적 만들기] 탭에서 폼1~8 중 하나를 고르면 빈 견적 작성 창이 열린다.
 // 단가는 부가세 포함 금액 그대로 쓴다(마진 · 만원 올림 없음). Excel · PDF · 메일은 카드 견적과 같은 서버 코드를 쓴다.
 const mqModal = $("#manualQuoteModal");
-const MQ_MIN_ROWS = 5;
+const MQ_MIN_ROWS = 8; // 종이에 처음 보이는 빈 행 수
 const MQ_MAX_ROWS = 20; // 서버 manual_quote.MAX_ITEMS 와 같게
 let mqCurrentId = "";
 let mqList = [];
@@ -4151,37 +4151,285 @@ async function deleteMq(id) {
   loadMqList();
 }
 
-// ----- 작성 창 -----
+// ----- 작성 창: 고른 서식(폼1~8) 모양의 '종이' 위에서 바로 입력 -----
+// 서식마다 제목 · 색 · 정보칸 · 열 머리글을 흉내 낸다(Excel 과 픽셀 단위로 같지는 않다 → 👁️ 미리보기가 실제 모양).
+// 품목 행은 서식과 상관없이 같은 입력 클래스(.mq-cat/.mq-name/.mq-qty/.mq-price)를 쓴다.
+// 견적처(customer_info)는 견적마다 따로 저장되고 Excel · PDF · 메일에 그대로 들어간다(견적정보 파일은 건드리지 않음).
+let mqMeta = { title: "", quote_date: "", customer: { name: "", manager: "", phone: "", email: "", address: "" } };
+
+// 열 키: no 번호 · cat 구분 · name 품명 · catname [구분] 품명 한 칸 · qty 수량 · unit 단가 · unitaux 단가(입력용, 서식엔 없음)
+//        amount 금액(자동) · as 무상A/S(자동) · remark 비고(자동)
+const MQ_PAPER = {
+  1: { cols: ["no", "cat", "name", "qty", "unit", "amount"], heads: ["No", "구분", "품명", "수량", "단가", "금액"], th: "background:#1F4E79;color:#fff" },
+  2: { cols: ["no", "cat", "name", "qty", "unit", "amount"], heads: ["No", "ITEM", "DESCRIPTION", "QTY", "RATE", "AMOUNT"], th: "background:#2C3E50;color:#fff", flat: true },
+  3: { cols: ["catname", "qty", "unit", "amount"], heads: ["Description", "Qty", "Unit Price", "Amount"], th: "background:#D35400;color:#fff", flat: true, line: "#F0C9A8" },
+  4: { cols: ["no", "cat", "name", "qty", "unit", "amount"], heads: ["No", "Component", "Specification", "Q'ty", "Unit", "Total"], th: "background:#27AE60;color:#fff", flat: true },
+  5: { cols: ["catname", "qty", "unitaux", "amount"], heads: ["Item Description", "Qty", "단가 ✎", "Amount"], th: "background:#fff;color:#000;border-bottom:3px solid #34495E;text-align:left", flat: true },
+  6: { cols: ["cat", "name", "qty", "unit", "amount", "as", "remark"], heads: ["부품 구분", "제조사 / 제품명 (상세 스펙)", "수량", "단가 (원)", "금액 (원)", "무상A/S", "비고"], th: "background:#F2F2F2;color:#000" },
+  7: { cols: ["no", "cat", "name", "qty", "unitaux", "amount", "remark"], heads: ["No", "구 분", "부품 및 상세 사양", "수량", "단가 ✎", "금액", "비고"], th: "background:#D9E1F2;color:#000" },
+  8: { cols: ["no", "cat", "name", "qty", "unit", "amount"], heads: ["NO", "품 목", "규격 및 상세 사양", "수 량", "단 가", "금 액"], th: "background:#1F4E79;color:#fff" },
+};
+const MQ_COL_WIDTH = { no: "6%", cat: "15%", qty: "7%", unit: "12%", unitaux: "12%", amount: "13%", as: "8%", remark: "11%" };
+const MQ_VALID_NOTE = "▶ 견적유효기간 : 견적일로부터 24시간";
+
+// excel_export._as_warranty_period / _spec_remark 와 같은 규칙(폼6 무상A/S, 폼6·7 비고 자동 표시용)
+function mqWarranty(cat) {
+  const c = (cat || "").toUpperCase();
+  if (c.includes("CPU") || c.includes("메인보드") || c.includes("M.B")) return "3년";
+  if (c.includes("그래픽") || c.includes("VGA") || c.includes("VIDEO")) return "3년";
+  if (c.includes("SSD")) return "2~5년";
+  if (c.includes("HDD")) return "2년";
+  if (c.includes("파워") || c.includes("POWER")) return "5~7년";
+  if (c.includes("쿨러") || c.includes("케이스") || c.includes("메모리") || c.includes("RAM")) return "1년";
+  if (["조립", "공임", "기술", "소프트웨어"].some((k) => c.includes(k))) return "-";
+  return "1년";
+}
+
+function mqRemark(cat, name) {
+  const c = (cat || "").toUpperCase();
+  const n = (name || "").toUpperCase();
+  if (c.includes("RAM") || c.includes("메모리")) {
+    if (n.includes("32")) return "총 32GB";
+    if (n.includes("16")) return "총 16GB";
+    if (n.includes("64")) return "총 64GB";
+    return "";
+  }
+  if (c.includes("조립") || c.includes("공임")) return "초기불량 케어";
+  if (c.includes("소프트웨어") || c.includes("윈도우") || n.includes("DSP")) return "정품 라이선스";
+  return "";
+}
+
+function mqGet(path) {
+  return path.split(".").reduce((o, k) => (o == null ? "" : o[k]), mqMeta) ?? "";
+}
+
+function mqSet(path, value) {
+  const keys = path.split(".");
+  const last = keys.pop();
+  const obj = keys.reduce((o, k) => o[k], mqMeta);
+  obj[last] = value;
+}
+
+/** 견적처 · 제목 · 날짜 입력칸(data-mq) 값을 mqMeta 와 맞춘다. except 는 지금 입력 중인 칸. */
+function mqSyncBound(except = null) {
+  document.querySelectorAll("#mqEditPane [data-mq]").forEach((el) => {
+    if (el === except) return;
+    const v = mqGet(el.dataset.mq);
+    if (el.value !== v) el.value = v;
+  });
+  document.querySelectorAll("#mqEditPane [data-mq-text]").forEach((el) => {
+    el.textContent = mqGet(el.dataset.mqText) || el.dataset.empty || "";
+  });
+}
+
+function mqCustomerFromInfo() {
+  const qi = quoteInfo || {};
+  return {
+    name: (qi.customer_name || "").trim(),
+    manager: (qi.customer_manager || "").trim(),
+    phone: (qi.customer_phone || "").trim(),
+    email: (qi.customer_email || "").trim(),
+    address: (qi.customer_address || "").trim(),
+  };
+}
+
+/** 📇 거래처 불러오기 목록. 견적처 상호와 같은 거래처가 있으면 그 항목을 선택해 둔다. */
+function renderMqCustPick() {
+  const sel = $("#mqCustPick");
+  if (!sel) return;
+  const cur = (mqMeta.customer.name || "").trim();
+  sel.innerHTML = `<option value="">${custList.length ? `— 저장된 거래처 ${custList.length}곳 —` : "— 저장된 거래처 없음 —"}</option>` +
+    custList.map((c) => `<option value="${escapeHtml(c.id)}"${c.name === cur ? " selected" : ""}>${escapeHtml(c.name || "")}${c.manager ? ` (${escapeHtml(c.manager)})` : ""}</option>`).join("");
+}
+
+// ----- 종이(견적서 모양) 그리기 -----
+function mqIn(path, ph = "", cls = "") {
+  const type = path === "quote_date" ? "date" : "text";
+  return `<input type="${type}" class="mqp-in ${cls}" data-mq="${path}" value="${escapeHtml(mqGet(path))}" placeholder="${escapeHtml(ph)}" />`;
+}
+
+function mqSup(key, fallback = "") {
+  return `<span class="mqp-sup">${escapeHtml((quoteInfo?.[key] || "").trim() || fallback)}</span>`;
+}
+
+function mqTot(prefix = "", suffix = "") {
+  return `<span data-mq-calc="total" data-prefix="${prefix}" data-suffix="${suffix}">${prefix}0${suffix}</span>`;
+}
+
+const MQ_CONTACT = () => `${mqIn("customer.phone", "연락처", "w-phone")} / ${mqIn("customer.email", "이메일", "w-email")}`;
+
+function mqPaperTop(n) {
+  const valid = `<div class="mqp-valid">${MQ_VALID_NOTE}</div>`;
+  switch (n) {
+    case 1:
+      return `<div class="mqp-title" style="color:#1F4E79">견 &nbsp; 적 &nbsp; 서</div>
+        <table class="mqp-grid mqp-info"><colgroup><col style="width:11%"><col style="width:39%"><col style="width:8%"><col style="width:11%"><col></colgroup>
+          <tr><th>견 적 처</th><td>${mqIn("customer.name", "거래처 상호", "b")}</td><td class="mqp-gap"></td><th>공 급 자</th><td>${mqSup("supplier_name")}</td></tr>
+          <tr><th>담 당 자</th><td>${mqIn("customer.manager", "담당자")}</td><td class="mqp-gap"></td><th>담 당 자</th><td>${mqSup("supplier_manager")}</td></tr>
+          <tr><th>연 락 처</th><td>${MQ_CONTACT()}</td><td class="mqp-gap"></td><th>연 락 처</th><td>${mqSup("supplier_phone")}</td></tr>
+          <tr><th>견 적 일</th><td>${mqIn("quote_date")}</td><td class="mqp-gap"></td><th>이 메 일</th><td>${mqSup("supplier_email")}</td></tr>
+          <tr class="mqp-sum"><td colspan="2" class="c b">합계금액 (부가세포함)</td><td colspan="3" class="r big">${mqTot()}</td></tr>
+        </table>${valid}`;
+    case 2:
+      return `<div class="mqp-flex"><div class="mqp-inv">INVOICE</div>
+          <div class="mqp-right"><div class="mqp-supname">${mqSup("supplier_name")}</div>
+            <div>Tel: ${mqSup("supplier_phone")} / 담당: ${mqSup("supplier_manager")}</div>
+            <div>E-mail: ${mqSup("supplier_email")}</div>
+            <div>DATE: ${mqIn("quote_date")}</div></div></div>
+        <div class="b">BILL TO:</div>
+        <div class="mqp-indent">${mqIn("customer.name", "거래처 상호", "b big w-name")}</div>
+        <div class="mqp-indent">Attn: ${mqIn("customer.manager", "담당자", "w-mgr")} / Tel: ${mqIn("customer.phone", "연락처", "w-phone")} / E-mail: ${mqIn("customer.email", "이메일", "w-email")}</div>${valid}`;
+    case 3:
+      return `<div class="mqp-title l" style="color:#E67E22">PROJECT QUOTATION</div>
+        <div class="mqp-box" style="border-color:#E67E22;background:#FDF2E9"><div class="mqp-box-l">
+            <div class="b">To: ${mqIn("customer.name", "거래처 상호", "b w-name")} (${mqIn("customer.manager", "담당자", "w-mgr")} / ${mqIn("customer.phone", "연락처", "w-phone")} / ${mqIn("customer.email", "이메일", "w-email")})</div>
+            <div>From: ${mqSup("supplier_name")} (${mqSup("supplier_manager")} / ${mqSup("supplier_phone")})</div>
+            <div>E-mail: ${mqSup("supplier_email")}</div></div>
+          <div class="mqp-box-r"><div class="mqp-muted">TOTAL ESTIMATE</div><div class="mqp-hero" style="color:#E67E22">${mqTot("₩ ")}</div></div></div>
+        <div class="mqp-muted r">견적일 ${mqIn("quote_date")}</div>${valid}`;
+    case 4:
+      return `<div class="mqp-title" style="color:#27AE60">기술 명세 및 견적서 (Technical Proposal)</div>
+        <div class="r">Date: ${mqIn("quote_date")} &nbsp;|&nbsp; Ref: 0</div>
+        <table class="mqp-grid mqp-greenbox"><colgroup><col style="width:66%"><col></colgroup>
+          <tr><td class="b">수신 (To) : ${mqIn("customer.name", "거래처 상호", "b w-name")} - ${mqIn("customer.manager", "담당자", "w-mgr")} 귀하 (${mqIn("customer.phone", "연락처", "w-phone")} / ${mqIn("customer.email", "이메일", "w-email")})</td><td class="c mqp-muted b">총 견적금액</td></tr>
+          <tr><td>발신 (From): ${mqSup("supplier_name")} - ${mqSup("supplier_manager")} (${mqSup("supplier_phone")} / ${mqSup("supplier_email")})</td><td class="c mqp-hero" style="color:#27AE60">${mqTot("", " 원")}</td></tr>
+        </table>${valid}`;
+    case 5:
+      return `<div class="mqp-title" style="color:#34495E">견 적 (ESTIMATE)</div>
+        <div class="mqp-flex"><div class="b">To: ${mqIn("customer.name", "거래처 상호", "b w-name")} (${mqIn("customer.manager", "담당자", "w-mgr")} / ${mqIn("customer.phone", "연락처", "w-phone")} / ${mqIn("customer.email", "이메일", "w-email")})</div>
+          <div>Date: ${mqIn("quote_date")}</div></div>${valid}`;
+    case 6:
+      return `<div class="mqp-banner" style="background:#1F4E79">조 립 &nbsp; 컴 퓨 터 &nbsp; 견 적 서</div>
+        <div class="mqp-sec">1. 견적 개요 및 판매자 정보</div>
+        <table class="mqp-grid mqp-info"><colgroup><col style="width:13%"><col style="width:41%"><col style="width:11%"><col></colgroup>
+          <tr><th>견적 일자</th><td>${mqIn("quote_date")}</td><th>상 호 명</th><td>${mqSup("supplier_name")}</td></tr>
+          <tr><th>고 객 명</th><td>${mqIn("customer.name", "거래처 상호", "b")}</td><th>대 표 자</th><td>${mqSup("supplier_manager")}</td></tr>
+          <tr><th>담 당 자</th><td>${mqIn("customer.manager", "담당자")}</td><th>연 락 처</th><td>${mqSup("supplier_phone")}</td></tr>
+          <tr><th>연 락 처</th><td>${MQ_CONTACT()}</td><th>이 메 일</th><td>${mqSup("supplier_email")}</td></tr>
+          <tr><th>용 &nbsp; &nbsp; 도</th><td class="mqp-muted">□ 게이밍 &nbsp; □ 사무/인터넷 &nbsp; □ 영상편집</td><th>매장주소</th><td>${mqSup("supplier_address")}</td></tr>
+        </table>
+        <div class="mqp-sec">2. 조립 부품 세부 견적 내역</div>`;
+    case 7:
+      return `<div class="mqp-title" style="color:#1F4E79">견 &nbsp; &nbsp; 적 &nbsp; &nbsp; 서</div>
+        <div class="mqp-sub">Estimate &nbsp;| &nbsp;Philippians 4:13 &nbsp;I can do all this through him who gives me strength.</div>
+        <div class="mqp-flex top"><div class="mqp-lines">
+            <div class="b">견적일 : ${mqIn("quote_date")}</div>
+            <div class="b big">수 &nbsp;신 : ${mqIn("customer.name", "거래처 상호", "b big w-name")} (${mqIn("customer.manager", "담당자", "w-mgr")})</div>
+            <div>연락처 : ${mqIn("customer.phone", "연락처", "w-phone")}</div>
+            <div>이메일 : ${mqIn("customer.email", "이메일", "w-email")}</div>
+            <div>아래와 같이 견적하여 드립니다.</div></div>
+          <table class="mqp-grid mqp-info mqp-sup7"><colgroup><col style="width:28%"><col></colgroup>
+            <tr><th>상 &nbsp; 호</th><td>${mqSup("supplier_name")} <small>(대표: ${mqSup("supplier_manager")})</small></td></tr>
+            <tr><th>등록번호</th><td>${mqSup("supplier_business_number")}</td></tr>
+            <tr><th>연 락 처</th><td>${mqSup("supplier_phone")}</td></tr>
+            <tr><th>이 메 일</th><td>${mqSup("supplier_email")}</td></tr>
+            <tr><th>주 &nbsp; 소</th><td>${mqSup("supplier_address")}</td></tr></table></div>
+        <table class="mqp-grid mqp-items"><colgroup><col style="width:6%"><col style="width:17%"><col><col style="width:7%"><col style="width:13%"><col style="width:15%"></colgroup>
+          <thead><tr>${["No", "구분/품명", "상세 모델명", "수량", "공급가(원)", "합계(VAT포함)"].map((h) => `<th style="background:#61D1C6;color:#fff">${h}</th>`).join("")}</tr></thead>
+          <tbody><tr><td class="c">1</td><td class="c b">데스크탑 컴퓨터</td><td>${mqIn("title", "견적 제목 (모델명)")}</td><td class="c">1</td><td class="r" data-mq-calc="supply">0</td><td class="r b">${mqTot()}</td></tr>
+            <tr class="mqp-sum"><td colspan="4" class="c b">합 &nbsp; 계 (VAT 포함)</td><td colspan="2" class="r b big">${mqTot("₩ ")}</td></tr></tbody></table>
+        <div class="mqp-note b">■ 납품/보증: 발주 후 3~7일 이내 납품 | 모든 신품 하드웨어 1년 무상 보증 (당사 구매 제품 무상 점검 지원)</div>
+        <div class="mqp-banner sm" style="background:#2E75B6">【 제 품 &nbsp; 상 세 &nbsp; S P E C 】</div>`;
+    case 8:
+      return `<div class="mqp-title" style="color:#1F4E79">견 &nbsp; &nbsp; 적 &nbsp; &nbsp; 서</div>
+        <table class="mqp-grid mqp-info"><colgroup><col style="width:8%"><col style="width:42%"><col style="width:6%"><col style="width:11%"><col></colgroup>
+          <tr><th>상 호</th><td>${mqIn("customer.name", "거래처 상호", "b")}</td><th rowspan="5" class="mqp-vert">공<br>급<br>자</th><th>등록번호</th><td>${mqSup("supplier_business_number")}</td></tr>
+          <tr><th>담 당</th><td>${mqIn("customer.manager", "담당자", "w-mgr")} 귀하</td><th>상 &nbsp; 호</th><td>${mqSup("supplier_name")} <small>(대표: ${mqSup("supplier_manager")})</small></td></tr>
+          <tr><th>연락처</th><td>${MQ_CONTACT()}</td><th>사 업 장</th><td>${mqSup("supplier_address")}</td></tr>
+          <tr><th>내 용</th><td>${mqIn("title", "견적 제목 (비우면 '컴퓨터 견적')")}</td><th>연 락 처</th><td>${mqSup("supplier_phone")}</td></tr>
+          <tr><th>일 자</th><td>${mqIn("quote_date")}</td><th>이 메 일</th><td>${mqSup("supplier_email")}</td></tr>
+          <tr class="mqp-sum"><td colspan="2" class="c b" style="background:#E7E6E6">합계금액 (VAT 포함)</td><td colspan="3" class="r b big" style="color:#1F4E79">${mqTot("₩ ")}</td></tr>
+        </table>`;
+    default:
+      return "";
+  }
+}
+
+function mqPaperBottom(n, ncol) {
+  const sumRow = (label, labelSpan, prefix = "") =>
+    `<tr class="mqp-sum"><td colspan="${labelSpan}" class="c b">${label}</td><td colspan="${ncol - labelSpan}" class="r b big">${mqTot(prefix)}</td><td class="mqp-x"></td></tr>`;
+  const right = (label, value, cls = "") =>
+    `<tr class="mqp-flat-sum ${cls}"><td colspan="${ncol - 1}" class="r b">${label}</td><td class="r b">${value}</td><td class="mqp-x"></td></tr>`;
+  const bank = quoteInfo?.bank_account ? `<div class="mqp-note mqp-muted">■ 입금 계좌 : ${escapeHtml([quoteInfo.bank_name, quoteInfo.bank_account].filter(Boolean).join(" "))}${quoteInfo.bank_holder ? ` (예금주 : ${escapeHtml(quoteInfo.bank_holder)})` : ""}</div>` : "";
+  switch (n) {
+    case 1:
+      return { foot: sumRow("합계 (VAT 포함)", ncol - 1), after: `<div class="mqp-note b" style="color:#000080">※ 윈도우, 오피스 별도 · 기술지원비 별도청구</div>${bank}` };
+    case 2:
+      return { foot: right("SUBTOTAL", mqTot()) + right("TAX (VAT)", "Included") + right("TOTAL DUE", mqTot(), "big"), after: `${bank}<div class="mqp-note c" style="font-style:italic">Thank you for your business!</div>` };
+    case 3:
+    case 4:
+      return { foot: "", after: `<div class="mqp-note mqp-muted">※ 윈도우, 오피스 별도 · 기술지원비 별도청구</div>${bank}` };
+    case 5:
+      return { foot: right("TOTAL", mqTot(), "big navy"), after: `${bank}<div class="mqp-note c">${mqSup("supplier_name")} / 담당: ${mqSup("supplier_manager")} / Tel: ${mqSup("supplier_phone")} / E-mail: ${mqSup("supplier_email")}</div>` };
+    case 6:
+      return { foot: sumRow("합 계 금 액 (VAT 포함)", 4, "₩ "), after: `<div class="mqp-sec">3. 유의사항 및 안내사항</div>
+        <div class="mqp-note mqp-muted">1) 본 견적서는 발행일로부터 3일간 유효하며, 부품 시장 시세 변동에 따라 단가가 변경될 수 있습니다.<br>2) 모든 부품은 100% 정품/새제품만 사용하며, 조립 완료 후 남은 정품 박스 및 구성품은 모두 함께 제공해 드립니다.<br>3) 무상 A/S 기간은 부품 제조사/수입사 기준이며, 매장 자체 초기불량 보증 기간은 구매일로부터 14일입니다.<br>4) 결제 방식: 현금영수증 및 세금계산서 발행 가능 (계좌입금 / 카드결제 동일)</div>${bank}` };
+    case 7:
+      return { foot: "", after: `<div class="mqp-note b">※ 제품 발주시 아래 발주확인 란 작성 후 회신 바랍니다.</div>
+        <div class="mqp-flex"><span>발주 일자 : &nbsp; &nbsp; 년 &nbsp; 월 &nbsp; 일</span><span>상호/성명 : <span data-mq-text="customer.name"></span></span><span>서명/직인 : &nbsp; &nbsp; &nbsp; (인)</span></div>${bank}
+        <div class="mqp-note c mqp-muted">영업담당: ${mqSup("supplier_manager")} / Tel: ${mqSup("supplier_phone")} / E-mail: ${mqSup("supplier_email")}</div>` };
+    case 8:
+      return { foot: sumRow("TOTAL (부가세 포함)", ncol - 1, "₩ "), after: `<div class="mqp-note b">■ 첨부 및 안내사항</div><div class="mqp-note">1. 납품일자 : 기간 협의 &nbsp; | &nbsp; 2. 유효기간 : 견적일로부터 7일<br>3. 결제조건 : 선결제 (세금계산서 발행)</div>${bank}` };
+    default:
+      return { foot: "", after: "" };
+  }
+}
+
+/** 고른 서식 모양으로 종이 전체를 다시 그린다. items 는 지금까지 입력한 품목(빈 행 포함 가능). */
+function renderMqPaper(items = []) {
+  const paper = $("#mqPaper");
+  if (!paper) return;
+  const n = Number($("#mqForm")?.value) || 1;
+  const cfg = MQ_PAPER[n];
+  const ncol = cfg.cols.length;
+  const { foot, after } = mqPaperBottom(n, ncol);
+  paper.className = `mq-paper mqp-f${n}${cfg.flat ? " mqp-flat" : ""}`;
+  paper.style.setProperty("--mqp-line", cfg.line || "#dddddd");
+  paper.innerHTML = `${mqPaperTop(n)}
+    <table class="mqp-grid mqp-items mqp-rows"><colgroup>${cfg.cols.map((c) => `<col${MQ_COL_WIDTH[c] ? ` style="width:${MQ_COL_WIDTH[c]}"` : ""}>`).join("")}<col style="width:26px"></colgroup>
+      <thead><tr>${cfg.heads.map((h, i) => `<th style="${cfg.th}"${cfg.cols[i] === "unitaux" ? ' class="mqp-aux-h" title="이 서식에는 단가 열이 없습니다. 금액(수량×단가) 계산용 입력칸입니다"' : ""}>${h}</th>`).join("")}<th class="mqp-x"></th></tr></thead>
+      <tbody id="mqItemsTbody"></tbody>
+      ${foot ? `<tfoot>${foot}</tfoot>` : ""}
+    </table>
+    <div class="mqp-addrow"><button type="button" id="mqBtnAddRow" class="btn btn-xs btn-outline" title="품목 행을 하나 더 추가합니다 (최대 ${MQ_MAX_ROWS}행)">＋ 행추가</button></div>
+    ${after}`;
+  $("#mqBtnAddRow").addEventListener("click", () => {
+    const cur = getMqItems({ keepEmpty: true });
+    if (cur.length >= MQ_MAX_ROWS) return;
+    cur.push({ category: "", name: "", qty: 1, unit_price: 0 });
+    renderMqRows(cur);
+  });
+  renderMqRows(items);
+  mqSyncBound();
+}
+
 function renderMqRows(items = []) {
   const tbody = $("#mqItemsTbody");
   if (!tbody) return;
+  const cfg = MQ_PAPER[Number($("#mqForm")?.value) || 1];
   const rows = items.map((it) => ({ ...it }));
   while (rows.length < MQ_MIN_ROWS) rows.push({ category: "", name: "", qty: 1, unit_price: 0 });
-  tbody.innerHTML = "";
-  rows.slice(0, MQ_MAX_ROWS).forEach((it, idx) => {
-    const tr = document.createElement("tr");
-    tr.className = "mq-row";
-    tr.innerHTML = `
-      <td style="text-align:center;">${idx + 1}</td>
-      <td><input type="text" class="tr-inp mq-cat" value="${escapeHtml(it.category || "")}" placeholder="예: 본체" /></td>
-      <td><input type="text" class="tr-inp mq-name" value="${escapeHtml(it.name || "")}" placeholder="품명 / 상세 모델명" /></td>
-      <td><input type="text" inputmode="numeric" class="tr-inp mq-qty" style="text-align:center;" value="${it.name || it.unit_price ? (it.qty || 1) : ""}" placeholder="1" /></td>
-      <td class="tr-col-cost"><input type="text" inputmode="numeric" class="tr-inp mq-price" style="text-align:right;" value="${it.unit_price ? mqFmt(it.unit_price) : ""}" placeholder="0" /></td>
-      <td class="tr-col-cost mq-amount" style="text-align:right;">0</td>
-      <td class="tr-col-act"><button type="button" class="tr-task-del-btn" title="이 행 삭제">✕</button></td>`;
-    tr.querySelector(".mq-price").addEventListener("input", (e) => formatTrCostInput(e.target)); // 콤마 + calcTrTotal(무해)
-    tr.querySelector(".mq-price").addEventListener("input", calcMqTotal);
-    tr.querySelector(".mq-qty").addEventListener("input", (e) => {
-      e.target.value = mqDigits(e.target.value).slice(0, 4);
-      calcMqTotal();
-    });
-    tr.querySelector(".tr-task-del-btn").addEventListener("click", () => {
-      const cur = getMqItems({ keepEmpty: true });
-      cur.splice(idx, 1);
-      renderMqRows(cur);
-    });
-    tbody.appendChild(tr);
-  });
+  const cell = (key, it, idx) => {
+    const filled = it.name || it.unit_price;
+    const cat = `<input type="text" class="mqp-in mq-cat" value="${escapeHtml(it.category || "")}" placeholder="구분" />`;
+    const name = `<input type="text" class="mqp-in mq-name" value="${escapeHtml(it.name || "")}" placeholder="품명 / 상세 모델명" />`;
+    const price = `<input type="text" inputmode="numeric" class="mqp-in mq-price r" value="${it.unit_price ? mqFmt(it.unit_price) : ""}" placeholder="0" />`;
+    switch (key) {
+      case "no": return `<td class="c">${idx + 1}</td>`;
+      case "cat": return `<td class="mqp-cat">${cat}</td>`;
+      case "name": return `<td>${name}</td>`;
+      case "catname": return `<td><div class="mqp-catname">[${cat}] ${name}</div></td>`;
+      case "qty": return `<td><input type="text" inputmode="numeric" class="mqp-in mq-qty c" value="${filled ? (it.qty || 1) : ""}" placeholder="1" /></td>`;
+      case "unit": return `<td>${price}</td>`;
+      case "unitaux": return `<td class="mqp-aux">${price}</td>`;
+      case "amount": return `<td class="r mq-amount"></td>`;
+      case "as": return `<td class="c mqp-auto mq-as"></td>`;
+      case "remark": return `<td class="c mqp-auto mq-remark"></td>`;
+      default: return "<td></td>";
+    }
+  };
+  tbody.innerHTML = rows.slice(0, MQ_MAX_ROWS).map((it, idx) =>
+    `<tr class="mq-row">${cfg.cols.map((k) => cell(k, it, idx)).join("")}<td class="mqp-x"><button type="button" class="mqp-del" data-idx="${idx}" title="이 행 삭제">✕</button></td></tr>`).join("");
   const addBtn = $("#mqBtnAddRow");
   if (addBtn) addBtn.disabled = rows.length >= MQ_MAX_ROWS;
   calcMqTotal();
@@ -4202,12 +4450,22 @@ function calcMqTotal() {
   document.querySelectorAll("#mqItemsTbody .mq-row").forEach((tr) => {
     const qty = Math.max(1, Number(mqDigits(tr.querySelector(".mq-qty").value)) || 1);
     const price = Number(mqDigits(tr.querySelector(".mq-price").value)) || 0;
+    const cat = tr.querySelector(".mq-cat").value.trim();
     const named = tr.querySelector(".mq-name").value.trim();
     const amount = named || price ? qty * price : 0;
-    tr.querySelector(".mq-amount").textContent = mqFmt(amount);
+    tr.querySelector(".mq-amount").textContent = named || price ? mqFmt(amount) : "";
+    const as = tr.querySelector(".mq-as");
+    if (as) as.textContent = named ? mqWarranty(cat) : "";
+    const remark = tr.querySelector(".mq-remark");
+    if (remark) remark.textContent = named ? mqRemark(cat, named) : "";
     if (named) total += amount;
   });
-  $("#mqTotal").textContent = mqFmt(total);
+  document.querySelectorAll("#mqPaper [data-mq-calc='total']").forEach((el) => {
+    el.textContent = `${el.dataset.prefix || ""}${mqFmt(total)}${el.dataset.suffix || ""}`;
+  });
+  document.querySelectorAll("#mqPaper [data-mq-calc='supply']").forEach((el) => {
+    el.textContent = mqFmt(Math.round(total / 1.1)); // excel_export 폼7 공급가 = round(합계 / 1.1)
+  });
   return total;
 }
 
@@ -4215,8 +4473,9 @@ function getMqPayloadQuote() {
   return {
     id: mqCurrentId,
     form: Number($("#mqForm").value) || 1,
-    title: $("#mqQuoteTitle").value.trim(),
-    quote_date: $("#mqQuoteDate").value,
+    title: (mqMeta.title || "").trim(),
+    quote_date: mqMeta.quote_date,
+    customer_info: { ...mqMeta.customer },
     items: getMqItems(),
   };
 }
@@ -4226,26 +4485,96 @@ function syncMqHeader() {
   $("#mqTitle").textContent = `📝 새 견적 만들기 — 폼${n} (${EXCEL_FORM_LABELS[n]})`;
   const badge = $("#mqStatusBadge");
   if (badge) badge.textContent = mqCurrentId ? "저장된 견적 수정 중" : "새 견적";
-  $("#mqCustomer").textContent = (quoteInfo?.customer_name || "").trim() || "(견적처 미지정)";
 }
 
-/** rec 이 있으면 저장된 견적을 열고, 없으면 form 서식으로 빈 견적을 연다. */
-function openMqEditor(rec, form = 1) {
+/** rec 이 있으면 저장된 견적을 열고, 없으면 form 서식으로 빈 견적을 연다. 견적처 기본값은 견적정보에 지정된 거래처. */
+async function openMqEditor(rec, form = 1) {
   const sel = $("#mqForm");
   if (sel && !sel.childElementCount) {
     sel.innerHTML = Object.entries(EXCEL_FORM_LABELS).map(([n, l]) => `<option value="${n}">폼${n} · ${l}</option>`).join("");
   }
   mqCurrentId = rec?.id || "";
   sel.value = String(rec?.form || form || 1);
-  $("#mqQuoteTitle").value = rec?.title || "";
-  $("#mqQuoteDate").value = rec?.quote_date || new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD (로컬 날짜)
+  const saved = rec?.customer_info;
+  mqMeta = {
+    title: rec?.title || "",
+    quote_date: rec?.quote_date || new Date().toLocaleDateString("sv-SE"), // YYYY-MM-DD (로컬 날짜)
+    // 예전 저장본(견적처 칸 없음)은 견적정보의 견적처로 연다
+    customer: saved && Object.values(saved).some((v) => String(v || "").trim()) ? { ...mqCustomerFromInfo(), ...saved } : mqCustomerFromInfo(),
+  };
   $("#mqUnitPrice").checked = showUnitPrices;
-  renderMqRows(rec?.items || []);
+  renderMqPaper(rec?.items || []);
   showMqEdit();
   syncMqHeader();
+  renderMqCustPick();
   show(mqModal);
   $("#mqQuoteTitle").focus();
+  if (!custList.length) {
+    await loadCustomers();
+    renderMqCustPick();
+  }
 }
+
+function mqApplyCustomer(c) {
+  mqMeta.customer = {
+    name: (c?.name || "").trim(),
+    manager: (c?.manager || "").trim(),
+    phone: (c?.phone || "").trim(),
+    email: (c?.email || "").trim(),
+    address: (c?.address || "").trim(),
+  };
+  mqSyncBound();
+  renderMqCustPick();
+}
+
+async function saveMqCustomer() {
+  const data = { ...mqMeta.customer };
+  if (!data.name) {
+    alert("견적처 상호를 먼저 입력하세요.");
+    return;
+  }
+  try {
+    const res = await postJsonRaw("/api/customers", data);
+    if (!res.ok) throw new Error(res.data?.detail || "거래처 저장에 실패했습니다.");
+  } catch (e) {
+    alert("거래처 저장 오류: " + e.message);
+    return;
+  }
+  await loadCustomers();
+  renderMqCustPick();
+  alert(`📒 '${data.name}' 거래처를 목록에 저장했습니다.`);
+}
+
+// 종이 · 상단 칸 입력을 한 곳에서 받는다(다시 그려도 리스너가 남도록 위임)
+$("#mqEditPane")?.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.dataset?.mq) {
+    mqSet(el.dataset.mq, el.value);
+    mqSyncBound(el);
+    if (el.dataset.mq === "customer.name") renderMqCustPick();
+    return;
+  }
+  if (el.classList.contains("mq-price")) {
+    const d = mqDigits(el.value).slice(0, 12);
+    el.value = d ? mqFmt(Number(d)) : "";
+  } else if (el.classList.contains("mq-qty")) {
+    el.value = mqDigits(el.value).slice(0, 4);
+  }
+  if (el.closest("#mqItemsTbody")) calcMqTotal();
+});
+$("#mqEditPane")?.addEventListener("click", (e) => {
+  const del = e.target.closest(".mqp-del");
+  if (!del) return;
+  const cur = getMqItems({ keepEmpty: true });
+  cur.splice(Number(del.dataset.idx), 1);
+  renderMqRows(cur);
+});
+$("#mqCustPick")?.addEventListener("change", (e) => {
+  const c = custList.find((x) => x.id === e.target.value);
+  if (c) mqApplyCustomer(c);
+});
+$("#mqCustReset")?.addEventListener("click", () => mqApplyCustomer(mqCustomerFromInfo()));
+$("#mqCustSave")?.addEventListener("click", saveMqCustomer);
 
 function closeMqEditor() {
   mqPreviewSeq += 1;
@@ -4362,12 +4691,12 @@ async function previewMq() {
   }
 }
 
-$("#mqForm")?.addEventListener("change", () => { syncMqHeader(); showMqEdit(); });
-$("#mqBtnAddRow")?.addEventListener("click", () => {
-  const cur = getMqItems({ keepEmpty: true });
-  if (cur.length >= MQ_MAX_ROWS) return;
-  cur.push({ category: "", name: "", qty: 1, unit_price: 0 });
-  renderMqRows(cur);
+// 서식을 바꾸면 입력한 품목 · 견적처를 그대로 둔 채 종이 모양만 바꾼다
+$("#mqForm")?.addEventListener("change", () => {
+  const items = getMqItems({ keepEmpty: true });
+  syncMqHeader();
+  showMqEdit();
+  renderMqPaper(items);
 });
 $("#mqBtnNew")?.addEventListener("click", () => {
   if (confirm("지금 서식으로 빈 견적을 새로 쓸까요? (저장하지 않은 내용은 지워집니다)")) openMqEditor(null, Number($("#mqForm").value));

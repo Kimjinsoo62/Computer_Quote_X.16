@@ -21,6 +21,8 @@ TAB_LABEL = "직접견적"
 # 폼 시트는 A4 세로 1페이지로 강제되므로 행이 너무 많으면 글자가 읽기 어려울 만큼 줄어든다.
 MAX_ITEMS = 20
 FORM_NUMBERS = range(1, 9)
+# 견적마다 따로 두는 견적처(거래처) 정보. 비어 있으면(예전 저장본) 견적정보(quote_info.json)의 견적처를 쓴다.
+CUSTOMER_FIELDS = ("name", "manager", "phone", "email", "address")
 
 
 def _int(value: Any, default: int = 0) -> int:
@@ -48,14 +50,28 @@ def clean_items(items: Any) -> list[dict[str, Any]]:
     return rows[:MAX_ITEMS]
 
 
+def clean_customer(value: Any) -> dict[str, str]:
+    src = value if isinstance(value, dict) else {}
+    return {k: str(src.get(k) or "").strip()[:200] for k in CUSTOMER_FIELDS}
+
+
 def clean_record(data: dict[str, Any]) -> dict[str, Any]:
     form = _int(data.get("form"), 1)
     return {
         "form": form if form in FORM_NUMBERS else 1,
         "title": str(data.get("title") or "").strip(),
         "quote_date": str(data.get("quote_date") or "").strip() or date.today().isoformat(),
+        "customer_info": clean_customer(data.get("customer_info")),
         "items": clean_items(data.get("items")),
     }
+
+
+def info_override(record: dict[str, Any]) -> dict[str, str]:
+    """견적서에 들어갈 견적처를 quote_info 키 이름으로 돌려준다. 견적처 칸이 모두 비면 {}(견적정보 그대로)."""
+    cust = clean_customer(record.get("customer_info"))
+    if not any(cust.values()):
+        return {}
+    return {f"customer_{k}": v for k, v in cust.items()}
 
 
 def total_of(items: list[dict[str, Any]]) -> int:
@@ -125,12 +141,12 @@ def get_manual_quote(quote_id: str) -> dict[str, Any] | None:
 
 
 def save_manual_quote(data: dict[str, Any]) -> dict[str, Any]:
-    """id 가 있으면 고치고, 없거나 못 찾으면 새로 만든다. 거래처 이름은 저장할 때의 견적처로 남긴다(목록용)."""
+    """id 가 있으면 고치고, 없거나 못 찾으면 새로 만든다. customer 는 목록 표시용 거래처 이름(견적처 칸 → 없으면 견적정보)."""
     records = load_manual_quotes()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rec = clean_record(data)
     rec["total"] = total_of(rec["items"])
-    rec["customer"] = (load_quote_info().get("customer_name") or "").strip()
+    rec["customer"] = rec["customer_info"]["name"] or (load_quote_info().get("customer_name") or "").strip()
     rec["updated_at"] = now
     quote_id = str(data.get("id") or "")
     for idx, old in enumerate(records):

@@ -1891,13 +1891,106 @@ html.calc-html body {
 .mq-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text); white-space: nowrap; }
 .mq-inline input[type="checkbox"] { width: 16px; height: 16px; }
 .mq-select { width: auto; min-width: 150px; background: #fff; border: 1px solid #94a3b8; border-radius: 4px; }
-.mq-meta { display: grid; grid-template-columns: 1fr 170px auto; gap: 12px; align-items: end; }
+.mq-meta { display: grid; grid-template-columns: minmax(200px, 1.4fr) 150px minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 8px; align-items: end; }
 .mq-meta label { display: flex; flex-direction: column; gap: 3px; font-weight: 700; color: var(--text); }
 .mq-meta .tr-inp { background: #fff; border: 1px solid #94a3b8; border-radius: 4px; padding: 4px 8px; }
-.mq-meta-customer { padding-bottom: 6px; color: var(--text); }
-.mq-meta-customer small { color: var(--muted); }
-.mq-table .tr-inp { border-color: #e2e8f0; }
-.mq-table .mq-amount { font-weight: 700; color: #0f172a; }
+.mq-meta-btns { display: flex; gap: 6px; }
+.mq-paper-hint { margin: 0; }
+/* 견적서 모양 종이: A4 세로 비율의 흰 종이 위에 서식별 색 · 칸을 흉내 낸다 */
+.mq-paper-wrap { background: #e5e7eb; border-radius: 6px; padding: 14px 0; display: flex; justify-content: center; }
+.mq-paper { width: 860px; min-height: 1216px; background: #fff; color: #111; box-shadow: 0 2px 10px rgba(0, 0, 0, .18); padding: 26px 30px 30px; font-size: 10pt; line-height: 1.35; font-family: "Malgun Gothic", sans-serif; }
+.mq-paper .c { text-align: center; }
+.mq-paper .r { text-align: right; }
+.mq-paper .l { text-align: left; }
+.mq-paper .b { font-weight: 700; }
+.mq-paper .big { font-size: 12pt; }
+.mqp-title { font-size: 24pt; font-weight: 800; text-align: center; letter-spacing: 2px; margin: 0 0 12px; white-space: nowrap; }
+.mqp-title.l { text-align: left; }
+.mqp-sub { text-align: center; font-style: italic; color: #555; font-size: 9pt; margin: -6px 0 12px; }
+.mqp-banner { color: #fff; text-align: center; font-size: 16pt; font-weight: 800; padding: 6px; letter-spacing: 2px; }
+.mqp-banner.sm { font-size: 11pt; margin-top: 12px; }
+.mqp-sec { background: #D9E1F2; font-weight: 700; font-size: 11pt; padding: 4px 6px; margin-top: 6px; }
+.mqp-valid { color: #000080; font-weight: 700; margin: 6px 0 10px; }
+.mqp-note { margin-top: 8px; font-size: 9pt; }
+.mqp-muted { color: #666; }
+.mqp-sup { color: #475569; }
+.mqp-flex { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 4px 0; }
+.mqp-flex.top { align-items: flex-start; margin-bottom: 10px; }
+.mqp-right { text-align: right; display: flex; flex-direction: column; gap: 3px; }
+.mqp-supname { font-size: 15pt; font-weight: 700; }
+.mqp-inv { font: 800 30pt Arial, sans-serif; color: #333; }
+.mqp-indent { padding-left: 24px; margin: 3px 0; }
+.mqp-lines { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.mqp-sup7 { width: 46%; flex: 0 0 46%; }
+.mqp-box { display: flex; border: 2px solid; margin: 6px 0 4px; }
+.mqp-box-l { flex: 1 1 auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 5px; border-right: 1px solid #f5cba7; }
+.mqp-box-r { flex: 0 0 34%; text-align: right; padding: 6px 10px; }
+.mqp-hero { font-size: 20pt; font-weight: 800; }
+.mqp-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mqp-grid th, .mqp-grid td { border: 1px solid #999; padding: 2px 4px; height: 28px; vertical-align: middle; }
+.mqp-info th { background: #E7E6E6; font-weight: 700; text-align: center; white-space: nowrap; }
+.mqp-f6 .mqp-info th, .mqp-f8 .mqp-info th { background: #F2F2F2; }
+.mqp-info td.mqp-gap { border-top: 0; border-bottom: 0; background: #fff; }
+.mqp-vert { background: #E7E6E6 !important; line-height: 1.6; }
+.mqp-greenbox { border: 2px solid #27AE60; margin: 4px 0; }
+.mqp-greenbox td { border-color: #a7d7b8; height: 36px; }
+.mqp-sum td { background: #FFF2CC; height: 32px; }
+.mqp-items { margin-top: 2px; }
+.mqp-items th { font-weight: 700; text-align: center; height: 30px; }
+.mqp-items td.mqp-cat .mqp-in { text-align: center; }
+.mqp-f4 .mqp-cat .mqp-in, .mqp-f7 .mqp-cat .mqp-in, .mqp-f8 .mqp-cat .mqp-in { font-weight: 700; }
+.mqp-f3 .mq-amount, .mqp-f4 .mq-amount, .mqp-f8 .mq-amount { font-weight: 700; }
+/* 인보이스 · 보고서형 등: 세로선 없이 가로 줄만 */
+.mqp-flat .mqp-items th, .mqp-flat .mqp-items td { border: 0; border-bottom: 1px solid var(--mqp-line); }
+.mqp-flat .mqp-items thead th { border-bottom-color: transparent; }
+.mqp-f5 .mqp-items thead th { border-bottom: 3px solid #34495E; }
+.mqp-flat-sum td { border: 0 !important; height: 26px; }
+.mqp-flat-sum.big td { font-size: 14pt; color: #2C3E50; }
+.mqp-flat-sum.navy td:last-of-type, .mqp-flat-sum.navy td:nth-last-child(2) { color: #000080; }
+.mqp-catname { display: flex; align-items: center; gap: 2px; }
+.mqp-catname .mq-cat { flex: 0 0 90px; }
+.mqp-catname .mq-name { flex: 1 1 auto; }
+.mqp-auto { color: #555; background: #fafafa; }
+.mqp-aux { background: #fffbea; }
+.mqp-aux .mqp-in { border: 1px dashed #e0b84c !important; }
+.mqp-aux-h { font-style: italic; opacity: .85; }
+/* 입력칸: 평소엔 셀과 구분되지 않을 만큼 옅게, 가리키거나 입력할 때만 테두리 */
+.mqp-in { width: 100%; border: 1px solid transparent; background: rgba(59, 130, 246, .05); font: inherit; color: inherit; padding: 1px 4px; border-radius: 2px; min-width: 0; }
+.mqp-in:hover { border-color: #cbd5e1; }
+.mqp-in:focus { outline: none; border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 2px rgba(59, 130, 246, .2); }
+.mqp-in::placeholder { color: #b6bec9; font-weight: 400; }
+.mqp-in.b { font-weight: 700; }
+.mqp-in.big { font-size: 13pt; }
+.mqp-in[type="date"] { width: 140px; }
+.mq-paper div > .mqp-in, .mq-paper td > .mqp-in.w-phone, .mq-paper td > .mqp-in.w-email, .mq-paper td > .mqp-in.w-mgr { display: inline-block; vertical-align: middle; }
+.mqp-in.w-name { width: 220px; }
+.mqp-in.w-mgr { width: 90px; }
+.mqp-in.w-phone { width: 120px; }
+.mqp-in.w-email { width: 170px; }
+.mqp-indent .mqp-in.w-name { width: 340px; }
+/* 영문 요약형(폼3 · 폼5)의 'To: 상호 (담당 / 전화 / 이메일)' 한 줄이 접히지 않게 칸을 줄인다 */
+.mqp-box-l > div, .mqp-f5 .mqp-flex > div { white-space: nowrap; }
+.mqp-box-l .mqp-in.w-name { width: 130px; }
+.mqp-box-l .mqp-in.w-mgr { width: 70px; }
+.mqp-box-l .mqp-in.w-phone { width: 95px; }
+.mqp-box-l .mqp-in.w-email { width: 135px; }
+.mqp-greenbox .mqp-in.w-name { width: 200px; }
+.mqp-greenbox .mqp-in.w-phone { width: 115px; }
+.mqp-greenbox .mqp-in.w-email { width: 180px; }
+td > .mqp-in.w-phone { width: 42%; }
+td > .mqp-in.w-email { width: 52%; }
+/* 행 삭제 칸: 종이 오른쪽 바깥처럼 보이게 테두리 없이 */
+.mqp-grid .mqp-x, .mqp-flat .mqp-items .mqp-x { border: 0 !important; background: transparent !important; padding: 0 0 0 4px; }
+.mqp-del { visibility: hidden; border: 0; background: #fee2e2; color: #b91c1c; border-radius: 3px; width: 20px; height: 20px; cursor: pointer; font-size: 11px; line-height: 1; }
+.mq-row:hover .mqp-del, .mq-row:focus-within .mqp-del { visibility: visible; }
+.mqp-addrow { margin: 4px 0 2px; }
+.mqp-addrow .btn { background: #fff; color: #1F4E79; border: 1px solid #1F4E79; }
+.mqp-addrow .btn:disabled { opacity: .4; }
+/* 품목표: 행 삭제 칸(26px)을 종이 오른쪽 여백으로 빼서 표 본체 폭을 위쪽 정보표와 맞춘다 */
+.mqp-rows { width: calc(100% + 30px); }
+/* 빈 행의 자리 글자는 그 행을 가리키거나 입력할 때만 보인다 */
+.mq-row .mqp-in::placeholder { color: transparent; }
+.mq-row:hover .mqp-in::placeholder, .mq-row:focus-within .mqp-in::placeholder { color: #b6bec9; }
 .mq-preview { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; }
 .mq-preview.hidden { display: none; }
 .mq-preview-view { flex: 1 1 auto; min-height: 60vh; background: #fff; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }

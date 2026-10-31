@@ -584,12 +584,14 @@ def build_excel(
     single_sheet_title: str = "",
     gallery: bool = True,
     quote_date: str = "",
+    info_override: dict | None = None,
 ) -> BytesIO:
     """hide_unit_prices=True 면 품목별 단가·금액을 비우고 합계만 남긴다.
 
     forms 를 주면(예: [1, 3]) 견적요약을 빼고 해당 폼 시트만 남긴다. 비우면 지금처럼 전체를 만든다.
     single_sheet_title 은 시트가 하나만 남을 때 그 시트의 이름이다.
     gallery=True 면(서식 선택이 없는 전체 파일일 때만) 맨 앞에 폼1~8 썸네일 '서식 목록' 시트를 넣는다.
+    info_override 는 견적정보 위에 덮어쓸 값(직접 만든 견적의 견적처: customer_name 등)이다.
     """
     if result is None:
         result = fetch_today_quotes()
@@ -598,7 +600,7 @@ def build_excel(
         return None if hide_unit_prices else value
 
     # 저장된 견적처/공급자 정보 (모든 폼 시트에 적용)
-    info = load_quote_info()
+    info = {**load_quote_info(), **(info_override or {})}
     # 견적일: 직접 만든 견적은 작성 창의 날짜(quote_date 인자)가 우선, 그 밖은 견적정보의 견적 기준일 → 수집일
     quote_date = quote_date or info["quote_date"] or result.quote_date
 
