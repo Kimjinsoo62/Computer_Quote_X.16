@@ -1,10 +1,15 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.06
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.07
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver XI.06 주요 변경
+## 🆕 Ver XI.07 주요 변경
+
+1. **📝 견적서 모양 그대로 입력** — 새 견적 작성 창(`#manualQuoteModal`)이 작업내역서식 표 대신 고른 서식(폼1~8)의 제목 · 색 · 견적처/공급자 칸 · 품목 머리글을 흉내 낸 A4 종이(`#mqPaper`, `renderMqPaper` + `MQ_PAPER` 서식표)로 바뀌어 견적서 칸에 바로 입력합니다. 서식을 바꿔도 입력 내용은 유지됩니다. 금액 · 합계 · 폼6 무상A/S · 폼6/7 비고 · 폼7 공급가는 자동 표시(서버 `_as_warranty_period`/`_spec_remark`와 같은 규칙), 단가 열이 없는 폼5 · 7 은 입력용 단가 칸을 따로 둡니다. 실제 모양은 👁️ 미리보기(PDF)가 기준입니다.
+2. **📇 견적마다 거래처 지정** — 견적 레코드에 `customer_info`(상호 · 담당자 · 연락처 · 이메일 · 주소)를 저장합니다. 새 견적은 견적정보의 견적처가 기본값이고, [📇 거래처 불러오기](`customers.json`) · 직접 입력 · [↺ 기본 견적처] · [📒 거래처 목록에 저장]을 지원합니다. `manual_quote.info_override()`가 `build_excel(info_override=…)` · `_deliver_quote_excel(info_override=…)`로 넘어가 Excel · PDF · 보관함 · 메일 받는 사람에 그 견적처가 들어갑니다(`quote_info.json`은 건드리지 않음). 견적처 칸이 모두 빈 예전 저장본은 견적정보의 견적처를 씁니다.
+
+## Ver XI.06 주요 변경
 
 1. **📝 새 견적 만들기** — [⚙️ 설정관리]에 `📝 새 견적 만들기` 탭을 추가했습니다. 폼1~8 썸네일 중 하나를 고르면 빈 견적 작성 창(`#manualQuoteModal`)이 열리고, 구분 · 품명 · 수량 · 단가(부가세 포함, 최대 20행)를 직접 적어 `manual_quotes.json`에 저장 · 수정합니다(`app/manual_quote.py`, `GET/POST/DELETE /api/manual-quotes`). `to_result()`가 `TodayQuotesResult` 한 건으로 바꿔 `build_excel()`에 넘기므로 8종 서식이 그대로 쓰이며 마진 · 만원 올림은 없습니다. Excel · PDF 미리보기 · 보관함 · 메일 초안은 `POST /api/manual-quotes/excel`이 카드 견적과 같은 `_deliver_quote_excel()`(기존 `download_excel` 꼬리를 뽑아 낸 공용 함수)로 처리합니다.
 
