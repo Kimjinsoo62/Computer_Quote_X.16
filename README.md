@@ -1,10 +1,15 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.11
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.12
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver XI.11 주요 변경
+## 🆕 Ver XI.12 주요 변경
+
+1. **⚙️ 설정관리 바로가기** — 상단 네비게이션의 `#btnSettings`를 제목(로고) 바로 오른쪽 `.nav-quick` 묶음으로 옮기고, 옆에 `🗂️ 견적서 관리`(`#btnNavArchive` → `openSettings("archive")`) · `📋 작업내역서`(`#btnNavTaskReport` → `openSettings("taskreport")`) 버튼을 두었습니다. 설정관리 창의 해당 탭을 바로 열고 목록을 불러옵니다.
+2. **🛡️ 작업내역서 보증 기간 2주** — 보증 기간 라디오에 `2주`를 추가했습니다(`TR_WARRANTY_PRESETS = ["2주", "1개월", "3개월"]`). 서버(`task_report.py`)는 글자를 그대로 저장하므로 Excel 작업내역서에도 "2주"로 나옵니다.
+
+## Ver XI.11 주요 변경
 
 1. **📝 작성 창 품목 칸 20행** — 새 견적 작성 창의 견적서 모양 종이(`#mqPaper`)가 빈 행 8개 대신 처음부터 20행으로 열립니다(`app.js` `MQ_MIN_ROWS = MQ_MAX_ROWS`). 실제 견적서의 고정 20행 품목 표(XI.10, `manual_quote.MIN_ITEM_ROWS`)와 칸 수가 같아집니다. 저장된 견적을 열거나 행을 ✕로 지워도 20행으로 다시 채워집니다.
 
