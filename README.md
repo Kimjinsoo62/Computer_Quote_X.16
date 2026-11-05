@@ -1,10 +1,14 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.14
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.15
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver XI.14 주요 변경
+## 🆕 Ver XI.15 주요 변경
+
+1. **🙈 Excel "게시 중…" 진행 창 숨김** — 앱 시작 예열(`prewarm`)과 서식 미리보기 때 상주 Excel 이 `ExportAsFixedFormat` 중에 `Visible=$false`와 상관없이 "게시 중..." 진행 창(클래스 `CMsoProgressBarWindow`)을 약 4.5초 띄우던 것을 없앴습니다. `pdf_export._hider_loop` 스레드가 `SetWinEventHook(EVENT_OBJECT_SHOW)`로 창이 뜨는 즉시, 그리고 변환 중에는 0.1초 간격으로 훑어 `ShowWindowAsync(SW_HIDE)`로 숨깁니다. 대상은 워커 Excel PID 의 그 진행 창뿐이라 사용자 Excel · 오류 대화상자는 건드리지 않습니다.
+
+## Ver XI.14 주요 변경
 
 1. **🌐 네트워크 버튼에 포트 표시** — 상단 네트워크 버튼(`#networkIpText`)의 글자를 `네트워크 접속 (IP)`에서 `IP:포트`(예: `192.168.0.13:8090`)로 바꿨습니다. 포트는 `landing()`이 넘기는 `port` 템플릿 값입니다.
 
