@@ -2070,6 +2070,9 @@ function closeSettings() {
 }
 
 $("#btnSettings")?.addEventListener("click", () => openSettings());
+// 메인창 상단 바로가기: 설정관리의 해당 탭을 바로 연다
+$("#btnNavArchive")?.addEventListener("click", () => openSettings("archive"));
+$("#btnNavTaskReport")?.addEventListener("click", () => openSettings("taskreport"));
 $("#settingsClose")?.addEventListener("click", closeSettings);
 settingsModal?.addEventListener("click", (e) => {
   if (e.target === settingsModal) closeSettings();
@@ -3543,8 +3546,8 @@ function getTrTasksFromForm({ keepEmpty = false } = {}) {
   return tasks;
 }
 
-/** 보증 기간: 1 · 3개월 중 고르거나 ( N 개월) 에 직접 적는다. 저장 값은 예전처럼 "N개월" 글자. */
-const TR_WARRANTY_PRESETS = ["1개월", "3개월"];
+/** 보증 기간: 2주 · 1 · 3개월 중 고르거나 ( N 개월) 에 직접 적는다. 저장 값은 "2주" · "N개월" 글자. */
+const TR_WARRANTY_PRESETS = ["2주", "1개월", "3개월"];
 
 function getTrWarranty() {
   const picked = document.querySelector('input[name="trWarranty"]:checked')?.value || "3개월";

@@ -2011,3 +2011,8 @@ td > .mqp-in.w-email { width: 52%; }
 .mq-preview.hidden { display: none; }
 .mq-preview-view { flex: 1 1 auto; min-height: 60vh; background: #fff; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .mq-preview-view .fg-pdf { width: 100%; height: 100%; min-height: 60vh; border: 0; display: block; }
+
+/* 상단 제목 바로 오른쪽의 설정관리 · 견적서 관리 · 작업내역서 바로가기 */
+.nav-quick { display: flex; align-items: center; gap: 4px; margin-left: 10px; }
+.nav-quick .btn { color: var(--text); text-decoration: none; }
+.nav-quick .btn:hover { color: var(--primary); }

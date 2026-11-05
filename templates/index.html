@@ -17,11 +17,20 @@
           <span class="logo-icon">⚡</span>
           <span>컴퓨존 <strong>견적 자동화 Ver XI.11</strong></span>
         </a>
+        <!-- 설정관리 바로가기: 제목 바로 오른쪽. 견적서 관리 · 작업내역서는 설정관리 창의 해당 탭을 바로 연다 -->
+        <div class="nav-quick">
+          <button type="button" id="btnSettings" class="btn btn-outline btn-sm blink-warning" title="견적정보 · 거래처 · 서식폼 · 견적보관함 · 작업내역서를 한 곳에서 관리합니다">
+            <span id="settingsBtnText" class="blink-warning-text">⚙️ 설정관리</span>
+          </button>
+          <button type="button" id="btnNavArchive" class="btn btn-outline btn-sm" title="설정관리 → 견적서 관리 탭을 엽니다 (작성본 · 보관 파일 · 새 견적 만들기)">
+            🗂️ 견적서 관리
+          </button>
+          <button type="button" id="btnNavTaskReport" class="btn btn-outline btn-sm" title="설정관리 → 작업내역서 탭을 엽니다 (새로 작성 · 검색 · 열기 · 삭제)">
+            📋 작업내역서
+          </button>
+        </div>
       </div>
       <div class="nav-links">
-        <button type="button" id="btnSettings" class="btn btn-outline btn-sm blink-warning" title="견적정보 · 거래처 · 서식폼 · 견적보관함 · 작업내역서를 한 곳에서 관리합니다">
-          <span id="settingsBtnText" class="blink-warning-text">⚙️ 설정관리</span>
-        </button>
         <button type="button" id="btnNetworkShare" class="btn btn-outline btn-sm" title="다른 컴퓨터에서 접속할 수 있는 네트워크 IP 주소를 확인하고 복사합니다">
           🌐 <span id="networkIpText">네트워크 접속 ({{ lan_ip }})</span>
         </button>
@@ -927,6 +936,7 @@
                   <th>보증 기간</th>
                   <td>
                     <div class="tr-radio-group tr-warranty-group">
+                      <label><input type="radio" name="trWarranty" value="2주" /> 2주</label>
                       <label><input type="radio" name="trWarranty" value="1개월" /> 1개월</label>
                       <label><input type="radio" name="trWarranty" value="3개월" checked /> 3개월</label>
                       <label title="직접 입력 (예: 12)"><input type="radio" name="trWarranty" value="custom" /> (<input type="text" id="trWarrantyCustom" class="tr-inp tr-inp-inline tr-warranty-custom" inputmode="numeric" /> 개월)</label>
