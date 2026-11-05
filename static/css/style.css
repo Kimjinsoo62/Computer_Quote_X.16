@@ -1821,7 +1821,10 @@ html.calc-html body {
 
 /* ⚙️ 설정관리: 견적정보·거래처 / 서식폼 / 견적보관함 / 작업내역서 탭 */
 .settings-modal { max-width: 1500px; }
-.settings-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.settings-tabs { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+/* 🧩 견적요소관리 | (📒 거래처관리 · 🗂️ 견적서관리 · 📋 작업내역서) — 거래 흐름 3개를 테두리 한 묶음으로 */
+.settings-tab-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--border); }
+.settings-tab-group { display: flex; gap: 4px; padding: 2px; border: 1px solid var(--border); border-radius: 10px; }
 .settings-tab .archive-count { margin-left: 2px; }
 .settings-body { display: flex; flex-direction: column; min-height: 0; }
 .settings-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -1854,6 +1857,19 @@ html.calc-html body {
 .settings-info-form .modal-status { margin: 6px 0 0; }
 .settings-info-foot { display: flex; justify-content: flex-end; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .settings-info-foot #quoteInfoReset { margin-right: auto; }
+.settings-info-form .qi-warning-banner { margin-bottom: 6px; }
+/* 거래처관리 탭: 견적처 칸을 2열로 */
+.settings-cust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.settings-cust-wide { grid-column: 1 / -1; }
+/* 🧩 견적요소관리 탭: 왼쪽 공급자, 오른쪽 견적일 · 추가 품목 금액 · 입금 계좌 */
+.settings-elem-form { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.settings-panel > .qi-warning-banner { margin-bottom: 6px; }
+.settings-elem-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 10px; align-items: start; }
+.settings-elem-col { display: flex; flex-direction: column; gap: 8px; }
+.settings-elem-col .extra-price-group { margin-top: 0; }
+.settings-elem-form .modal-group label { margin-bottom: 5px; }
+.settings-elem-form .modal-group input { margin-top: 2px; padding: 3px 8px; }
+.settings-elem-form .modal-status { margin: 6px 0 0; }
 
 /* ---------- 📝 새 견적 만들기 ---------- */
 /* 설정관리 탭: 서식 8개를 한 줄로 보여 주고 고르게 한다 */

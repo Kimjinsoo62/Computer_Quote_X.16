@@ -1731,14 +1731,12 @@ function updateBlinkWarnings() {
   const qiDummy = isQuoteInfoDummy(quoteInfo);
   const btnQi = $("#btnCurrentCustomer");
   const txtQi = $("#quoteInfoBtnText");
-  const bannerQi = $("#qiWarningNotice");
-
   if (btnQi) btnQi.classList.toggle("blink-warning", qiDummy);
   if (txtQi) {
     txtQi.classList.toggle("blink-warning-text", qiDummy);
     txtQi.textContent = `거래처: ${(quoteInfo?.customer_name || "").trim() || "미지정"}`;
   }
-  if (bannerQi) bannerQi.classList.toggle("hidden", !qiDummy);
+  qiToggleWarningBanners(qiDummy);
   $("#btnSettings")?.classList.toggle("blink-warning", qiDummy);
   $("#settingsBtnText")?.classList.toggle("blink-warning-text", qiDummy);
 
@@ -1775,12 +1773,17 @@ function syncQuoteInfoToTaskReport(force = false) {
   updateBlinkWarnings();
 }
 
+// 견적요소관리 · 거래처관리 탭에 같은 경고 배너 · 상태 줄이 하나씩 있다(class 로 함께 갱신)
+function qiToggleWarningBanners(show) {
+  document.querySelectorAll(".qi-warning-banner").forEach((el) => el.classList.toggle("hidden", !show));
+}
+
 function qiSetStatus(msg, ok = true) {
-  const el = $("#quoteInfoStatus");
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = ok ? "var(--accent, #4caf50)" : "#e53935";
-  if (msg) setTimeout(() => { el.textContent = ""; }, 3000);
+  document.querySelectorAll(".qi-status").forEach((el) => {
+    el.textContent = msg;
+    el.style.color = ok ? "var(--accent, #4caf50)" : "#e53935";
+    if (msg) setTimeout(() => { el.textContent = ""; }, 3000);
+  });
 }
 
 function qiFillForm(info) {
@@ -1829,7 +1832,7 @@ function qiRerender() {
   }
 }
 
-$("#btnCurrentCustomer")?.addEventListener("click", () => openSettings("info"));
+$("#btnCurrentCustomer")?.addEventListener("click", () => openSettings("customer"));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   // 메일 발송 창 위의 앱 비밀번호 안내만 닫는다(아래 발송 창의 입력은 그대로)
@@ -1853,7 +1856,9 @@ document.addEventListener("keydown", (e) => {
   if (galleryModal && !galleryModal.classList.contains("hidden")) closeFormGallery();
 });
 
-$("#quoteInfoSave")?.addEventListener("click", async () => {
+// 💾 저장: 견적요소관리(#qiElemSave) · 거래처관리(#quoteInfoSave) 어느 탭에서 눌러도
+// 두 탭의 칸을 모두 보낸다(save_quote_info 는 안 보낸 키를 기본값으로 되돌리므로 일부만 보내면 안 됨).
+document.querySelectorAll(".qi-save-btn").forEach((btn) => btn.addEventListener("click", async () => {
   const payload = {};
   for (const [key, sel] of Object.entries(qiFields)) {
     payload[key] = $(sel)?.value.trim() || "";
@@ -1876,7 +1881,7 @@ $("#quoteInfoSave")?.addEventListener("click", async () => {
   } catch (e) {
     qiSetStatus(e.message, false);
   }
-});
+}));
 
 $("#quoteInfoReset")?.addEventListener("click", async () => {
   if (!confirm("저장된 견적처/공급자 정보를 초기화할까요?")) return;
@@ -2028,9 +2033,9 @@ $("#custTbody")?.addEventListener("click", (e) => {
   qiSetStatus(`'${c?.name || ""}' 불러옴 — 💾 저장을 누르면 견적서에 적용됩니다.`);
 });
 
-// ---------- ⚙️ 설정관리 (견적정보 · 거래처 / 서식폼 / 견적보관함 / 작업내역서) ----------
+// ---------- ⚙️ 설정관리 (🧩 견적요소관리 | 📒 거래처관리 · 🗂️ 견적서관리 · 📋 작업내역서) ----------
 const settingsModal = $("#settingsModal");
-let settingsTab = "info";
+let settingsTab = "elements";
 
 function switchSettingsTab(tab) {
   if (!settingsModal) return;
@@ -2045,7 +2050,7 @@ function switchSettingsTab(tab) {
   settingsModal.querySelectorAll(".settings-panel").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== tab);
   });
-  if (tab === "info") loadCustomers();
+  if (tab === "customer") loadCustomers();
   else if (tab === "archive") {
     refreshQuoteHub();
     loadTrBackupDir();
@@ -4232,8 +4237,7 @@ Object.values(qiFields).forEach((sel) => {
     for (const [key, fieldSel] of Object.entries(qiFields)) {
       currentValues[key] = $(fieldSel)?.value.trim() || "";
     }
-    const isStillDummy = isQuoteInfoDummy(currentValues);
-    $("#qiWarningNotice")?.classList.toggle("hidden", !isStillDummy);
+    qiToggleWarningBanners(isQuoteInfoDummy(currentValues));
   });
 });
 
