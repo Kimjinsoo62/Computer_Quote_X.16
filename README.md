@@ -1,10 +1,14 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.15
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XI.16
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver XI.15 주요 변경
+## 🆕 Ver XI.16 주요 변경
+
+1. **⚙️ 설정관리 탭 재구성** — `📇 견적정보 · 거래처` 탭을 둘로 나눠 **🧩 견적요소관리 | 📒 거래처관리 · 🗂️ 견적서관리 · 📋 작업내역서** 4개 탭으로 바꿨습니다. 견적요소관리(`elements`)는 모든 견적서에 공통인 공급자 · 견적일 · 추가 품목 금액 · 입금 계좌, 거래처관리(`customer`)는 거래처 목록 + 견적처입니다. 거래처 · 견적서 · 작업내역서 3개 탭은 `.settings-tab-group` 테두리로 묶었습니다. `qi*` 칸이 두 탭에 나뉘어도 두 💾 저장(`.qi-save-btn`)은 `qiFields` 18칸을 모두 보냅니다(`save_quote_info()`가 빠진 키를 기본값으로 되돌리므로). 경고 배너 · 상태 줄은 탭마다 하나씩 두고 class(`.qi-warning-banner`, `.qi-status`)로 함께 갱신합니다. 상단 📇 거래처 버튼은 거래처관리 탭을 엽니다.
+
+## Ver XI.15 주요 변경
 
 1. **🙈 Excel "게시 중…" 진행 창 숨김** — 앱 시작 예열(`prewarm`)과 서식 미리보기 때 상주 Excel 이 `ExportAsFixedFormat` 중에 `Visible=$false`와 상관없이 "게시 중..." 진행 창(클래스 `CMsoProgressBarWindow`)을 약 4.5초 띄우던 것을 없앴습니다. `pdf_export._hider_loop` 스레드가 `SetWinEventHook(EVENT_OBJECT_SHOW)`로 창이 뜨는 즉시, 그리고 변환 중에는 0.1초 간격으로 훑어 `ShowWindowAsync(SW_HIDE)`로 숨깁니다. 대상은 워커 Excel PID 의 그 진행 창뿐이라 사용자 Excel · 오류 대화상자는 건드리지 않습니다.
 
