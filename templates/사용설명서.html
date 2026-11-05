@@ -426,7 +426,7 @@
       <div class="manual-note">
         <strong>Ver 9.0 주요 기능</strong>
         <ul>
-          <li><strong>🌐 네트워크(LAN IP) 다중 기기 동시 작업 지원</strong>: 프로그램 실행 PC뿐 아니라 같은 네트워크(공유기) 내의 다른 컴퓨터, 노트북, 태블릿, 스마트폰에서도 <code>http://[서버IP]:8090</code> 주소로 접속해 동시에 견적 및 내역서 작성이 가능합니다. 상단 메뉴의 <span class="manual-badge-blue">🌐 네트워크 접속</span> 버튼을 누르면 접속 안내 창이 열리고 📋 복사 버튼으로 주소를 복사할 수 있습니다.</li>
+          <li><strong>🌐 네트워크(LAN IP) 다중 기기 동시 작업 지원</strong>: 프로그램 실행 PC뿐 아니라 같은 네트워크(공유기) 내의 다른 컴퓨터, 노트북, 태블릿, 스마트폰에서도 <code>http://[서버IP]:8090</code> 주소로 접속해 동시에 견적 및 내역서 작성이 가능합니다. 상단 메뉴의 <span class="manual-badge-blue">🌐 192.168.x.x:8090</span> 버튼을 누르면 접속 안내 창이 열리고 📋 복사 버튼으로 주소를 복사할 수 있습니다.</li>
           <li><strong>🍎 Apple Store 공식몰 실시간 동기화</strong>: 과거 하드코딩 모델을 없애고, 현재 애플 공식 스토어에서 판매 중인 라인업을 실시간으로 수집·노출합니다. 공식몰 접속에 실패할 때만 마지막으로 저장된 스냅샷을 보여 주며 <code>● Apple 공식몰 스냅샷</code> 배지로 구분됩니다. <span class="manual-badge-red">🔄 공홈 실시간 새로고침</span> 버튼으로 언제든 다시 가져올 수 있습니다.</li>
           <li><strong>🔴 다크모드 시인성 강화 — 팝업 모달 내 선명한 빨간색 [닫기] 버튼 탑재</strong>: 어두운 배경에서 찾기 어렵던 우측 상단 <code>✕</code> 대신, <strong>견적 정보</strong> 및 <strong>작업내역서</strong> 모달 우측 상단에 눈에 바로 띄는 빨간색 <strong>[닫기]</strong> 버튼을 달아 직관성을 높였습니다.</li>
           <li><strong>✨ 견적 정보 & 작업내역서 저장 시 깜빡임 자동 멈춤</strong>: 앱 시작 시 미입력 상태를 알리기 위해 깜빡이던 상단 버튼이, 정보를 한 번이라도 입력하고 저장하면 즉시 깜빡임을 멈추고 깔끔한 일반 버튼으로 전환됩니다.</li>
@@ -537,7 +537,7 @@
 
       <h3>접속 주소 확인 및 복사</h3>
       <ol class="manual-steps">
-        <li>메인 프로그램 상단 메뉴 바를 보면 <span class="manual-badge-blue">🌐 네트워크 접속 (192.168.x.x)</span> 버튼이 있습니다. 괄호 안에 현재 실행 중인 PC의 공유기 내부 IP가 실시간으로 표시됩니다.</li>
+        <li>메인 프로그램 상단 메뉴 바를 보면 <span class="manual-badge-blue">🌐 192.168.x.x:8090</span> 버튼이 있습니다. 현재 실행 중인 PC의 공유기 내부 IP와 포트 번호가 표시됩니다.</li>
         <li>이 버튼을 클릭하면 <strong>접속 안내 창</strong>이 열립니다. 네트워크 주소(예: <code>http://192.168.0.13:8090/</code>)와 이 PC 전용 주소(<code>http://127.0.0.1:8090/</code>) 옆의 <strong>📋 복사</strong> 버튼으로 주소를 클립보드에 복사합니다.</li>
         <li>같은 사무실 내의 다른 직원 PC, 상담용 노트북, 카운터 태블릿(아이패드/갤럭시탭), 스마트폰의 웹 브라우저(Chrome, Edge, Safari 등)를 열고 복사한 주소를 입력합니다.</li>
       </ol>
@@ -572,7 +572,7 @@
             <strong>제목 바로 오른쪽</strong>: <strong>⚙️ 설정관리</strong> (견적정보 · 거래처 · 견적서 관리(작성본 · 보관 파일) · 작업내역서 목록·작성) ·
             <strong>🗂️ 견적서 관리</strong> · <strong>📋 작업내역서</strong> (설정관리의 해당 탭 바로 열기)<br />
             <strong>오른쪽</strong>:
-            <strong>🌐 네트워크 접속</strong> (LAN IP 확인 및 원클릭 주소 복사) · 
+            <strong>🌐 IP:포트</strong> (예: 192.168.0.13:8090, 누르면 LAN 주소 확인 및 원클릭 복사) · 
             <strong>🧮 계산기</strong> (독립 팝업 부가세 계산기) · 
             <strong>🔄 업데이트</strong> (GitHub 새 버전 확인·적용) ·
             <strong>📖 사용설명서</strong> ·
@@ -944,7 +944,7 @@
           <td>다른 컴퓨터/스마트폰에서 접속이 안 됨</td>
           <td>
             1. 같은 공유기(Wi-Fi/LAN)에 연결되어 있는지 확인하세요.<br />
-            2. 상단 <span class="manual-badge-blue">🌐 네트워크 접속</span> 버튼을 눌러 정확한 IP(예: <code>http://192.168.0.13:8090/</code>)를 확인하세요.<br />
+            2. 상단 <span class="manual-badge-blue">🌐 192.168.x.x:8090</span> 버튼을 눌러 정확한 IP(예: <code>http://192.168.0.13:8090/</code>)를 확인하세요.<br />
             3. 서버 PC의 윈도우 방화벽에서 8090 포트를 허용해 주세요.
           </td>
         </tr>
