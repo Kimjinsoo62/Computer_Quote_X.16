@@ -15,6 +15,8 @@
    Windows 기본 프린터는 바꾸지 않는다. 바꿀 수 없으면 기본 프린터 그대로 쓴다.
 3. 캐시: 같은 key(카드 · 서식 · 견적정보 · 품목)의 PDF · 썸네일은 CACHE_TTL_SEC 동안 다시 만들지 않고,
    동시에 같은 key 를 요청하면 한 번만 만든다(cached).
+
+Excel 이 내보내기 중에 띄우는 "게시 중..." 진행 창은 _hider_loop 가 바로 숨긴다(앱 시작 예열 · 미리보기 때 화면에 안 보이게).
 """
 from __future__ import annotations
 
@@ -102,6 +104,107 @@ try {
 """.replace("{FAST}", FAST_PRINTER)
 
 
+# ── "게시 중..." 진행 창 숨기기 ─────────────────────────────────────────────
+# Excel 은 Visible=$false 여도 ExportAsFixedFormat 중에 "게시 중..." 진행 창(클래스 CMsoProgressBarWindow)을
+# 화면에 띄운다. 워커 PowerShell 은 내보내기 동안 막혀 있으므로 서버 쪽 스레드가 대신 숨긴다.
+# 1) SetWinEventHook(EVENT_OBJECT_SHOW): 창이 뜨는 즉시 알림을 받아 숨긴다.
+# 2) 0.1초 간격 훑기: 훅이 놓친 창(훅 설치 전에 뜬 창 등)을 변환 중에만 찾아 숨긴다.
+# 대상은 워커가 띄운 Excel PID 의 그 진행 창뿐이다(사용자 Excel · 다른 창은 건드리지 않음).
+import ctypes
+from ctypes import wintypes
+
+_PROGRESS_CLASS = "CMsoProgressBarWindow"
+_EVENT_OBJECT_SHOW = 0x8002
+_OBJID_WINDOW = 0
+_SW_HIDE = 0
+_PM_REMOVE = 0x0001
+_QS_ALLINPUT = 0x04FF
+_SWEEP_SEC = 0.1
+
+_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_WinEventProc = ctypes.WINFUNCTYPE(
+    None, wintypes.HANDLE, wintypes.DWORD, wintypes.HWND, wintypes.LONG, wintypes.LONG, wintypes.DWORD, wintypes.DWORD
+)
+_EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_user32.SetWinEventHook.restype = wintypes.HANDLE
+_user32.SetWinEventHook.argtypes = [
+    wintypes.DWORD, wintypes.DWORD, wintypes.HMODULE, _WinEventProc, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD
+]
+_user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+_user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_user32.IsWindowVisible.argtypes = [wintypes.HWND]
+_user32.ShowWindowAsync.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.EnumWindows.argtypes = [_EnumWindowsProc, wintypes.LPARAM]
+_user32.MsgWaitForMultipleObjects.argtypes = [
+    wintypes.DWORD, ctypes.c_void_p, wintypes.BOOL, wintypes.DWORD, wintypes.DWORD
+]
+_user32.PeekMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT, wintypes.UINT]
+
+_hider_lock = threading.Lock()
+_hider_started = False
+_converting = 0  # 지금 변환 중인 워커 수(0 이면 훑기를 쉰다)
+
+
+def _worker_excel_pids() -> set[int]:
+    return {w.excel_pid for w in _workers if w.excel_pid}
+
+
+def _hide_if_progress(hwnd, pids: set[int]) -> None:
+    pid = wintypes.DWORD()
+    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value not in pids:
+        return
+    cls = ctypes.create_unicode_buffer(64)
+    _user32.GetClassNameW(hwnd, cls, 64)
+    if cls.value == _PROGRESS_CLASS and _user32.IsWindowVisible(hwnd):
+        # Excel UI 스레드는 내보내기로 바쁘니 동기 ShowWindow 대신 비동기로 숨긴다
+        _user32.ShowWindowAsync(hwnd, _SW_HIDE)
+
+
+def _on_show(_hook, _event, hwnd, id_object, id_child, _thread, _time) -> None:
+    if id_object != _OBJID_WINDOW or id_child != 0 or not hwnd:
+        return
+    try:
+        pids = _worker_excel_pids()
+        if pids:
+            _hide_if_progress(hwnd, pids)
+    except Exception:  # 콜백 안 예외는 조용히 넘긴다
+        pass
+
+
+def _on_enum(hwnd, _lparam) -> bool:
+    try:
+        _hide_if_progress(hwnd, _worker_excel_pids())
+    except Exception:
+        pass
+    return True
+
+
+_on_show_cb = _WinEventProc(_on_show)  # GC 되지 않게 모듈 전역에 둔다
+_on_enum_cb = _EnumWindowsProc(_on_enum)
+
+
+def _hider_loop() -> None:
+    # 훅은 설치한 스레드의 메시지 루프로 전달된다(WINEVENT_OUTOFCONTEXT=0)
+    hook = _user32.SetWinEventHook(_EVENT_OBJECT_SHOW, _EVENT_OBJECT_SHOW, None, _on_show_cb, 0, 0, 0)
+    msg = wintypes.MSG()
+    while True:
+        _user32.MsgWaitForMultipleObjects(0, None, False, int(_SWEEP_SEC * 1000), _QS_ALLINPUT)
+        while _user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, _PM_REMOVE):
+            _user32.TranslateMessage(ctypes.byref(msg))
+            _user32.DispatchMessageW(ctypes.byref(msg))
+        if _converting or not hook:
+            _user32.EnumWindows(_on_enum_cb, 0)
+
+
+def _ensure_hider() -> None:
+    global _hider_started
+    with _hider_lock:
+        if not _hider_started:
+            _hider_started = True
+            threading.Thread(target=_hider_loop, name="excel-progress-hider", daemon=True).start()
+
+
 def excel_available() -> bool:
     try:
         winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"Excel.Application\CLSID"))
@@ -156,6 +259,16 @@ class _Worker:
             return None
 
     def convert(self, xlsx: Path, pdf: Path) -> None:
+        global _converting
+        with _hider_lock:
+            _converting += 1
+        try:
+            self._convert(xlsx, pdf)
+        finally:
+            with _hider_lock:
+                _converting -= 1
+
+    def _convert(self, xlsx: Path, pdf: Path) -> None:
         try:
             self.proc.stdin.write(f"{xlsx}\t{pdf}\n".encode("utf-8"))
             self.proc.stdin.flush()
@@ -218,6 +331,7 @@ def _write_pid_file() -> None:
 
 def _ensure_alive(w: _Worker) -> None:
     global _idle_thread_started
+    _ensure_hider()
     if not w.alive():
         w.kill()  # 죽은 워커가 남긴 Excel 정리
         try:
