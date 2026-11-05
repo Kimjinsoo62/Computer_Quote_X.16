@@ -250,9 +250,12 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
     n_rows = max(MIN_TASK_ROWS, len(tasks))
     for idx in range(n_rows):
         row_num = 20 + idx
-        ws[f"A{row_num}"] = idx + 1
+        # 번호는 사용자가 직접 적는다(이어 쓴 행은 비워 둠). 빈 행은 번호도 비운다.
+        ws[f"A{row_num}"] = ""
         if idx < len(tasks):
             t = tasks[idx]
+            no = str(t.get("no", "") or "").strip()
+            ws[f"A{row_num}"] = int(no) if no.isdigit() else no
             ws[f"B{row_num}"] = t.get("description", "")
             ws[f"D{row_num}"] = t.get("parts", "")
             cost_val = int(t.get("cost", 0) or 0)

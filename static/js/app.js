@@ -3494,14 +3494,14 @@ function renderTrTaskRows(tasks = []) {
 
   const items = tasks.map((t) => ({ ...t }));
   while (items.length < TR_MIN_TASK_ROWS) {
-    items.push({ no: items.length + 1, description: "", parts: "", cost: 0 });
+    items.push({ no: "", description: "", parts: "", cost: 0 });
   }
 
   items.forEach((task, idx) => {
     const tr = document.createElement("tr");
     tr.className = "tr-task-row";
     tr.innerHTML = `
-      <td style="text-align:center;"><span class="tr-row-no">${idx + 1}</span></td>
+      <td style="text-align:center;"><input type="text" class="tr-inp tr-task-no" style="text-align:center;" value="${escapeHtml(String(task.no ?? ''))}" maxlength="4" /></td>
       <td><input type="text" class="tr-inp tr-task-desc" value="${escapeHtml(task.description || '')}" placeholder="작업 내용" /></td>
       <td><input type="text" class="tr-inp tr-task-parts" value="${escapeHtml(task.parts || '')}" placeholder="부품 / 자재" /></td>
       <td class="tr-col-cost"><input type="text" inputmode="numeric" class="tr-inp tr-task-cost" style="text-align:right;" value="${task.cost ? Number(task.cost).toLocaleString("ko-KR") : ''}" placeholder="0" oninput="formatTrCostInput(this)" /></td>
@@ -3515,9 +3515,92 @@ function renderTrTaskRows(tasks = []) {
 
 function addTrTaskRow() {
   const currentTasks = getTrTasksFromForm({ keepEmpty: true });
-  currentTasks.push({ no: currentTasks.length + 1, description: "", parts: "", cost: 0 });
+  currentTasks.push({ no: "", description: "", parts: "", cost: 0 });
   renderTrTaskRows(currentTasks);
 }
+
+// ---- 작업 내용 칸: 한 행 끝까지 쓰면 다음 행으로 넘어가 이어 쓴다 ----
+// 다음 행이 없으면 행을 새로 만들되, 저절로 늘리는 건 기본 5행에서 2행까지(최대 7행).
+// 이어 쓴 행의 번호는 비워 두고, 번호는 사용자가 직접 적는다.
+const TR_AUTO_ROW_LIMIT = 2;
+let trWrapCanvas = null;
+
+/** 입력칸 글자 폭(px). 칸 너비와 비교해 넘치는지 본다. */
+function trTextWidth(inp, text) {
+  trWrapCanvas = trWrapCanvas || document.createElement("canvas");
+  const ctx = trWrapCanvas.getContext("2d");
+  ctx.font = getComputedStyle(inp).font;
+  return ctx.measureText(text).width;
+}
+
+function trInnerWidth(inp) {
+  const cs = getComputedStyle(inp);
+  return inp.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+}
+
+/** 칸에 들어가는 앞부분 길이. 넘치는 곳 앞의 띄어쓰기에서 끊고, 띄어쓰기가 없으면 글자 단위로 끊는다. */
+function trFitLength(inp, text) {
+  const max = trInnerWidth(inp);
+  let n = 0;
+  while (n < text.length && trTextWidth(inp, text.slice(0, n + 1)) <= max) n++;
+  if (n >= text.length) return n;
+  const sp = text.lastIndexOf(" ", n);
+  return sp > 0 ? sp + 1 : Math.max(n, 1);
+}
+
+/** 다음 행의 작업 내용 칸. 없으면(한도 안에서) 행을 하나 만든다. */
+function trNextDescInput(inp) {
+  const row = inp.closest("tr");
+  let next = row?.nextElementSibling?.querySelector(".tr-task-desc");
+  if (next) return next;
+  const rows = [...document.querySelectorAll("#trTasksTbody tr")];
+  if (rows.length >= TR_MIN_TASK_ROWS + TR_AUTO_ROW_LIMIT) return null;
+  const idx = rows.indexOf(row);
+  addTrTaskRow(); // 다시 그리므로 같은 위치의 칸을 새로 찾는다
+  const newRows = document.querySelectorAll("#trTasksTbody tr");
+  return newRows[idx + 1]?.querySelector(".tr-task-desc") || null;
+}
+
+/** 넘친 글자를 다음 행 앞에 붙이고 커서를 그 뒤로 옮긴다. 다음 행도 넘치면 이어서 넘긴다. */
+function trWrapDesc(inp) {
+  const text = inp.value;
+  if (!text || trTextWidth(inp, text) <= trInnerWidth(inp)) return;
+  if (inp.selectionStart !== text.length) return; // 가운데를 고치는 중이면 건드리지 않는다
+  const cut = trFitLength(inp, text);
+  const head = text.slice(0, cut).replace(/\s+$/, "");
+  const tail = text.slice(cut).replace(/^\s+/, "");
+  inp.value = head; // 행을 새로 만들 때 이 값이 보존되도록 먼저 줄인다
+  const next = trNextDescInput(inp);
+  if (!next) { inp.value = text; return; } // 더 만들 수 없으면 그대로 둔다(칸 안에서 옆으로 밀림)
+  const rest = next.value;
+  next.value = tail + rest;
+  next.focus();
+  next.setSelectionRange(tail.length, tail.length);
+  if (rest) trWrapDesc(next);
+}
+
+const trTasksTbody = $("#trTasksTbody");
+trTasksTbody?.addEventListener("input", (e) => {
+  if (!e.target.classList?.contains("tr-task-desc") || e.isComposing) return;
+  trWrapDesc(e.target);
+});
+// 한글은 글자가 완성될 때(compositionend) 확인한다
+trTasksTbody?.addEventListener("compositionend", (e) => {
+  if (!e.target.classList?.contains("tr-task-desc")) return;
+  const inp = e.target;
+  setTimeout(() => trWrapDesc(inp), 0);
+});
+// 비어 있는 작업 내용 칸 맨 앞에서 Backspace 를 누르면 위 행 끝으로 돌아간다
+trTasksTbody?.addEventListener("keydown", (e) => {
+  const inp = e.target;
+  if (e.key !== "Backspace" || !inp.classList?.contains("tr-task-desc") || e.isComposing) return;
+  if (inp.value || inp.selectionStart !== 0) return;
+  const prev = inp.closest("tr")?.previousElementSibling?.querySelector(".tr-task-desc");
+  if (!prev) return;
+  e.preventDefault();
+  prev.focus();
+  prev.setSelectionRange(prev.value.length, prev.value.length);
+});
 
 window.deleteTrTaskRow = function(idx) {
   const currentTasks = getTrTasksFromForm({ keepEmpty: true });
@@ -3532,17 +3615,16 @@ function getTrTasksFromForm({ keepEmpty = false } = {}) {
   const rows = document.querySelectorAll("#trTasksTbody tr");
   const tasks = [];
   rows.forEach((tr) => {
+    const no = tr.querySelector(".tr-task-no")?.value.trim() || "";
     const desc = tr.querySelector(".tr-task-desc")?.value.trim() || "";
     const parts = tr.querySelector(".tr-task-parts")?.value.trim() || "";
     const cost = parseInt((tr.querySelector(".tr-task-cost")?.value || "").replace(/[^\d]/g, ""), 10) || 0;
-    tasks.push({ no: 0, description: desc, parts: parts, cost: cost });
+    tasks.push({ no, description: desc, parts: parts, cost: cost });
   });
   if (!keepEmpty) {
-    while (tasks.length && !tasks[tasks.length - 1].description && !tasks[tasks.length - 1].parts && !tasks[tasks.length - 1].cost) {
-      tasks.pop();
-    }
+    const isEmpty = (t) => !t.no && !t.description && !t.parts && !t.cost;
+    while (tasks.length && isEmpty(tasks[tasks.length - 1])) tasks.pop();
   }
-  tasks.forEach((t, i) => { t.no = i + 1; });
   return tasks;
 }
 
@@ -3810,7 +3892,6 @@ function openTrModal() {
 
 function closeTrModal() {
   if (!trModal) return;
-  hideTrAfterPrintNotice();
   hide(trModal);
 }
 
@@ -4084,46 +4165,9 @@ async function backupTrReport() {
   }
 }
 
-// 인쇄 / PDF 출력
+// 인쇄 / PDF 출력 (인쇄 창을 닫은 뒤 따로 안내를 띄우지 않는다)
 function printTrPaper() {
-  // 인쇄 창(브라우저 것)은 버튼을 넣을 수 없으므로, 닫힌 뒤 앱 쪽에 [닫기] 안내를 띄운다
-  window.addEventListener("afterprint", showTrAfterPrintNotice, { once: true });
   window.print();
-}
-
-const TR_AFTER_PRINT_SEC = 10;
-let trAfterPrintTimer = null;
-
-/** 인쇄 창이 닫히면 잠깐 띄우는 안내. 앱 창의 ✕ 대신 여기 [✕ 닫기]로 작업내역서만 닫게 한다. */
-function showTrAfterPrintNotice() {
-  hideTrAfterPrintNotice();
-  const box = document.createElement("div");
-  box.id = "trAfterPrintNotice";
-  box.className = "tr-after-print no-print";
-  box.setAttribute("role", "alertdialog");
-  box.innerHTML = `
-    <div class="tr-after-print-msg">🖨️ 인쇄 창이 닫혔습니다.<br><small>작업내역서를 닫으려면 앱 창의 ✕ 가 아니라 아래 [✕ 닫기]를 누르세요.</small></div>
-    <div class="tr-after-print-btns">
-      <button type="button" class="btn-modal-close tr-after-print-close">✕ 닫기</button>
-      <button type="button" class="btn btn-outline btn-sm tr-after-print-stay">계속 작업 <span class="tr-after-print-sec">${TR_AFTER_PRINT_SEC}</span></button>
-    </div>`;
-  box.querySelector(".tr-after-print-close").addEventListener("click", () => { hideTrAfterPrintNotice(); closeTrModal(); });
-  box.querySelector(".tr-after-print-stay").addEventListener("click", hideTrAfterPrintNotice);
-  document.body.appendChild(box);
-  box.querySelector(".tr-after-print-close").focus();
-  let left = TR_AFTER_PRINT_SEC;
-  trAfterPrintTimer = setInterval(() => {
-    left -= 1;
-    const sec = box.querySelector(".tr-after-print-sec");
-    if (sec) sec.textContent = left;
-    if (left <= 0) hideTrAfterPrintNotice(); // 아무것도 안 누르면 창은 그대로 두고 안내만 사라진다
-  }, 1000);
-}
-
-function hideTrAfterPrintNotice() {
-  if (trAfterPrintTimer) clearInterval(trAfterPrintTimer);
-  trAfterPrintTimer = null;
-  document.getElementById("trAfterPrintNotice")?.remove();
 }
 
 // 실시간 엑셀 다운로드
