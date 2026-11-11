@@ -814,7 +814,11 @@ def build_excel(
 
         r += 1
         ws.merge_cells(f"A{r}:F{r}")
-        ws[f"A{r}"] = "※ 컴퓨존 실시간 판매가 기준 (VAT 포함)"
+        # Apple 견적은 공식몰 판매가다 (price_source: apple_official · apple_official_snapshot · apple_cto)
+        is_apple = str(q.price_source or "").startswith("apple") or "apple.com" in str(q.url or "")
+        ws[f"A{r}"] = (
+            "※ Apple 공식몰 판매가 기준 (VAT 포함)" if is_apple else "※ 컴퓨존 실시간 판매가 기준 (VAT 포함)"
+        )
         _set_cell(ws[f"A{r}"], font=normal, alignment=left)
 
         r += 1

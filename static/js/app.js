@@ -2377,7 +2377,11 @@ function applyCtoChanges() {
 }
 
 // CTO 항목 → 같은 사양을 나타내는 기본 사양 행 (서버 main.py CTO_BASE_ROW 와 같게 유지)
-const CTO_BASE_ROW = { "통합 메모리": "메모리", "저장장치": "SSD", "프로세서": "CPU/SoC" };
+const CTO_BASE_ROW = {
+  "통합 메모리": "메모리", "저장장치": "SSD", "프로세서": "CPU/SoC",
+  // 아래는 서버 quote_engine._build_apple_catalog_parts 의 세부사양 행과 구분명이 같다(그 행을 바꾼다)
+  "전원 어댑터": "전원 어댑터", "이더넷": "이더넷", "연결": "연결", "디스플레이 마감": "디스플레이 마감", "스탠드": "스탠드",
+};
 
 /** 기본 사양 행이 있는 CTO 항목은 그 행을 업그레이드 사양으로 바꾸고 금액을 더한다. 나머지는 아래에 붙인다. */
 function mergeCtoParts(baseParts, added) {
@@ -2564,6 +2568,17 @@ function renderCatalogWarnings(warnings) {
 }
 $("#catalogWarnClose")?.addEventListener("click", () => hide($("#catalogWarn")));
 
+// 견적 목록 요청 번호. 새 목록을 요청할 때마다 올라가고, 응답이 왔을 때 번호가 바뀌어 있으면 버린다.
+// (예: 시작 때 받는 컴퓨존 AI PC 목록(수 초)이 그 사이 누른 🍎 Apple 목록보다 늦게 와서 화면을 덮어쓰던 문제)
+let quoteRequestSeq = 0;
+function beginQuoteRequest() {
+  quoteRequestSeq += 1;
+  return quoteRequestSeq;
+}
+function isStaleQuoteRequest(seq) {
+  return seq !== quoteRequestSeq;
+}
+
 function applyQuotePayload(data) {
   renderCatalogWarnings(data?.warnings);
   quoteData = data;
@@ -2577,6 +2592,7 @@ function applyQuotePayload(data) {
 }
 
 async function fetchQuotes(cat = "ai", forceRefresh = false, opts = {}) {
+  const seq = beginQuoteRequest(); // 게임 · 금액대 창으로 가도 진행 중인 목록 응답은 버린다
   if (cat === "game-pc" || cat === "game") {
     openGamePcModal();
     return;
@@ -2618,8 +2634,11 @@ async function fetchQuotes(cat = "ai", forceRefresh = false, opts = {}) {
     }
 
     const res = await fetch(`${endpoint}?${qStr}`);
+    if (isStaleQuoteRequest(seq)) return;
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-    quoteData = await res.json();
+    const payload = await res.json();
+    if (isStaleQuoteRequest(seq)) return;
+    quoteData = payload;
 
     // 구버전/우회 호출로 game-pc category 응답이 온 경우 위자드 실행
     if (quoteData.needs_game_wizard) {
@@ -2636,6 +2655,7 @@ async function fetchQuotes(cat = "ai", forceRefresh = false, opts = {}) {
     if (opts.ctoCarry) reapplyCto(quoteData.quotes, opts.ctoCarry);
     applyQuotePayload(quoteData);
   } catch (e) {
+    if (isStaleQuoteRequest(seq)) return;
     hide(loading);
     hide(summaryCards);
     hide(quoteTabs);
@@ -2830,6 +2850,7 @@ async function submitGamePcRecommend() {
   hidePriceSearchBar();
   hideResultChrome();
 
+  const seq = beginQuoteRequest();
   try {
     const res = await fetch("/api/game-pc/recommend", {
       method: "POST",
@@ -2844,9 +2865,11 @@ async function submitGamePcRecommend() {
       }),
     });
     const data = await res.json().catch(() => ({}));
+    if (isStaleQuoteRequest(seq)) return;
     if (!res.ok) throw new Error(data.detail || `HTTP error ${res.status}`);
     applyQuotePayload(data);
   } catch (e) {
+    if (isStaleQuoteRequest(seq)) return;
     hide(loading);
     hide(summaryCards);
     hide(quoteTabs);
@@ -3121,6 +3144,7 @@ async function submitPriceSearch(opts = {}) {
   hide(quoteTabs);
   hideResultChrome();
 
+  const seq = beginQuoteRequest();
   try {
     const res = await fetch("/api/price-search", {
       method: "POST",
@@ -3138,6 +3162,7 @@ async function submitPriceSearch(opts = {}) {
     const detail = Array.isArray(data.detail)
       ? data.detail.map((x) => x.msg || x).join(" ")
       : data.detail;
+    if (isStaleQuoteRequest(seq)) return;
     if (!res.ok) throw new Error(detail || `HTTP error ${res.status}`);
     applyQuotePayload(data);
     const shown = data.quotes?.length || 0;
@@ -3148,6 +3173,7 @@ async function submitPriceSearch(opts = {}) {
         : `${shown}건을 찾았습니다.`
     );
   } catch (e) {
+    if (isStaleQuoteRequest(seq)) return;
     hide(loading);
     hide(summaryCards);
     hide(quoteTabs);
