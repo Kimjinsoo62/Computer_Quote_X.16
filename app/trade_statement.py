@@ -337,10 +337,10 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
 
     r += 1
     cust_line = " / ".join(x for x in (cust["manager"], cust["phone"], cust["email"]) if x)
-    ws[f"A{r}"] = f"To: {cust['name']}" + (f" ({cust_line})" if cust_line else "")
+    ws[f"A{r}"] = f"공급받는자: {cust['name']}" + (f" ({cust_line})" if cust_line else "") + " 귀하"
     ws.merge_cells(f"A{r}:C{r}")
     _set_cell(ws[f"A{r}"], font=bold, alignment=fit)
-    ws[f"E{r}"] = f"Date: {rec['issue_date']}"
+    ws[f"E{r}"] = f"발행일: {rec['issue_date']}"
     ws.merge_cells(f"E{r}:F{r}")
     _set_cell(ws[f"E{r}"], font=normal, alignment=right)
     ws.row_dimensions[r].height = 18.0
