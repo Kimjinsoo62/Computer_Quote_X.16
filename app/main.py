@@ -11,7 +11,7 @@ import urllib.error
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -49,7 +49,7 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
-from app import customer_book, mail_send, manual_quote, pdf_export, quote_archive
+from app import customer_book, mail_send, manual_quote, pdf_export, quote_archive, trade_statement
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
@@ -1316,6 +1316,132 @@ def api_manual_quote_excel(payload: dict = Body(...)):
         info_override=override,
         min_item_rows=manual_quote.MIN_ITEM_ROWS,
     )
+
+
+# ---------------------------------------------------------------------------
+# 🧾 거래명세서관리 (app/trade_statement.py) — 폼5 모양 거래명세표 위아래 두 벌, 서명본 보관
+# ---------------------------------------------------------------------------
+@app.get("/api/trade-statements")
+def api_trade_statements():
+    return {"statements": trade_statement.load_statements(), "max_items": trade_statement.MAX_ITEMS}
+
+
+@app.post("/api/trade-statements")
+def api_save_trade_statement(data: dict = Body(...)):
+    """id 가 있으면 수정, 없으면 새로 저장(번호 TS-YYYYMMDD-NN 자동)."""
+    try:
+        return {"status": "ok", "statement": trade_statement.save_statement(data)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.delete("/api/trade-statements/{stmt_id}")
+def api_delete_trade_statement(stmt_id: str):
+    if not trade_statement.delete_statement(stmt_id):
+        raise HTTPException(status_code=404, detail="거래명세서를 찾을 수 없습니다.")
+    return {"status": "ok"}
+
+
+@app.post("/api/trade-statements/excel")
+def api_trade_statement_excel(payload: dict = Body(...)):
+    """작성 중(또는 저장된) 명세서(payload.statement)를 Excel 로, pdf=1 이면 PDF(미리보기 · 인쇄용)로 준다."""
+    rec = payload.get("statement") or {}
+    try:
+        buf = trade_statement.build_statement_excel(rec)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    clean = trade_statement.clean_record(rec)
+    cust = quote_archive.safe_filename_part(trade_statement._customer_info(clean)["name"], 40) or "거래처미지정"
+    doc_no = quote_archive.safe_filename_part(str(rec.get("doc_no") or ""), 40)
+    stem = "_".join(x for x in ("거래명세표", cust, doc_no or clean["issue_date"]) if x)
+    if payload.get("pdf"):
+        key = json.dumps(["trade_statement", clean, rec.get("doc_no"), load_quote_info()], ensure_ascii=False, sort_keys=True, default=str)
+        try:
+            pdf_bytes = pdf_export.cached_pdf(key, buf.getvalue)
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="trade_statement.pdf"; filename*=UTF-8\'\'{quote(stem + ".pdf")}'},
+        )
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="trade_statement.xlsx"; filename*=UTF-8\'\'{quote(stem + ".xlsx")}'},
+    )
+
+
+@app.post("/api/trade-statements/backup")
+def api_trade_statement_backup():
+    """명세서 목록 + 서명본 파일을 백업 폴더(작업내역서와 같은 폴더)에 ZIP 으로. 폴더가 없으면 428."""
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요(작업내역서 창의 📁 폴더 지정)."})
+    try:
+        return {"ok": True, **trade_statement.backup_statements(folder)}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"백업 파일을 쓰지 못했습니다: {e}") from e
+
+
+@app.post("/api/trade-statements/open-dir")
+def api_trade_statement_open_dir(payload: dict = Body(default={})):
+    """서명본 폴더(trade_statements/)를 서버 PC 탐색기로 연다. id 를 주면 그 서명본 파일을 선택한 상태로."""
+    trade_statement.SIGNED_DIR.mkdir(parents=True, exist_ok=True)
+    target = str(trade_statement.SIGNED_DIR)
+    rec = trade_statement.get_statement(str(payload.get("id") or ""))
+    path = trade_statement.signed_path(rec) if rec else None
+    if path:
+        target = str(path)
+    try:
+        open_in_explorer(target)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"탐색기를 열지 못했습니다: {e}") from e
+    return {"ok": True, "opened": target}
+
+
+@app.post("/api/trade-statements/{stmt_id}/signed")
+async def api_trade_statement_attach(stmt_id: str, file: UploadFile = File(...)):
+    """서명받은 명세서(스캔 PDF · 사진)를 올려 보관하고 서명 완료로 표시한다."""
+    content = await file.read()
+    try:
+        rec = trade_statement.attach_signed(stmt_id, file.filename or "", content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="거래명세서를 찾을 수 없습니다.") from e
+    return {"status": "ok", "statement": rec}
+
+
+@app.get("/api/trade-statements/{stmt_id}/signed")
+def api_trade_statement_signed_view(stmt_id: str):
+    rec = trade_statement.get_statement(stmt_id)
+    path = trade_statement.signed_path(rec) if rec else None
+    if not path:
+        raise HTTPException(status_code=404, detail="보관된 서명본 파일이 없습니다.")
+    media = {
+        ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp",
+    }.get(path.suffix.lower(), "application/octet-stream")
+    name = rec.get("signed_file_orig") or path.name
+    return Response(
+        content=path.read_bytes(),
+        media_type=media,
+        headers={
+            "Content-Disposition": f'inline; filename="signed{path.suffix}"; filename*=UTF-8\'\'{quote(name)}',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.delete("/api/trade-statements/{stmt_id}/signed")
+def api_trade_statement_detach(stmt_id: str):
+    rec = trade_statement.detach_signed(stmt_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="거래명세서를 찾을 수 없습니다.")
+    return {"status": "ok", "statement": rec}
 
 
 @app.post("/api/task-reports/download/excel")

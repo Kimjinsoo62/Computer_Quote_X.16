@@ -17,3 +17,5 @@ customers.json
 # 오프라인 설치 패키지 바이너리 (download.bat으로 다시 받음)
 Offline Install Package/wheels/
 Offline Install Package/python/
+trade_statements.json
+trade_statements/

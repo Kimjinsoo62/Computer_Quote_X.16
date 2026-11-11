@@ -2018,3 +2018,71 @@ td > .mqp-in.w-email { width: 52%; }
 .nav-quick { display: flex; align-items: center; gap: 4px; margin-left: 10px; }
 .nav-quick .btn { color: var(--text); text-decoration: none; }
 .nav-quick .btn:hover { color: var(--primary); }
+
+/* ── 아이콘 메뉴 (static/js/iconbtn.js) ──
+ * 이모지로 시작하는 메뉴 버튼은 한글 글자(.ib-label)를 숨기고 이모지만 보인다.
+ * 마우스를 올리면 #ibTip 말풍선에 한글 제목과 설명이 뜬다. */
+.ib .ib-label { display: none !important; }
+.ib { justify-content: center; gap: 3px; }
+.btn.ib, .store-tab.ib, .settings-tab.ib, .hub-filter-btn.ib { min-width: 30px; }
+.btn-lg.ib { font-size: 1.35rem; padding: 3px 10px; min-width: 42px; line-height: 1.2; }
+.store-tab.ib { font-size: 1.25rem; padding: 2px 12px; }
+.btn-lg.ib, .btn-lg.ib .btn-icon { font-size: 1.45rem !important; }
+.btn-sm.ib, .btn-sm.ib .btn-icon { font-size: 1.1rem; }
+/* 포함/제외 전환 버튼: 제외 상태는 이모지를 흐리게 해서 글자 없이도 상태가 보이게 */
+.extra-toggle.ib.extra-off { opacity: 0.55; filter: grayscale(0.85); }
+.extra-toggle.ib.extra-on { opacity: 1; filter: none; }
+/* 견적 카드 버튼: 이모지만 남으므로 한 줄로 촘촘히 */
+.summary-card .card-actions { grid-template-columns: repeat(auto-fit, minmax(30px, 1fr)); }
+.summary-card .card-actions .btn.ib { padding: 0 4px; font-size: 1.1rem; }
+#ibTip {
+  position: fixed; z-index: 100000; pointer-events: none;
+  max-width: 320px; padding: 4px 8px; border-radius: 4px;
+  background: #0f172a; color: #f8fafc; border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  font-size: 10pt; line-height: 1.35; white-space: pre-line;
+  display: none;
+}
+#ibTip.on { display: block; }
+#ibTip strong { display: block; font-weight: 700; }
+#ibTip span { display: block; margin-top: 2px; color: #cbd5e1; font-size: 9pt; }
+@media print { #ibTip { display: none !important; } }
+
+/* ── 🧾 거래명세서관리 (목록: 설정관리 statement 탭, 작성: #tradeStatementModal) ── */
+.ts-modal { max-width: 1180px; }
+.ts-body { display: flex; flex-direction: column; gap: 6px; }
+.ts-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-end; }
+.ts-meta label { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; color: var(--muted); flex: 1 1 140px; min-width: 120px; }
+.ts-meta label.ts-meta-wide { flex: 2 1 260px; }
+.ts-meta .tr-inp { width: 100%; box-sizing: border-box; }
+.ts-select { min-width: 280px; max-width: 420px; }
+.ts-items-wrap { max-height: 48vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.ts-items { width: 100%; }
+.ts-items td { padding: 2px 4px; }
+.ts-items .tr-inp { width: 100%; box-sizing: border-box; }
+.ts-items .num, .ts-table .num { text-align: right; }
+.ts-items tfoot td { position: sticky; bottom: 0; background: var(--card, #0f172a); border-top: 2px solid var(--border); }
+.ts-total-label { text-align: right; font-weight: 700; }
+.ts-total { text-align: right; font-weight: 800; color: var(--accent); font-size: 1.1rem; }
+.ts-sign { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 8px; border: 1px dashed var(--border); border-radius: 6px; }
+.ts-sign-inp { width: 140px; }
+.ts-sign-file { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.ts-note { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--muted); }
+.ts-note .tr-inp { flex: 1; }
+.ts-badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 0.85rem; font-weight: 700; }
+.ts-badge-ok { background: rgba(52, 211, 153, 0.15); color: #6ee7b7; border: 1px solid rgba(52, 211, 153, 0.5); }
+.ts-badge-wait { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); }
+#tsPreviewPane { display: flex; flex-direction: column; gap: 4px; }
+#tsPreviewPane.hidden { display: none; }
+#tsPreviewView, #tsPreviewView .fg-pdf { min-height: 74vh; }
+/* 작성 창은 어두운 화면이라 작업내역서(흰 종이)용 .tr-inp 색을 덮어쓴다 */
+.ts-modal .tr-inp, .ts-modal select.tr-inp {
+  background: var(--card2) !important; color: var(--text) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important; border-radius: 4px; min-height: 24px;
+}
+.ts-modal .tr-inp:focus { border-color: #3b82f6 !important; outline: none; }
+.ts-modal .tr-inp[readonly] { color: var(--muted) !important; }
+.ts-modal .tr-inp::placeholder { color: rgba(148, 163, 184, 0.6); }
+.ts-modal select.tr-inp option { background: #1a2332; color: #e5e7eb; }
+.ts-modal input[type="date"].tr-inp { color-scheme: dark; }
+.ts-modal .modal-body { overflow: auto; }

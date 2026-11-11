@@ -554,6 +554,9 @@ function summaryCardHtml(q, i) {
         <button type="button" class="btn btn-sm btn-excel-one" data-index="${i}" title="폼1~8 썸네일을 보고 하나를 골라 이 항목만 그 서식으로 받습니다">
           📥 엑셀 견적서
         </button>
+        <button type="button" class="btn btn-sm btn-outline btn-statement-one" data-index="${i}" title="이 견적의 품목 · 금액(화면에 보이는 마진 적용가)으로 납품용 거래명세표(위아래 두 벌)를 만듭니다">
+          🧾 거래명세서
+        </button>
       </div>
     </div>`;
 }
@@ -576,6 +579,14 @@ function bindSummaryCardEvents(container) {
       const idx = parseInt(btn.dataset.index, 10);
       const tierKey = btn.dataset.tierkey;
       openCtoModal(idx, tierKey);
+    });
+  });
+
+  // 🧾 거래명세서 = 이 카드 품목으로 새 거래명세표 작성 창
+  container.querySelectorAll(".btn-statement-one").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTsFromQuote(parseInt(btn.dataset.index, 10));
     });
   });
 
@@ -2057,6 +2068,8 @@ function switchSettingsTab(tab) {
   } else if (tab === "taskreport") {
     loadTrReportsList();
     loadTrBackupDir();
+  } else if (tab === "statement") {
+    loadTsList();
   }
 }
 
@@ -3006,7 +3019,7 @@ function applyResultView() {
 
   const isList = resultView === "list";
   if (meta) meta.textContent = resultMetaText();
-  if (toggle) toggle.textContent = isList ? "카드로보기" : "리스트로보기";
+  if (toggle) toggle.textContent = isList ? "🃏 카드로보기" : "📃 리스트로보기";
   show(bar);
 
   if (isList) {
@@ -4963,3 +4976,486 @@ async function openCalcWindow() {
 }
 
 $("#btnOpenCalc")?.addEventListener("click", openCalcWindow);
+
+
+// ===================================================================
+// 🧾 거래명세서관리 (app/trade_statement.py)
+//  - 거래명세표 = 견적서 폼5(리테일) 모양에 제목만 "거 래 명 세 표", A4 한 장에 위(공급받는자 보관용) · 아래(공급자 보관용) 두 벌
+//  - 목록은 ⚙️ 설정관리의 🧾 거래명세서관리 탭, 작성은 #tradeStatementModal
+//  - 품목은 직접 입력하거나 견적 카드의 🧾 버튼(화면에 보이는 마진 적용 단가 그대로) · 📝 작성본에서 가져온다
+// ===================================================================
+// 거래명세표 품목 최대 행 수. app/trade_statement.py 의 MAX_ITEMS 와 같아야 한다(양쪽 주석에 명시).
+const TS_MAX_ROWS = 20;
+const TS_BLANK_ROWS = 5; // 새 명세서에 미리 깔아 두는 빈 행
+const tsModal = $("#tradeStatementModal");
+let tsList = [];
+let tsFilter = "all"; // all | unsigned | signed
+let tsCurrent = null; // 저장된 명세서(편집 중) 또는 null(새 명세서)
+let tsPdfUrl = "";
+let tsPendingSource = ""; // 카드 · 작성본에서 가져온 새 명세서의 출처(저장할 때 source 로)
+
+function tsToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function tsNum(v) {
+  const n = parseInt(String(v ?? "").replace(/[^\d-]/g, ""), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function tsFmt(n) {
+  return (Number(n) || 0).toLocaleString("ko-KR");
+}
+
+async function loadTsList() {
+  try {
+    const res = await fetch("/api/trade-statements", { cache: "no-store" });
+    const data = await res.json();
+    tsList = data.statements || [];
+  } catch (_) {
+    tsList = [];
+  }
+  renderTsList();
+}
+
+function renderTsList() {
+  const tbody = $("#tsTbody");
+  const signedN = tsList.filter((s) => s.signed).length;
+  const counts = { all: tsList.length, signed: signedN, unsigned: tsList.length - signedN };
+  document.querySelectorAll("[data-ts-count]").forEach((el) => { el.textContent = counts[el.dataset.tsCount] ?? 0; });
+  const badge = $("#tsListCount");
+  if (badge) badge.textContent = counts.unsigned ? `${counts.unsigned}/${counts.all}` : String(counts.all);
+  document.querySelectorAll(".ts-filter-btn").forEach((b) => {
+    const on = b.dataset.tsFilter === tsFilter;
+    b.classList.toggle("btn-primary", on);
+    b.classList.toggle("btn-outline", !on);
+  });
+  if (!tbody) return;
+  const q = ($("#tsSearch")?.value || "").trim().toLowerCase();
+  const rows = tsList.filter((s) => {
+    if (tsFilter === "signed" && !s.signed) return false;
+    if (tsFilter === "unsigned" && s.signed) return false;
+    if (!q) return true;
+    return [s.doc_no, s.customer, s.title, s.signer, s.issue_date].some((v) => String(v || "").toLowerCase().includes(q));
+  });
+  const stats = $("#tsStats");
+  if (stats) stats.textContent = `${rows.length}건 표시 · 미서명 ${counts.unsigned}건`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="tr-list-empty">${tsList.length ? "검색 · 필터에 맞는 거래명세서가 없습니다." : "저장된 거래명세서가 없습니다. ➕ 새 거래명세서 또는 견적 카드의 🧾 버튼으로 만드세요."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((s) => {
+    const id = escapeHtml(s.id);
+    const sign = s.signed
+      ? `<span class="ts-badge ts-badge-ok">✅ 서명완료</span> ${escapeHtml(s.signer || "")}${s.signed_date ? ` <small>${escapeHtml(s.signed_date)}</small>` : ""}`
+      : `<span class="ts-badge ts-badge-wait">⏳ 미서명</span>`;
+    const file = s.signed_file
+      ? `<button type="button" class="btn btn-xs btn-outline" data-ts-act="view" data-id="${id}" title="보관된 서명본(${escapeHtml(s.signed_file_orig || s.signed_file)})을 새 탭으로 엽니다">📎</button>`
+      : "";
+    return `<tr data-id="${id}">
+      <td>${escapeHtml(s.issue_date || "")}</td>
+      <td>${escapeHtml(s.doc_no || "")}</td>
+      <td>${escapeHtml(s.customer || "-")}</td>
+      <td>${escapeHtml(s.title || "")}</td>
+      <td class="num">${tsFmt(s.total)}</td>
+      <td>${sign}</td>
+      <td class="tr-list-actions">
+        <button type="button" class="btn btn-xs btn-primary" data-ts-act="edit" data-id="${id}" title="작성 창에서 열어 고치거나 서명 상태 · 서명본을 정합니다">✏️ 열기</button>
+        <button type="button" class="btn btn-xs btn-outline" data-ts-act="print" data-id="${id}" title="미리보기를 열어 인쇄합니다">🖨️ 인쇄</button>
+        <button type="button" class="btn btn-xs btn-outline" data-ts-act="excel" data-id="${id}" title="Excel 파일로 받습니다">📥 Excel</button>
+        ${file}
+        <button type="button" class="btn btn-xs btn-shutdown" data-ts-act="del" data-id="${id}" title="거래명세서 삭제 (보관된 서명본 파일도 함께 지웁니다)">✕ 삭제</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+$("#tsTbody")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-ts-act]");
+  if (!btn) return;
+  const rec = tsList.find((s) => s.id === btn.dataset.id);
+  if (!rec) return;
+  const act = btn.dataset.tsAct;
+  if (act === "edit") openTsEditor(rec);
+  else if (act === "print") { await openTsEditor(rec); showTsPreview(); }
+  else if (act === "excel") downloadTsExcel(rec);
+  else if (act === "view") window.open(`/api/trade-statements/${encodeURIComponent(rec.id)}/signed`, "_blank", "noopener");
+  else if (act === "del") {
+    if (!confirm(`거래명세서 ${rec.doc_no || ""} (${rec.customer || "-"})를 삭제할까요?${rec.signed_file ? "\n보관된 서명본 파일도 함께 지워집니다." : ""}`)) return;
+    const res = await fetch(`/api/trade-statements/${encodeURIComponent(rec.id)}`, { method: "DELETE" });
+    if (!res.ok) alert("삭제하지 못했습니다.");
+    loadTsList();
+  }
+});
+document.querySelectorAll(".ts-filter-btn").forEach((b) => b.addEventListener("click", () => {
+  tsFilter = b.dataset.tsFilter;
+  renderTsList();
+}));
+$("#tsSearchGo")?.addEventListener("click", renderTsList);
+$("#tsSearchClear")?.addEventListener("click", () => { const i = $("#tsSearch"); if (i) i.value = ""; renderTsList(); });
+$("#tsSearch")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); renderTsList(); }
+  else if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.stopPropagation(); e.target.value = ""; renderTsList(); }
+});
+$("#tsSearch")?.addEventListener("input", renderTsList);
+$("#tsBtnRefresh")?.addEventListener("click", loadTsList);
+$("#tsBtnNew")?.addEventListener("click", () => openTsEditor(null));
+$("#btnNavStatement")?.addEventListener("click", () => openSettings("statement"));
+$("#tsBtnOpenDir")?.addEventListener("click", async () => {
+  const r = await postJsonRaw("/api/trade-statements/open-dir", {});
+  if (!r.ok) alert(r.data?.detail || "폴더를 열지 못했습니다.");
+});
+$("#tsBtnBackup")?.addEventListener("click", async () => {
+  showBusy("거래명세서 백업 중…");
+  try {
+    const r = await postJsonRaw("/api/trade-statements/backup", {});
+    if (!r.ok) throw new Error(r.data?.detail?.message || r.data?.detail || `백업 실패 (${r.status})`);
+    alert(`✔ 백업했습니다 (명세서 ${r.data.count}건 · 서명본 ${r.data.files}개)\n${r.data.path}`);
+  } catch (e) {
+    alert("백업 오류: " + e.message);
+  } finally {
+    hideBusy();
+  }
+});
+
+// ---------- 작성 창 ----------
+function tsRowHtml(it, idx) {
+  const v = (k) => escapeHtml(it?.[k] ?? "");
+  const unit = it && it.unit_price !== undefined && it.unit_price !== "" ? tsFmt(it.unit_price) : "";
+  return `<tr class="ts-row">
+    <td class="num">${idx + 1}</td>
+    <td><input type="text" class="tr-inp" data-k="category" value="${v("category")}" /></td>
+    <td><input type="text" class="tr-inp" data-k="name" value="${v("name")}" /></td>
+    <td><input type="text" class="tr-inp num" data-k="qty" inputmode="numeric" value="${it?.qty ?? ""}" /></td>
+    <td><input type="text" class="tr-inp num" data-k="unit_price" inputmode="numeric" value="${unit}" /></td>
+    <td class="num ts-amount">0</td>
+    <td><button type="button" class="tr-task-del-btn ts-del" data-idx="${idx}" title="이 행 삭제">✕</button></td>
+  </tr>`;
+}
+
+function getTsItems({ keepEmpty = false } = {}) {
+  return Array.from(document.querySelectorAll("#tsItemsTbody .ts-row")).map((tr) => {
+    const g = (k) => tr.querySelector(`[data-k="${k}"]`)?.value ?? "";
+    return { category: g("category").trim(), name: g("name").trim(), qty: g("qty").trim(), unit_price: g("unit_price").trim() };
+  }).filter((it) => keepEmpty || it.name).map((it) => (keepEmpty ? it : {
+    ...it, qty: Math.max(1, tsNum(it.qty) || 1), unit_price: tsNum(it.unit_price),
+  }));
+}
+
+function renderTsRows(items) {
+  const tbody = $("#tsItemsTbody");
+  if (!tbody) return;
+  const rows = (items || []).slice(0, TS_MAX_ROWS);
+  tbody.innerHTML = rows.map(tsRowHtml).join("");
+  calcTsTotal();
+}
+
+function calcTsTotal() {
+  let total = 0;
+  document.querySelectorAll("#tsItemsTbody .ts-row").forEach((tr) => {
+    const name = tr.querySelector('[data-k="name"]')?.value.trim();
+    const qtyRaw = tr.querySelector('[data-k="qty"]')?.value;
+    const qty = Math.max(1, tsNum(qtyRaw) || 1);
+    const unit = tsNum(tr.querySelector('[data-k="unit_price"]')?.value);
+    const amt = name ? qty * unit : 0;
+    total += amt;
+    const cell = tr.querySelector(".ts-amount");
+    if (cell) cell.textContent = name ? tsFmt(amt) : "";
+  });
+  const t = $("#tsTotal");
+  if (t) t.textContent = tsFmt(total);
+  const n = document.querySelectorAll("#tsItemsTbody .ts-row").length;
+  const hint = $("#tsRowHint");
+  if (hint) hint.textContent = `${n} / 최대 ${TS_MAX_ROWS}행 · 품명이 빈 행은 빠집니다`;
+  const add = $("#tsBtnAddRow");
+  if (add) add.disabled = n >= TS_MAX_ROWS;
+}
+
+function tsSetCustomer(c) {
+  document.querySelectorAll("[data-ts-cust]").forEach((el) => { el.value = (c?.[el.dataset.tsCust] || "").trim(); });
+}
+
+function tsGetCustomer() {
+  const c = {};
+  document.querySelectorAll("[data-ts-cust]").forEach((el) => { c[el.dataset.tsCust] = el.value.trim(); });
+  return c;
+}
+
+function renderTsPicks() {
+  const cs = $("#tsCustPick");
+  if (cs) {
+    cs.innerHTML = `<option value="">${custList.length ? `— 저장된 거래처 ${custList.length}곳 —` : "— 저장된 거래처 없음 —"}</option>` +
+      custList.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || "")}${c.manager ? ` (${escapeHtml(c.manager)})` : ""}</option>`).join("");
+  }
+  const ms = $("#tsManualPick");
+  if (ms) {
+    ms.innerHTML = `<option value="">${mqList.length ? `— 작성본 ${mqList.length}건 —` : "— 작성본 없음 —"}</option>` +
+      mqList.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.quote_date || "")} ${escapeHtml(m.customer || "")} · ${escapeHtml(m.title || "(제목 없음)")} · ${tsFmt(m.total)}원</option>`).join("");
+  }
+}
+
+function syncTsHeader() {
+  const badge = $("#tsStatusBadge");
+  const saved = !!tsCurrent?.id;
+  if (badge) badge.textContent = saved ? `저장됨 · ${tsCurrent.doc_no || ""}` : "새 명세서 (저장 전)";
+  const title = $("#tsTitle");
+  if (title) title.textContent = saved ? `🧾 거래명세표 — ${tsCurrent.doc_no || ""}` : "🧾 새 거래명세표";
+  const fileName = $("#tsSignedFileName");
+  if (fileName) fileName.textContent = tsCurrent?.signed_file ? (tsCurrent.signed_file_orig || tsCurrent.signed_file) : (saved ? "없음" : "없음 (먼저 💾 저장)");
+  const up = $("#tsBtnUpload");
+  if (up) up.disabled = !saved;
+  const view = $("#tsBtnViewSigned");
+  if (view) view.disabled = !tsCurrent?.signed_file;
+  const del = $("#tsBtnDelSigned");
+  if (del) del.disabled = !tsCurrent?.signed_file;
+}
+
+/** 작성 창을 연다. rec 가 있으면 그 명세서(저장본이면 id 포함), 없으면 빈 명세서. */
+async function openTsEditor(rec) {
+  if (!tsModal) return;
+  if (!custList.length) await loadCustomers();
+  if (!mqList.length) await loadMqList();
+  tsCurrent = rec?.id ? { ...rec } : null;
+  if (!rec) tsPendingSource = "";
+  $("#tsDocNo").value = rec?.doc_no || "";
+  $("#tsIssueDate").value = rec?.issue_date || tsToday();
+  $("#tsDocTitle").value = rec?.title || "";
+  $("#tsNote").value = rec?.note || "";
+  $("#tsSigned").checked = !!rec?.signed;
+  $("#tsSigner").value = rec?.signer || "";
+  $("#tsSignedDate").value = rec?.signed_date || "";
+  const cust = rec?.customer_info && Object.values(rec.customer_info).some(Boolean) ? rec.customer_info : mqCustomerFromInfo();
+  tsSetCustomer(cust);
+  const items = (rec?.items || []).slice();
+  while (items.length < TS_BLANK_ROWS) items.push({});
+  renderTsRows(items);
+  renderTsPicks();
+  syncTsHeader();
+  showTsEdit();
+  show(tsModal);
+}
+
+function closeTsEditor() {
+  hide(tsModal);
+  showTsEdit();
+}
+
+function tsPayload() {
+  return {
+    id: tsCurrent?.id || "",
+    doc_no: $("#tsDocNo").value.trim(),
+    issue_date: $("#tsIssueDate").value || tsToday(),
+    title: $("#tsDocTitle").value.trim(),
+    note: $("#tsNote").value.trim(),
+    signed: $("#tsSigned").checked,
+    signer: $("#tsSigner").value.trim(),
+    signed_date: $("#tsSignedDate").value,
+    customer_info: tsGetCustomer(),
+    items: getTsItems(),
+    source: tsCurrent?.source || tsPendingSource || "",
+  };
+}
+
+async function saveTs({ quiet = false } = {}) {
+  const body = tsPayload();
+  if (!body.items.length) {
+    alert("품목을 한 줄 이상 입력하세요(품명이 빈 줄은 저장되지 않습니다).");
+    return false;
+  }
+  showBusy("거래명세서 저장 중…");
+  try {
+    const res = await postJsonRaw("/api/trade-statements", body);
+    if (!res.ok) throw new Error(res.data?.detail || `저장 실패 (${res.status})`);
+    tsCurrent = res.data.statement;
+    tsPendingSource = "";
+    $("#tsDocNo").value = tsCurrent.doc_no || "";
+    $("#tsSignedDate").value = tsCurrent.signed_date || "";
+    syncTsHeader();
+    loadTsList();
+  } catch (e) {
+    alert("저장 오류: " + e.message);
+    return false;
+  } finally {
+    hideBusy();
+  }
+  if (!quiet) alert(`✔ 거래명세서 ${tsCurrent.doc_no}를 저장했습니다. ⚙️ 설정관리 → 🧾 거래명세서관리 목록에서 다시 열 수 있습니다.`);
+  return true;
+}
+
+function tsExcelBody(rec, extra = {}) {
+  return JSON.stringify({ statement: rec, ...extra });
+}
+
+async function downloadTsExcel(rec) {
+  const st = rec || tsPayload();
+  if (!st.items?.length) { alert("품목을 한 줄 이상 입력하세요."); return; }
+  await downloadWithBusy("/api/trade-statements/excel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: tsExcelBody(st),
+  }, "거래명세표.xlsx", "거래명세표 Excel 만드는 중…");
+}
+
+function showTsEdit() {
+  show($("#tsEditPane"));
+  hide($("#tsPreviewPane"));
+  if (tsPdfUrl) { URL.revokeObjectURL(tsPdfUrl); tsPdfUrl = ""; }
+  const view = $("#tsPreviewView");
+  if (view) view.innerHTML = "";
+}
+
+async function showTsPreview() {
+  const st = tsPayload();
+  if (!st.items.length) { alert("품목을 한 줄 이상 입력하세요."); return; }
+  showBusy("거래명세표 만드는 중… (위아래 두 벌)");
+  try {
+    const res = await fetch("/api/trade-statements/excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: tsExcelBody(st, { pdf: 1 }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `미리보기 실패 (${res.status})`);
+    }
+    if (tsPdfUrl) URL.revokeObjectURL(tsPdfUrl);
+    tsPdfUrl = URL.createObjectURL(await res.blob());
+    hide($("#tsEditPane"));
+    show($("#tsPreviewPane"));
+    $("#tsPreviewView").innerHTML = `<iframe class="fg-pdf" src="${tsPdfUrl}#view=FitV" title="거래명세표 미리보기"></iframe>`;
+  } catch (e) {
+    alert("미리보기 오류: " + e.message + "\n(Excel 이 없는 PC 에서는 📥 Excel 다운로드로 받아 인쇄하세요.)");
+  } finally {
+    hideBusy();
+  }
+}
+
+$("#tsItemsTbody")?.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.dataset.k === "unit_price") {
+    const neg = el.value.trim().startsWith("-");
+    const d = el.value.replace(/[^\d]/g, "");
+    el.value = d ? (neg ? "-" : "") + tsFmt(Number(d)) : (neg ? "-" : "");
+  } else if (el.dataset.k === "qty") {
+    el.value = el.value.replace(/[^\d]/g, "").slice(0, 4);
+  }
+  calcTsTotal();
+});
+$("#tsItemsTbody")?.addEventListener("click", (e) => {
+  const del = e.target.closest(".ts-del");
+  if (!del) return;
+  const cur = getTsItems({ keepEmpty: true });
+  cur.splice(Number(del.dataset.idx), 1);
+  if (!cur.length) cur.push({});
+  renderTsRows(cur.map((it) => ({ ...it, unit_price: it.unit_price === "" ? "" : tsNum(it.unit_price) })));
+});
+$("#tsBtnAddRow")?.addEventListener("click", () => {
+  const cur = getTsItems({ keepEmpty: true }).map((it) => ({ ...it, unit_price: it.unit_price === "" ? "" : tsNum(it.unit_price) }));
+  if (cur.length >= TS_MAX_ROWS) return;
+  cur.push({});
+  renderTsRows(cur);
+});
+$("#tsCustPick")?.addEventListener("change", (e) => {
+  const c = custList.find((x) => x.id === e.target.value);
+  if (c) tsSetCustomer(c);
+});
+$("#tsManualPick")?.addEventListener("change", (e) => {
+  const m = mqList.find((x) => x.id === e.target.value);
+  e.target.value = "";
+  if (!m) return;
+  if (getTsItems().length && !confirm("지금 품목을 작성본의 품목으로 바꿀까요?")) return;
+  if (!$("#tsDocTitle").value.trim()) $("#tsDocTitle").value = m.title || "";
+  if (m.customer_info && Object.values(m.customer_info).some(Boolean)) tsSetCustomer(m.customer_info);
+  const items = (m.items || []).slice();
+  if (items.length > TS_MAX_ROWS) alert(`작성본 품목 ${items.length}개 중 앞의 ${TS_MAX_ROWS}개만 가져옵니다(거래명세표 최대 ${TS_MAX_ROWS}행).`);
+  renderTsRows(items);
+  tsPendingSource = `작성본: ${m.title || m.id}`;
+});
+$("#tsSigned")?.addEventListener("change", (e) => {
+  if (e.target.checked && !$("#tsSignedDate").value) $("#tsSignedDate").value = tsToday();
+});
+$("#tsBtnBlank")?.addEventListener("click", () => openTsEditor(null));
+$("#tsBtnSave")?.addEventListener("click", () => saveTs());
+$("#tsBtnPreview")?.addEventListener("click", showTsPreview);
+$("#tsPreviewBack")?.addEventListener("click", showTsEdit);
+$("#tsBtnExcel")?.addEventListener("click", () => downloadTsExcel());
+$("#tsBtnClose")?.addEventListener("click", closeTsEditor);
+$("#tsClose")?.addEventListener("click", closeTsEditor);
+$("#tsBtnUpload")?.addEventListener("click", () => {
+  if (!tsCurrent?.id) { alert("먼저 💾 저장하세요."); return; }
+  $("#tsSignedFile")?.click();
+});
+$("#tsSignedFile")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file || !tsCurrent?.id) return;
+  // 화면에서 고친 내용(인수자 등)을 먼저 저장해 둔 뒤 파일을 붙인다
+  if (!(await saveTs({ quiet: true }))) return;
+  showBusy("서명본 올리는 중…");
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/trade-statements/${encodeURIComponent(tsCurrent.id)}/signed`, { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `올리기 실패 (${res.status})`);
+    tsCurrent = data.statement;
+    $("#tsSigned").checked = true;
+    $("#tsSignedDate").value = tsCurrent.signed_date || tsToday();
+    syncTsHeader();
+    loadTsList();
+    alert("✔ 서명본을 보관하고 ✅ 서명완료로 표시했습니다.");
+  } catch (err) {
+    alert("서명본 오류: " + err.message);
+  } finally {
+    hideBusy();
+  }
+});
+$("#tsBtnViewSigned")?.addEventListener("click", () => {
+  if (tsCurrent?.signed_file) window.open(`/api/trade-statements/${encodeURIComponent(tsCurrent.id)}/signed`, "_blank", "noopener");
+});
+$("#tsBtnDelSigned")?.addEventListener("click", async () => {
+  if (!tsCurrent?.signed_file || !confirm("보관된 서명본 파일을 지울까요? (✅ 서명 받음 표시는 그대로 둡니다)")) return;
+  const res = await fetch(`/api/trade-statements/${encodeURIComponent(tsCurrent.id)}/signed`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(data.detail || "지우지 못했습니다."); return; }
+  tsCurrent = data.statement;
+  syncTsHeader();
+  loadTsList();
+});
+// Esc: 거래명세표 창만 닫는다(아래 설정관리는 그대로). 다른 Esc 처리보다 먼저 받는다.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !tsModal || tsModal.classList.contains("hidden")) return;
+  if (e.target.id === "tsSearch") return;
+  e.stopImmediatePropagation();
+  if (!$("#tsPreviewPane").classList.contains("hidden")) showTsEdit();
+  else closeTsEditor();
+}, true);
+
+/** 견적 카드의 🧾 버튼: 화면에 보이는 품목 · 단가(마진 · 만원 올림 적용 결과)를 그대로 새 명세서에 담는다. */
+function openTsFromQuote(index) {
+  const q = quoteData?.quotes?.[index];
+  if (!q) return;
+  const items = displayParts(q)
+    .filter((p) => String(p.name || "").trim() && (p.qty > 0 || Number(p.amount)))
+    .map((p) => ({
+      category: p.category || "",
+      name: p.name,
+      qty: p.qty > 0 ? p.qty : 1,
+      unit_price: p.qty > 0 ? Number(p.unit_price) || 0 : Number(p.amount) || 0,
+    }));
+  if (items.length > TS_MAX_ROWS) {
+    // 뒤를 잘라 내면 마지막의 할인 행이 빠져 서명받을 합계가 틀어지므로 아예 만들지 않는다
+    alert(`이 견적은 품목이 ${items.length}개라 거래명세표(최대 ${TS_MAX_ROWS}행)에 다 담을 수 없습니다. ➕ 새 거래명세서에서 품목을 묶어 직접 적으세요.`);
+    return;
+  }
+  tsPendingSource = `견적카드: ${q.tab_label || q.tier || ""} ${q.model || ""}`.trim();
+  openTsEditor({
+    title: q.model || "",
+    issue_date: tsToday(),
+    items,
+  });
+}
+
+// 시작 시 탭 건수 배지
+loadTsList();
