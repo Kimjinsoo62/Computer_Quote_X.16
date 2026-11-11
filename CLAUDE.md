@@ -64,6 +64,7 @@ templates/index.html + static/js/app.js  ──fetch──▶  app/main.py (모�
 1. 메모리 HTML 캐시(`HTML_TTL_SEC` 15분) → 2. 메모리 카탈로그 캐시(`CATALOG_TTL_SEC` 30분) → 3. `apple_catalog_cache.json` 스냅샷(라이브 수집 실패 시 경고와 함께 폴백).
 `refresh=1`/`/api/apple/refresh`는 메모리 두 층만 비우고 다시 수집한다. 스냅샷 파일은 지우지 않으며, 수집 성공 시 덮어쓰고 실패 시 폴백으로 남는다. 직전 스냅샷보다 모델 수가 30% 이상 줄면 `meta.warnings`에 페이지 구조 변경 의심 경고를 넣고 화면에 띄운다.
 Mac 계열(`MAC_TIER_PREFIXES`)은 공식몰 구성하기 API로 **실시간 CTO**(`fetch_apple_cto_live`)를, 그 외 제품은 구매 페이지 비교 옵션(`fetch_apple_cto_options`)을 준다.
+Apple 견적 행은 `quote_engine._build_apple_catalog_parts`가 만든다: `제품` 1행(공식가) + 금액 0 세부사양 행. 세부사양은 `apple_scraper`가 구매 페이지 `productSelectionData`에서 모은 `specs["detail"]`(칩 설명 `_chip_detail`, 색상, 기본 구성의 전원 어댑터 · 이더넷 · 키보드 `BASE_DETAIL_DIMS`, 마감 · 스탠드, 액세서리 소개 문단 `_page_summary`)이다. 사양 행 구분명(`CPU/SoC` · `메모리` · `SSD` · `전원 어댑터` · `이더넷` · `연결` · `디스플레이 마감` · `스탠드`)은 `CTO_BASE_ROW`의 대상이라 바꾸면 양쪽을 맞춘다. 옛 스냅샷에는 `detail`이 없어 칩 · 메모리 · 용량 · 크기만 나온다.
 
 ### Excel
 

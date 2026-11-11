@@ -1411,56 +1411,73 @@ def today_quotes_to_dict(result: TodayQuotesResult) -> dict[str, Any]:
     return data
 
 
+# Apple 세부사양 행. 구분명 "CPU/SoC" · "메모리" · "SSD" · "전원 어댑터" · "이더넷" · "연결" · "디스플레이 마감" · "스탠드" 는
+# CTO 가 같은 사양 행을 찾아 업그레이드 문구 · 금액으로 바꾸는 키다(main.py · app.js 의 CTO_BASE_ROW). 이름을 바꾸면 양쪽도 맞춘다.
+APPLE_DETAIL_ROWS = (
+    ("전원 어댑터", "adapter"),
+    ("이더넷", "ethernet"),
+    ("키보드", "keyboard"),
+    ("색상", "color"),
+    ("주요 특징", "summary"),
+)
+
+
+def _apple_size_text(display: str) -> str:
+    """'13' · '14.2"' · '11inch' → '13형' · '14.2형'. 숫자가 아니면 그대로."""
+    d = str(display or "").strip().replace('"', "").replace("inch", "")
+    return f"{d}형" if d and d.replace(".", "", 1).isdigit() else str(display or "").strip()
+
+
 def _build_apple_catalog_parts(
     item: dict[str, Any],
     include_setup: bool = False,
 ) -> tuple[list[QuotePart], int]:
-    """공식몰에서 가져온 대표 구성으로 사양 행을 만든다. 합계는 라이브 가격과 같게 맞춘다."""
+    """공식몰 대표 구성으로 견적 행을 만든다: 제품 1행(공식가) + 세부사양 행(금액 0). 합계 = 공식가."""
     specs = item.get("specs") or {}
+    detail = specs.get("detail") or {}
     total = int(item.get("price") or 0)
-    rows: list[tuple[str, str, int]] = []
-    chip = specs.get("chip_label") or item.get("chip") or ""
+    model = item.get("model") or "Apple 정품"
+    part_no = str(item.get("part_number") or "")
+    if part_no and not re.match(r"^[A-Z0-9]{4,6}[A-Z]{1,2}/[A-Z]$", part_no):
+        part_no = ""  # 'RO_MACMINI_…' 같은 내부 코드는 빼고 MDH74KH/A 같은 제품 번호만 적는다
+    rows: list[tuple[str, str, int]] = [("제품", f"{model} [{part_no}]" if part_no else model, total)]
+
+    chip = detail.get("chip") or ""
+    if not chip:
+        label = specs.get("chip_label") or item.get("chip") or ""
+        chip = f"Apple {label} 칩" if label and "코어" not in label else label
     if chip:
-        rows.append(("CPU/SoC", f"[Apple] {chip}", total))
+        rows.append(("CPU/SoC", chip, 0))
     memory = specs.get("memory") or ""
     if memory:
-        rows.append(("메모리", f"[Apple] {memory} 통합 메모리", 0))
+        rows.append(("메모리", memory if "메모리" in memory else f"{memory} 통합 메모리", 0))
     storage = specs.get("storage") or ""
     if storage:
-        rows.append(("SSD", f"[Apple] {storage}", 0))
-    display = specs.get("display") or ""
-    if display:
-        rows.append(("디스플레이", f"[Apple] {display}", 0))
-    if not rows:
-        rows.append(("본체", item.get("model") or "Apple 정품", total))
+        mac = item.get("cat_key") not in ("ipad_iphone",)
+        rows.append(("SSD", f"{storage} SSD 저장 장치" if mac else f"{storage} 저장 용량", 0))
+    size = _apple_size_text(specs.get("display") or "")
+    if size:
+        rows.append(("디스플레이", size, 0))
+    if detail.get("finish"):
+        rows.append(("디스플레이 마감", detail["finish"], 0))
+    if detail.get("stand"):
+        rows.append(("스탠드", detail["stand"], 0))
+    if str(item.get("family") or "").startswith("ipad") and specs.get("connection"):  # iPhone 은 연결 옵션이 없다
+        rows.append(("연결", specs["connection"], 0))
+    for cat, key in APPLE_DETAIL_ROWS:
+        if detail.get(key):
+            rows.append((cat, detail[key], 0))
 
-    sorted_raw = sorted(rows, key=lambda x: _sort_key(x[0]))
-    parts: list[QuotePart] = []
-    subtotal = 0
-    for i, (cat, name, price) in enumerate(sorted_raw, 1):
-        parts.append(
-            QuotePart(
-                no=i,
-                category=cat,
-                name=name,
-                qty=1,
-                unit_price=price,
-                amount=price,
-            )
-        )
-        subtotal += price
+    parts = [
+        QuotePart(no=i, category=cat, name=name, qty=1, unit_price=price, amount=price)
+        for i, (cat, name, price) in enumerate(rows, 1)
+    ]
+    subtotal = total
     if include_setup:
         cat, name, price, qty = _priced_extra(INITIAL_SETUP_ITEM)
         amount = price * qty
         parts.append(
-            QuotePart(
-                no=len(parts) + 1,
-                category=cat,
-                name=name,
-                qty=qty,
-                unit_price=price,
-                amount=amount,
-            )
+            QuotePart(no=len(parts) + 1, category=cat, name=name, qty=qty, unit_price=price, amount=amount)
         )
         subtotal += amount
     return parts, subtotal

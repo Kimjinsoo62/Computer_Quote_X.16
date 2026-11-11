@@ -383,6 +383,10 @@ def _parse_family_page(url: str, fam: dict[str, Any]) -> list[dict[str, Any]]:
     # 구성하기(CTO) 가격 API 의 컬렉션 이름. Mac 구매 페이지에만 있다.
     m = re.search(r"updateConfigUrl:\s*'[^']*collection=([A-Za-z0-9_]+)", html)
     collection = m.group(1) if m else ""
+    summary = _page_summary(html)
+    if summary:
+        for c in candidates:
+            c.setdefault("specs", {}).setdefault("detail", {})["summary"] = summary
     items = _pick_representatives(candidates, fam, collection)
     if is_mac and not collection:
         for it in items:
@@ -451,6 +455,11 @@ def _parse_mac_configurator(data: dict[str, Any], fam: dict[str, Any]) -> list[d
             config_display, "storage-dimensionCapacity", storage
         ) or _default_config_label(config_display, "storage-dimensionCapacity")
         part = product.get("btrOrFdPartNumber") or product.get("aosContainerPartNumber") or price_key
+        color = str(dims.get("chassis-dimensionColor") or "")
+        detail = {
+            "chip": _chip_detail(display, chip, cpu_gpu, chip_label),
+            "color": _header_text(display, "chassis-dimensionColor", color) or _color_name(color),
+        }
         if screensize:
             group_key = (screensize,)
         elif chip:
@@ -477,12 +486,22 @@ def _parse_mac_configurator(data: dict[str, Any], fam: dict[str, Any]) -> list[d
                 "group_key": group_key,
                 # 구성하기 API 에 그대로 넘길 원래 차원 값 (색상 포함)
                 "cfg_params": {k: str(v) for k, v in dims.items() if v},
+                # 기본 구성(전원 어댑터 · 이더넷 · 키보드)의 표시 문구. _apply_base_config_specs 가 쓴다.
+                "_cfg_labels": {
+                    dim: {
+                        v: _header_text(config_display, dim, v)
+                        for v in (config_display.get(dim) or {})
+                        if v != "variantOrder"
+                    }
+                    for dim in BASE_DETAIL_DIMS
+                },
                 "specs": {
                     "chip_label": chip_label,
                     "memory": memory_label,
                     "storage": storage_label,
                     "display": _size_label(screensize),
                     "cpu_gpu": cpu_gpu,
+                    "detail": {k: v for k, v in detail.items() if v},
                 },
             }
         )
@@ -535,6 +554,13 @@ def _parse_metrics_products(data: dict[str, Any], fam: dict[str, Any]) -> list[d
                     "display": _header_for(display, "dimensionScreensize", screensize) or _size_label(screensize),
                     "connection": "Wi-Fi" if conn in WIFI_CONNECTIONS else "Wi-Fi + Cellular",
                     "cpu_gpu": "",
+                    "detail": {k: v for k, v in {
+                        "chip": f"Apple {chip_label} 칩" if chip_label else "",
+                        "color": _header_text(display, "dimensionColor", str(product.get("dimensionColor") or ""))
+                        or _color_name(str(product.get("dimensionColor") or "")),
+                        "finish": _human_dim("finish", finish) if finish else "",
+                        "stand": _human_dim("stand", stand) if stand else "",
+                    }.items() if v},
                 },
             }
         )
@@ -579,6 +605,20 @@ def _apply_base_config_specs(item: dict[str, Any], cfg: dict[str, Any]) -> tuple
     sto = sel.get("storage-dimensionCapacity")
     if sto:
         specs["storage"] = _human_dim("storage", sto)
+    # 기본 구성에 포함된 전원 어댑터 · 이더넷 · 키보드 (견적서 세부사양 행)
+    labels = item.get("_cfg_labels") or {}
+    detail = dict(specs.get("detail") or {})
+    for dim, key in BASE_DETAIL_DIMS.items():
+        val = sel.get(dim)
+        if not val:
+            continue
+        text = (labels.get(dim) or {}).get(val) or _live_option_label(dim, val)
+        if dim == "power_adapter-wattage" and "어댑터" not in text:
+            text = f"{text} 전원 어댑터"
+        if dim == "keyboard-localizationCode" and "키보드" not in text:
+            text = f"{text} 키보드"
+        detail[key] = text
+    specs["detail"] = detail
     return {**item, "specs": specs}, True
 
 
@@ -1318,6 +1358,81 @@ def _format_chip_token(token: str) -> str:
         suffix = {"pro": " Pro", "max": " Max", "ultra": " Ultra"}.get(m.group(3) or "", "")
         return f"{m.group(1).upper()}{m.group(2)}{suffix}"
     return token.upper() if token else ""
+
+
+# 기본 구성에서 견적서 세부사양 행으로 보여 줄 차원 → specs["detail"] 키
+BASE_DETAIL_DIMS = {
+    "power_adapter-wattage": "adapter",
+    "ethernet_adapter-ethernetBandwidth": "ethernet",
+    "keyboard-localizationCode": "keyboard",
+}
+# 공식몰 색상 코드 → 표시 이름 (iPad · iPhone 처럼 페이지에 색상 문구가 없는 제품용)
+COLOR_NAMES = {
+    "spaceblack": "스페이스 블랙", "spacegray": "스페이스 그레이", "spacegrey": "스페이스 그레이",
+    "silver": "실버", "starlight": "스타라이트", "midnight": "미드나이트", "skyblue": "스카이 블루",
+    "blue": "블루", "purple": "퍼플", "pink": "핑크", "yellow": "옐로", "green": "그린", "orange": "오렌지",
+    "black": "블랙", "white": "화이트", "gold": "골드", "red": "레드", "teal": "틸", "ultramarine": "울트라마린",
+    "lavender": "라벤더", "sage": "세이지", "mistblue": "미스트 블루", "deepblue": "딥 블루",
+    "cosmicorange": "코스믹 오렌지", "cloudwhite": "클라우드 화이트", "lightgold": "라이트 골드",
+}
+
+
+def _color_name(code: str) -> str:
+    key = re.sub(r"[^a-z]", "", (code or "").lower())
+    return COLOR_NAMES.get(key, "")
+
+
+def _header_text(display: dict[str, Any], key: str, variant: str) -> str:
+    """차원 값의 표시 문구에서 부가 설명(<div class="form-label-small">) · 각주를 뺀 본문만 돌려준다."""
+    if not variant:
+        return ""
+    entry = (display.get(key) or {}).get(variant) or {}
+    raw = str(entry.get("header") or "") if isinstance(entry, dict) else str(entry)
+    raw = re.sub(r"<div[^>]*>.*?</div>", " ", raw, flags=re.S)
+    raw = re.sub(r"<br\s*/?>", " ", raw)
+    text = _strip_html(raw).replace("\xa0", " ")
+    text = re.sub(r"각주\s*\d*", "", text)
+    return re.sub(r"\s+", " ", text).strip(" ,")
+
+
+def _chip_detail(display: dict[str, Any], chip: str, cpu_gpu: str, chip_label: str) -> str:
+    """'Apple M5 칩 · 10코어 CPU, 8코어 GPU, 16코어 Neural Engine' 처럼 칩 행 문구를 만든다."""
+    cores = (_header_text(display, "processor-cpuCoreCount-gpuCoreCount", cpu_gpu)
+             or _header_text(display, "processor-dimensionChip-cpuCoreCount-gpuCoreCount", cpu_gpu))
+    chip_block = (display.get("processor-dimensionChip") or {}).get(chip) or {}
+    footer = (chip_block.get("dynamicFooter") or {}) if isinstance(chip_block, dict) else {}
+    one = footer.get(cpu_gpu) if isinstance(footer, dict) else None
+    if one:  # Mac mini M6: "12코어 CPU, 12코어 GPU <br> 듀얼 16코어 Neural Engine"
+        cores = re.sub(r"\s+", " ", _strip_html(re.sub(r"<br\s*/?>", ", ", str(one)))).strip(" ,")
+    elif isinstance(footer, dict) and footer.get("multioption") and "Neural Engine" not in cores:
+        ne = re.search(r"(\d+코어 Neural Engine)", _strip_html(str(footer["multioption"])))
+        if ne and cores:
+            cores = f"{cores}, {ne.group(1)}"
+    cores = re.sub(r"\s*,\s*", ", ", cores or "").strip(" ,")
+    if not cores and re.match(r"^\d+-\d+$", cpu_gpu or ""):
+        cpu, gpu = cpu_gpu.split("-")
+        cores = f"{cpu}코어 CPU, {gpu}코어 GPU"
+    name = chip_label if chip_label and "코어" not in chip_label else ""
+    head = f"Apple {name} 칩" if name else ""
+    if cores and "코어" not in cores:
+        # iMac: 본문은 "M6 칩(Thunderbolt 포트 2개)", 코어 수는 작은 설명 줄에 있다
+        entry = (display.get("processor-cpuCoreCount-gpuCoreCount") or {}).get(cpu_gpu) or {}
+        small = re.search(r"<div[^>]*>(.*?)</div>", str(entry.get("header") or "") if isinstance(entry, dict) else "", re.S)
+        small_txt = re.sub(r"\s+", " ", _strip_html(small.group(1))).strip(" ,") if small else ""
+        if "코어" in small_txt:
+            head = f"Apple {cores}" if not cores.startswith("Apple") else cores
+            cores = small_txt
+    return " · ".join(x for x in (head, cores) if x)
+
+
+def _page_summary(html: str) -> str:
+    """구매 페이지 맨 위 소개 문단(액세서리 페이지에만 있다). 예: '68.3cm 5K Retina 디스플레이. … Thunderbolt 5 포트.'"""
+    m = re.search(r'product-selection-header noscript[^>]*>\s*<h1[^>]*>.*?</h1>\s*<p>(.*?)</p>', html or "", re.S)
+    if not m:
+        return ""
+    text = _strip_html(m.group(1)).replace("\xa0", " ")
+    text = re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰]+", "", text)
+    return re.sub(r"\s+", " ", text).strip()[:200]
 
 
 def _default_config_label(display: dict[str, Any], key: str) -> str:

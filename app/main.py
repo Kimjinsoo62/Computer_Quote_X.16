@@ -626,7 +626,11 @@ def api_apple_cto(tier_key: str, sel: str = "", changed: str = ""):
 
 
 # CTO 항목 → 같은 사양을 나타내는 기본 사양 행 (static/js/app.js CTO_BASE_ROW 와 같게 유지)
-CTO_BASE_ROW = {"통합 메모리": "메모리", "저장장치": "SSD", "프로세서": "CPU/SoC"}
+CTO_BASE_ROW = {
+    "통합 메모리": "메모리", "저장장치": "SSD", "프로세서": "CPU/SoC",
+    # 아래는 quote_engine._build_apple_catalog_parts 의 세부사양 행과 구분명이 같다(그 행을 바꾼다)
+    "전원 어댑터": "전원 어댑터", "이더넷": "이더넷", "연결": "연결", "디스플레이 마감": "디스플레이 마감", "스탠드": "스탠드",
+}
 
 
 def _apply_cto_upgrades(result, cto_json: str):
