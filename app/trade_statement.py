@@ -281,7 +281,10 @@ def build_statement_excel(data: dict[str, Any]) -> BytesIO:
     ws = wb.active
     ws.title = SHEET_TITLE
     _apply_page_setup(ws)
-    ws.page_margins.top = ws.page_margins.bottom = 10.0 / 25.4
+    ws.page_margins.top = ws.page_margins.bottom = PRINT_MARGIN_TB_MM / 25.4
+    # 좌우 여백이 견적서(15mm)와 같으면 열 너비 합(88)이 폭을 넘어 Excel 이 쪽 전체를 92% 로 줄인다.
+    # 거래명세표는 좌우를 좁혀 100% 크기로 찍는다(그만큼 품목 글자가 커진다).
+    ws.page_margins.left = ws.page_margins.right = PRINT_MARGIN_LR_MM / 25.4
     for letter, width in FORM5_COL_WIDTHS.items():
         ws.column_dimensions[letter].width = width
 
@@ -295,10 +298,10 @@ def build_statement_excel(data: dict[str, Any]) -> BytesIO:
         r = _write_copy(ws, r, rec, cust, info, doc_no, label, lay)
         if i == 0:
             copy_h = sum(ws.row_dimensions[x].height or 15.0 for x in range(1, r + 1))
-            gap = max(CUT_GAP_MIN_PT, (PRINTABLE_HEIGHT_PT - 2 * copy_h - CUT_LINE_PT) / 2)
-            ws.row_dimensions[r + 1].height = round(gap, 1)
+            gap = _snap(max(CUT_GAP_MIN_PT, (PRINTABLE_HEIGHT_PT - 2 * copy_h - _snap(CUT_LINE_PT)) / 2), down=True)
+            ws.row_dimensions[r + 1].height = gap
             r = _write_cut_line(ws, r + 2) + 1
-            ws.row_dimensions[r].height = round(gap, 1)
+            ws.row_dimensions[r].height = gap
             r += 1
     ws.print_area = f"A1:F{r}"
     buf = BytesIO()
@@ -307,38 +310,59 @@ def build_statement_excel(data: dict[str, Any]) -> BytesIO:
     return buf
 
 
-# 절취선 위치 계산용 (포인트). A4 297mm 에서 위아래 여백 10mm 씩을 뺀 인쇄 높이 277mm, 렌더링 오차 여유 6pt.
-PRINTABLE_HEIGHT_PT = 277.0 / 25.4 * 72 - 6.0
-CUT_LINE_PT = 16.0
-CUT_GAP_MIN_PT = 6.0
+# 절취선 위치 계산용 (포인트). A4 297mm 에서 위아래 여백(5mm 씩, 일반 프린터 최소 여백 수준)을 뺀 인쇄 높이,
+# 렌더링 오차 여유 3pt. 품목이 적으면 남는 높이는 절취선 위아래 빈 줄이 가져가므로 여백이 좁아도 모양은 같다.
+PRINT_MARGIN_TB_MM = 5.0
+PRINT_MARGIN_LR_MM = 8.0
+PRINTABLE_HEIGHT_PT = (297.0 - 2 * PRINT_MARGIN_TB_MM) / 25.4 * 72 - 3.0
+CUT_LINE_PT = 12.0
+CUT_GAP_MIN_PT = 3.0
 
 
 # 한 벌의 행 높이(pt). 품목 행 수에 따라 _statement_layout() 이 아래 값을 고른다.
-_LAY_NORMAL = {"title_h": 17.0, "title_font": 20, "line_h": 18.0, "sub_h": 15.0, "total_h": 22.0, "sign_h": 30.0}
-_LAY_COMPACT = {"title_h": 13.0, "title_font": 16, "line_h": 15.0, "sub_h": 12.0, "total_h": 18.0, "sign_h": 22.0}
+# 품목이 기본 높이로 안 들어가면 _LAY_COMPACT 로 제목 · 안내 줄 · 합계 · 서명 칸을 줄이고 그만큼 품목 행에 준다.
+_LAY_NORMAL = {"title_h": 17.0, "title_font": 20, "line_h": 18.0, "line_font": 10, "sub_h": 15.0,
+               "total_h": 22.0, "total_font": 13, "sign_h": 30.0, "gap_h": 6.0, "note_h": 15.0}
+_LAY_COMPACT = {"title_h": 10.0, "title_font": 13, "line_h": 12.0, "line_font": 9, "sub_h": 10.0,
+                "total_h": 15.0, "total_font": 11, "sign_h": 17.0, "gap_h": 3.0, "note_h": 11.0}
 ITEM_ROW_PT = 17.0      # 품목 행 기본 높이 (10pt 글자)
-ITEM_ROW_MIN_PT = 9.0   # 이보다 낮으면 읽기 어려워 Excel 의 한 장 맞춤 축소에 맡긴다
+ITEM_ROW_MIN_PT = 8.5   # 이보다 낮으면 읽기 어려워 Excel 의 한 장 맞춤 축소에 맡긴다
 ITEM_FONT_MAX, ITEM_FONT_MIN = 10.0, 6.5
+ITEM_FONT_RATIO = 0.72  # 품목 글자 = 행 높이 × 이 비율. 0.74 를 넘으면 첫 행 글자가 표 머리 굵은 선에 닿는다(PDF 로 확인)
+
+
+PX_PT = 0.75  # Excel 은 행 높이를 화면 1픽셀(0.75pt) 단위로 맞춘다. 계산도 같은 단위로 해야 쪽을 넘지 않는다.
+
+
+def _snap(h: float, down: bool = False) -> float:
+    """행 높이를 Excel 이 실제로 쓰는 0.75pt 단위로 맞춘다(down=True 면 내림)."""
+    n = int(h / PX_PT) if down else round(h / PX_PT)
+    return round(n * PX_PT, 2)
 
 
 def _copy_fixed_height(lay: dict[str, float], note: bool) -> float:
     """한 벌에서 품목 행을 뺀 높이: 제목 2줄 · 번호 · 공급받는자 · 납품 문구 · 표 머리 · 간격 · 합계 · 공급자 · 서명 · 비고."""
-    return (2 * lay["title_h"] + lay["sub_h"] + 3 * lay["line_h"] + 6.0 + lay["total_h"]
-            + lay["line_h"] + lay["sign_h"] + (15.0 if note else 0.0))
+    return (2 * lay["title_h"] + lay["sub_h"] + 3 * lay["line_h"] + lay["gap_h"] + lay["total_h"]
+            + lay["line_h"] + lay["sign_h"] + (lay["note_h"] if note else 0.0))
 
 
 def _statement_layout(n_rows: int, note: bool) -> dict[str, float]:
     """품목 n_rows 행이 두 벌 모두 A4 한 장에 들어가도록 행 높이 · 글자 크기를 정한다."""
-    per_copy = (PRINTABLE_HEIGHT_PT - CUT_LINE_PT - 2 * CUT_GAP_MIN_PT) / 2
-    lay = dict(_LAY_NORMAL)
+    per_copy = (PRINTABLE_HEIGHT_PT - _snap(CUT_LINE_PT) - 2 * _snap(CUT_GAP_MIN_PT)) / 2
+    heights = ("title_h", "line_h", "sub_h", "total_h", "sign_h", "gap_h", "note_h")
+
+    def snapped(base: dict[str, float]) -> dict[str, float]:
+        return {k: (_snap(v) if k in heights else v) for k, v in base.items()}
+
+    lay = snapped(_LAY_NORMAL)
     room = per_copy - _copy_fixed_height(lay, note)
     if n_rows * ITEM_ROW_PT > room:
         # 기본 높이로 안 들어가면 제목 · 서명 칸부터 줄여 품목 칸을 넓힌다
-        lay = dict(_LAY_COMPACT)
+        lay = snapped(_LAY_COMPACT)
         room = per_copy - _copy_fixed_height(lay, note)
-    row_h = max(ITEM_ROW_MIN_PT, min(ITEM_ROW_PT, room / n_rows))
-    lay["row_h"] = round(row_h - 0.05, 1)  # 내림 (반올림으로 쪽을 넘지 않게)
-    lay["item_font"] = max(ITEM_FONT_MIN, min(ITEM_FONT_MAX, round(row_h / ITEM_ROW_PT * ITEM_FONT_MAX * 2) / 2))
+    row_h = _snap(max(ITEM_ROW_MIN_PT, min(ITEM_ROW_PT, room / n_rows)), down=True)
+    lay["row_h"] = row_h
+    lay["item_font"] = max(ITEM_FONT_MIN, min(ITEM_FONT_MAX, round(row_h * ITEM_FONT_RATIO * 2) / 2))  # 0.5pt 단위
     return lay
 
 
@@ -347,7 +371,7 @@ def _write_cut_line(ws, r: int) -> int:
     ws[f"A{r}"] = "✂ - - - - - - - - - - - - - - - -  절  취  선  - - - - - - - - - - - - - - - - ✂"
     _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=9, color="7F8C8D"),
               alignment=Alignment(horizontal="center", vertical="center"))
-    ws.row_dimensions[r].height = CUT_LINE_PT
+    ws.row_dimensions[r].height = _snap(CUT_LINE_PT)
     return r
 
 
@@ -355,8 +379,8 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
                 doc_no: str, copy_label: str, lay: dict[str, float] | None = None) -> int:
     """폼5(리테일) 모양 한 벌을 r0 행부터 그린다. 마지막으로 쓴 행 번호를 돌려준다."""
     lay = lay or _statement_layout(max(MIN_ROWS, len(rec["items"])), bool(rec["note"]))
-    normal = Font(name=FONT_NAME, size=10)
-    bold = Font(name=FONT_NAME, size=10, bold=True)
+    normal = Font(name=FONT_NAME, size=lay["line_font"])
+    bold = Font(name=FONT_NAME, size=lay["line_font"], bold=True)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left = Alignment(horizontal="left", vertical="center", wrap_text=True)
     right = Alignment(horizontal="right", vertical="center", shrink_to_fit=True)
@@ -393,7 +417,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     ws.merge_cells(f"A{r}:F{r}")
     note = f" — {rec['title']}" if rec["title"] else ""
     ws[f"A{r}"] = f"▶ 아래와 같이 납품(공급)합니다.{note}"
-    _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=10, bold=True, color="000080"), alignment=fit)
+    _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=lay["line_font"], bold=True, color="000080"), alignment=fit)
     ws.row_dimensions[r].height = lay["line_h"]
 
     # 표 머리 (폼5 와 같은 굵은 밑줄, 머리글은 한글)
@@ -431,12 +455,12 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
         ws.row_dimensions[r].height = lay["row_h"]
 
     r += 2
-    ws.row_dimensions[r - 1].height = 6.0
+    ws.row_dimensions[r - 1].height = lay["gap_h"]
     ws.merge_cells(f"D{r}:E{r}")
     ws[f"D{r}"] = "합  계"
     ws[f"F{r}"] = total_of(items)
-    _set_cell(ws[f"D{r}"], font=Font(name=FONT_NAME, size=13, bold=True), alignment=right)
-    _set_cell(ws[f"F{r}"], font=Font(name=FONT_NAME, size=13, bold=True, color="000080"),
+    _set_cell(ws[f"D{r}"], font=Font(name=FONT_NAME, size=lay["total_font"], bold=True), alignment=right)
+    _set_cell(ws[f"F{r}"], font=Font(name=FONT_NAME, size=lay["total_font"], bold=True, color="000080"),
               alignment=right, number_format="#,##0")
     ws[f"A{r}"] = "(VAT 포함)"
     ws.merge_cells(f"A{r}:C{r}")
@@ -472,7 +496,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
         ws.merge_cells(f"A{r}:F{r}")
         ws[f"A{r}"] = f"비고: {rec['note']}"
         _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=9), alignment=fit)
-        ws.row_dimensions[r].height = 15.0
+        ws.row_dimensions[r].height = lay["note_h"]
     return r
 
 
