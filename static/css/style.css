@@ -101,7 +101,7 @@ a:hover { text-decoration: underline; }
 
 /* Hero */
 .hero {
-  position: relative; padding: 44px 0 6px; overflow: hidden;
+  position: relative; padding: 77px 0 6px; overflow: hidden; /* nav 1행 38px + 2행 32px + 여백 */
 }
 .hero-bg {
   position: absolute; inset: 0;
@@ -2069,11 +2069,14 @@ td > .mqp-in.w-email { width: 52%; }
 .ts-modal input[type="date"].tr-inp { color-scheme: dark; }
 .ts-modal .modal-body { overflow: auto; }
 
-/* 메인창 1행: 제목 · 메뉴 | 기준일 · 거래처 · 마진 · 컴퓨존/Apple 전환 | 견적 옵션 · 도구 · 종료
-   (예전 2행 hero-topbar · 3행 store-switcher 를 nav 한 줄로 합침) */
+/* 메인창 1행: 제목 · 메뉴 | 기준일 · 거래처 · 마진 | 도구 · 종료
+   2행(.nav-sub): 컴퓨존/Apple 전환 · 견적 옵션 토글 */
 .nav-mid { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; justify-content: center; min-width: 0; padding: 0 8px; }
 .nav-date { white-space: nowrap; margin-right: 2px; line-height: 1; }
 .nav-date strong { color: var(--text); }
 .nav-store { margin-bottom: 0; margin-left: 6px; box-shadow: none; }
 .nav-store .store-tab { padding: 2px 10px; }
-.nav-toggles { display: flex; gap: 4px; align-items: center; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--border); }
+/* 메인창 2행: 왼쪽 컴퓨존/Apple 전환 + 견적 옵션 토글 5개 (상태 글자 표시) */
+.nav-sub { display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: 32px; border-top: 1px solid var(--border); }
+.nav-sub .nav-store { margin-left: 0; }
+.nav-toggles { display: flex; gap: 4px; align-items: center; padding-left: 8px; border-left: 1px solid var(--border); }
