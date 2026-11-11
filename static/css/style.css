@@ -125,24 +125,6 @@ a:hover { text-decoration: underline; }
 .cat-group .btn { flex: 1 1 0; min-width: 108px; }
 .hero-date { color: var(--muted); font-size: 1rem; }
 
-/* ?�단 �? 좌측?� 기�??�·문???�션, ?�측?� 견적 ?�션 ?��?.
-   ?��? 버튼 ?�체가 ?�재 ?�태�??�시?��?�?별도???�태 ?�스?�는 ?��? ?�는?? */
-.hero-topbar {
-  position: relative; z-index: 5;
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 8px; flex-wrap: wrap;
-  padding-bottom: 6px; margin-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-.hero-topbar p { margin: 0; }
-.hero-topbar-left {
-  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-}
-.hero-topbar-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.hero-topbar-right {
-  display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;
-}
-
 /* Store Switcher */
 .store-switcher {
   display: inline-flex; gap: 2px; background: rgba(15, 23, 42, 0.85);
@@ -936,8 +918,6 @@ a:hover { text-decoration: underline; }
   .modal-columns { grid-template-columns: 1fr; }
   .extra-price-grid { grid-template-columns: 1fr; }
   .resolution-grid { grid-template-columns: 1fr; }
-  .hero-topbar { flex-direction: column; align-items: stretch; gap: 12px; }
-  .hero-topbar-right { justify-content: flex-start; }
 }
 
 /* ==========================================================================
@@ -2086,3 +2066,12 @@ td > .mqp-in.w-email { width: 52%; }
 .ts-modal select.tr-inp option { background: #1a2332; color: #e5e7eb; }
 .ts-modal input[type="date"].tr-inp { color-scheme: dark; }
 .ts-modal .modal-body { overflow: auto; }
+
+/* 메인창 1행: 제목 · 메뉴 | 기준일 · 거래처 · 마진 · 컴퓨존/Apple 전환 | 견적 옵션 · 도구 · 종료
+   (예전 2행 hero-topbar · 3행 store-switcher 를 nav 한 줄로 합침) */
+.nav-mid { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; justify-content: center; min-width: 0; padding: 0 8px; }
+.nav-date { white-space: nowrap; margin-right: 2px; line-height: 1; }
+.nav-date strong { color: var(--text); }
+.nav-store { margin-bottom: 0; margin-left: 6px; box-shadow: none; }
+.nav-store .store-tab { padding: 2px 10px; }
+.nav-toggles { display: flex; gap: 4px; align-items: center; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--border); }

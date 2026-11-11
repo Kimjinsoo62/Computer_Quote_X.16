@@ -33,7 +33,49 @@
           </button>
         </div>
       </div>
+      <!-- 2행(기준일 · 거래처 · 마진) · 3행(컴퓨존/Apple 전환)을 1행에 합침 -->
+      <div class="nav-mid">
+        <span class="hero-date nav-date">견적 기준일 <strong id="quoteDate">{{ today }}</strong></span>
+        <!-- 현재 견적처 표시. 누르면 설정관리의 거래처관리 탭이 열린다 -->
+        <button type="button" id="btnCurrentCustomer" class="btn btn-outline btn-sm blink-warning" data-tip="거래처 (견적처)" title="현재 견적처(거래처) — 누르면 설정관리 → 📒 거래처관리 탭을 엽니다">
+          <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">거래처: -</span>
+        </button>
+        <button type="button" id="btnMarginCycle" class="btn btn-outline btn-sm margin-cycle" data-tip="컴퓨존 견적 마진" aria-label="컴퓨존 견적 마진">
+          <span class="btn-icon">💳</span>
+          <span id="marginCycleLabel">C</span>
+        </button>
+        <div class="store-switcher nav-store">
+          <button id="storeBtnCompuzone" class="store-tab active" data-store="compuzone">
+            ⚡ 컴퓨존 조립PC
+          </button>
+          <button id="storeBtnApple" class="store-tab" data-store="apple">
+            🍎 Apple Store (애플스토어)
+          </button>
+        </div>
+      </div>
       <div class="nav-links">
+        <div class="nav-toggles">
+          <button type="button" id="btnMonitorToggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="monitor" title="견적에서 모니터 포함/제외를 전환합니다">
+            <span class="btn-icon">🖥️</span>
+            <span id="monitorToggleLabel">모니터27 (제외됨)</span>
+          </button>
+          <button type="button" id="btnKeyboardToggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="keyboard" title="견적에서 무선키보드 포함/제외를 전환합니다">
+            <span class="btn-icon">⌨️</span>
+            <span id="keyboardToggleLabel">무선키보드 (제외됨)</span>
+          </button>
+          <button type="button" id="btnRam32Toggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="ram32" title="AI PC 메모리를 32GB(×2)로 확장합니다. 기본은 컴퓨존 구성(×1)과 동일합니다">
+            <span class="btn-icon">🧠</span>
+            <span id="ram32ToggleLabel">메모리32GB로 추가 (제외됨)</span>
+          </button>
+          <button type="button" id="btnSetupToggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="setup" title="견적에서 초기 세팅비 포함/제외를 전환합니다">
+            <span class="btn-icon">🛠️</span>
+            <span id="setupToggleLabel">초기 세팅비 (제외됨)</span>
+          </button>
+          <button type="button" id="btnUnitPriceToggle" class="btn btn-outline btn-sm extra-toggle extra-on" data-extra="unitprice" title="견적서에 품목별 단가·금액을 표시할지 전환합니다">
+            <span class="btn-icon">💰</span>
+            <span id="unitPriceToggleLabel">단가표시</span>
+          </button>
+        </div>
         <button type="button" id="btnNetworkShare" class="btn btn-outline btn-sm" data-tip="네트워크 접속 주소" title="다른 컴퓨터에서 접속할 수 있는 네트워크 IP 주소를 확인하고 복사합니다">
           🌐 <span id="networkIpText">{{ lan_ip }}:{{ port }}</span>
         </button>
@@ -55,53 +97,7 @@
 
   <header class="hero">
     <div class="hero-bg"></div>
-    <div class="container hero-topbar">
-      <div class="hero-topbar-left">
-        <p class="hero-date">견적 기준일: <strong id="quoteDate">{{ today }}</strong></p>
-        <div class="hero-topbar-actions">
-          <!-- 현재 견적처 표시. 누르면 설정관리의 거래처관리 탭이 열린다 -->
-          <button type="button" id="btnCurrentCustomer" class="btn btn-outline btn-sm blink-warning" data-tip="거래처 (견적처)" title="현재 견적처(거래처) — 누르면 설정관리 → 📒 거래처관리 탭을 엽니다">
-            <span class="btn-icon">📇</span> <span id="quoteInfoBtnText" class="blink-warning-text">거래처: -</span>
-          </button>
-          <button type="button" id="btnMarginCycle" class="btn btn-outline btn-sm margin-cycle" data-tip="컴퓨존 견적 마진" aria-label="컴퓨존 견적 마진">
-            <span class="btn-icon">💳</span>
-            <span id="marginCycleLabel">C</span>
-          </button>
-        </div>
-      </div>
-      <div class="hero-topbar-right">
-        <button type="button" id="btnMonitorToggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="monitor" title="견적에서 모니터 포함/제외를 전환합니다">
-          <span class="btn-icon">🖥️</span>
-          <span id="monitorToggleLabel">모니터27 (제외됨)</span>
-        </button>
-        <button type="button" id="btnKeyboardToggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="keyboard" title="견적에서 무선키보드 포함/제외를 전환합니다">
-          <span class="btn-icon">⌨️</span>
-          <span id="keyboardToggleLabel">무선키보드 (제외됨)</span>
-        </button>
-        <button type="button" id="btnRam32Toggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="ram32" title="AI PC 메모리를 32GB(×2)로 확장합니다. 기본은 컴퓨존 구성(×1)과 동일합니다">
-          <span class="btn-icon">🧠</span>
-          <span id="ram32ToggleLabel">메모리32GB로 추가 (제외됨)</span>
-        </button>
-        <button type="button" id="btnSetupToggle" class="btn btn-outline btn-sm extra-toggle extra-off" data-extra="setup" title="견적에서 초기 세팅비 포함/제외를 전환합니다">
-          <span class="btn-icon">🛠️</span>
-          <span id="setupToggleLabel">초기 세팅비 (제외됨)</span>
-        </button>
-        <button type="button" id="btnUnitPriceToggle" class="btn btn-outline btn-sm extra-toggle extra-on" data-extra="unitprice" title="견적서에 품목별 단가·금액을 표시할지 전환합니다">
-          <span class="btn-icon">💰</span>
-          <span id="unitPriceToggleLabel">단가표시</span>
-        </button>
-      </div>
-    </div>
     <div class="container hero-content">
-      <div class="store-switcher">
-        <button id="storeBtnCompuzone" class="store-tab active" data-store="compuzone">
-          ⚡ 컴퓨존 조립PC
-        </button>
-        <button id="storeBtnApple" class="store-tab" data-store="apple">
-          🍎 Apple Store (애플스토어)
-        </button>
-      </div>
-
       <div id="compuzoneCatGroup" class="hero-actions cat-group">
         <button id="btnFetchAll" class="btn btn-primary btn-lg cat-btn active" data-cat="ai">
           <span class="btn-icon">📋</span> AI PC 견적
