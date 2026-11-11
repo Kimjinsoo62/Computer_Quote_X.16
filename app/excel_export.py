@@ -843,12 +843,15 @@ def build_excel(
         cust_email = (info.get("customer_email") or "").strip()
         # 견적처 연락처 칸은 행을 늘리지 않고 '전화 / 이메일' 로 한 칸에 넣는다(칸은 shrink_to_fit 이라 줄바꿈 없음).
         cust_contact = " / ".join(x for x in (cust_phone, cust_email) if x)
+        # 한 줄에 '상호 (담당자)' 로 붙여 쓰는 곳(폼3 · 4 · 5 · 7 · 8)용: 담당자가 상호와 같으면 빈칸
+        cust_mgr_x = distinct_manager(cust_mgr, cust_name)
         # 영문 요약형 폼(3·4·5)의 'To:' 한 줄용: 담당자 / 전화 / 이메일
-        cust_line = " / ".join(x for x in (cust_mgr, cust_phone, cust_email) if x)
+        cust_line = " / ".join(x for x in (cust_mgr_x, cust_phone, cust_email) if x)
         sup_addr = (info.get("supplier_address") or "").strip()
         sup_biz_no = (info.get("supplier_business_number") or "").strip()
         sup_name = info["supplier_name"]
         sup_mgr = info["supplier_manager"]
+        sup_mgr_x = distinct_manager(sup_mgr, sup_name)
         sup_phone = info["supplier_phone"]
         sup_email = (info.get("supplier_email") or "").strip()
 
@@ -1016,11 +1019,12 @@ def build_excel(
         ws3["A1"].font = Font(name="Malgun Gothic", size=20, bold=True, color="E67E22")
         ws3["A1"].alignment = left
         
-        ws3["A3"] = f"To: {cust_name} ({cust_line})"
+        ws3["A3"] = f"To: {cust_name}" + (f" ({cust_line})" if cust_line else "")
         ws3.merge_cells("A3:C3")
         _set_cell(ws3["A3"], font=bold, alignment=fit)
         
-        ws3["A4"] = _name_link_text("From: ", sup_name, f" ({sup_mgr} / {sup_phone})", q.url)
+        sup_line3 = " / ".join(x for x in (sup_mgr_x, sup_phone) if x)
+        ws3["A4"] = _name_link_text("From: ", sup_name, f" ({sup_line3})" if sup_line3 else "", q.url)
         ws3.merge_cells("A4:C4")
         _set_cell(ws3["A4"], font=normal, alignment=fit)
         _link_cell(ws3["A4"], q.url)
@@ -1104,11 +1108,12 @@ def build_excel(
         ws4.merge_cells("A3:F3")
         _set_cell(ws4["A3"], font=normal, alignment=right)
         
-        ws4["A4"] = f" 수신 (To) : {cust_name} - {cust_mgr} 귀하" + (f" ({cust_contact})" if cust_contact else "")
+        ws4["A4"] = (f" 수신 (To) : {cust_name}" + (f" - {cust_mgr_x}" if cust_mgr_x else "") + " 귀하"
+                     + (f" ({cust_contact})" if cust_contact else ""))
         ws4["A5"] = _name_link_text(
             " 발신 (From): ",
             sup_name,
-            f" - {sup_mgr} ({sup_phone}" + (f" / {sup_email}" if sup_email else "") + ")",
+            (f" - {sup_mgr_x}" if sup_mgr_x else "") + f" ({sup_phone}" + (f" / {sup_email}" if sup_email else "") + ")",
             q.url,
         )
         ws4.merge_cells("A4:C4")
@@ -1182,7 +1187,7 @@ def build_excel(
         ws5["A1"].font = Font(name=FONT_NAME, size=22, bold=True, color="34495E")
         ws5["A1"].alignment = center
         
-        ws5["A4"] = f"To: {cust_name} ({cust_line})"
+        ws5["A4"] = f"To: {cust_name}" + (f" ({cust_line})" if cust_line else "")
         ws5.merge_cells("A4:C4")
         _set_cell(ws5["A4"], font=bold, alignment=fit)
         
@@ -1246,7 +1251,7 @@ def build_excel(
         ws5[f"A{r}"] = _name_link_text(
             "",
             sup_name,
-            f" / 담당: {sup_mgr} / Tel: {sup_phone}" + (f" / E-mail: {sup_email}" if sup_email else ""),
+            (f" / 담당: {sup_mgr_x}" if sup_mgr_x else "") + f" / Tel: {sup_phone}" + (f" / E-mail: {sup_email}" if sup_email else ""),
             q.url,
         )
         _set_cell(ws5[f"A{r}"], font=normal, alignment=center)
@@ -1399,7 +1404,7 @@ def build_excel(
 
         # 좌: 수신 정보 / 우: 공급자 박스(5행). 값은 줄바꿈 없이 칸에 맞춰 축소해 행 높이를 고정한다.
         ws7["A4"] = f"견적일 : {date_str}"
-        ws7["A5"] = f"수  신 : {cust_name} ({cust_mgr})"
+        ws7["A5"] = f"수  신 : {cust_name}" + (f" ({cust_mgr_x})" if cust_mgr_x else "")
         ws7["A6"] = f"연락처 : {cust_phone}" if cust_phone else None
         ws7["A7"] = f"이메일 : {cust_email}" if cust_email else None  # 7행은 원래 비어 있던 줄
         ws7["A8"] = "아래와 같이 견적하여 드립니다."
@@ -1412,7 +1417,7 @@ def build_excel(
         _set_cell(ws7["A8"], font=normal, alignment=fit)
 
         sup_rows7 = [
-            ("상    호", _name_link_text("", sup_name, f" (대표: {sup_mgr})", q.url)),
+            ("상    호", _name_link_text("", sup_name, f" (대표: {sup_mgr_x})" if sup_mgr_x else "", q.url)),
             ("등록번호", sup_biz_no),
             ("연 락 처", sup_phone),
             ("이 메 일", sup_email),
@@ -1566,7 +1571,7 @@ def build_excel(
         ]
         sup_rows8 = [
             ("등록번호", sup_biz_no),
-            ("상    호", _name_link_text("", sup_name, f" (대표: {sup_mgr})" if sup_mgr else "", q.url)),
+            ("상    호", _name_link_text("", sup_name, f" (대표: {sup_mgr_x})" if sup_mgr_x else "", q.url)),
             ("사 업 장", sup_addr),
             ("연 락 처", sup_phone),
             ("이 메 일", sup_email),
@@ -1721,6 +1726,14 @@ SAMPLE_PARTS = [
     ("모니터", "LG PC 모니터 27U411A 68cm(27인치)", 1, 180000),
     ("키보드마우스", "무선키보드마우스", 1, 30000),
 ]
+
+
+def distinct_manager(manager: str, name: str) -> str:
+    """담당자가 상호와 같으면(공백 무시) "" — 한 줄에 '상호 (담당자)' 로 붙여 쓰는 곳에서 같은 이름을 두 번 찍지 않는다.
+    폼1 · 폼2 · 폼6 처럼 담당자 칸이 따로 있는 곳은 이 함수를 쓰지 않고 그대로 둔다."""
+    m = str(manager or "").strip()
+    n = str(name or "").strip()
+    return "" if m and m.replace(" ", "") == n.replace(" ", "") else m
 
 
 def _device_label(q) -> str:

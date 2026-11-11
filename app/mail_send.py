@@ -115,8 +115,10 @@ def set_account(user: str, password: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 def compose_fields(info: dict[str, Any], model: str, total: int, quote_date: str) -> dict[str, str]:
     """받는 사람 = 견적처 이메일, 참조 = 공급자(나) 이메일. 제목 · 본문은 견적정보로 채운다."""
+    from app.excel_export import distinct_manager  # 담당자가 상호와 같으면 한 번만 쓴다
+
     customer = (info.get("customer_name") or "").strip()
-    manager = (info.get("customer_manager") or "").strip()
+    manager = distinct_manager(info.get("customer_manager"), customer)
     supplier = (info.get("supplier_name") or "").strip()
     to_addr = (info.get("customer_email") or "").strip()
     cc_addr = (info.get("supplier_email") or "").strip()
@@ -126,7 +128,7 @@ def compose_fields(info: dict[str, Any], model: str, total: int, quote_date: str
     signature = "\n".join(
         x
         for x in (
-            " ".join(y for y in (supplier, (info.get("supplier_manager") or "").strip()) if y),
+            " ".join(y for y in (supplier, distinct_manager(info.get("supplier_manager"), supplier)) if y),
             " / ".join(y for y in ((info.get("supplier_phone") or "").strip(), (info.get("supplier_email") or "").strip()) if y),
         )
         if x

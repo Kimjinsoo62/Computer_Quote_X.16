@@ -23,7 +23,7 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, Side
 
-from app.excel_export import FONT_NAME, FORM5_COL_WIDTHS, _apply_page_setup, _set_cell
+from app.excel_export import FONT_NAME, FORM5_COL_WIDTHS, _apply_page_setup, _set_cell, distinct_manager
 from app.manual_quote import CUSTOMER_FIELDS, clean_customer
 from app.quote_info import load_quote_info
 
@@ -405,7 +405,8 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     ws.row_dimensions[r].height = lay["sub_h"]
 
     r += 1
-    cust_line = " / ".join(x for x in (cust["manager"], cust["phone"], cust["email"]) if x)
+    # 담당자가 상호와 같으면 '곽명수대표 (곽명수대표)' 처럼 두 번 찍지 않는다
+    cust_line = " / ".join(x for x in (distinct_manager(cust["manager"], cust["name"]), cust["phone"], cust["email"]) if x)
     ws[f"A{r}"] = f"공급받는자: {cust['name']}" + (f" ({cust_line})" if cust_line else "") + " 귀하"
     ws.merge_cells(f"A{r}:C{r}")
     _set_cell(ws[f"A{r}"], font=bold, alignment=fit)
@@ -474,9 +475,12 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     r += 1
     sup_email = (info.get("supplier_email") or "").strip()
     ws.merge_cells(f"A{r}:F{r}")
+    sup_name = info.get("supplier_name", "")
+    sup_mgr = distinct_manager(info.get("supplier_manager", ""), sup_name)  # 상호와 같으면 '담당:' 을 빼고 한 번만
     ws[f"A{r}"] = (
-        f"공급자: {info.get('supplier_name', '')} / 담당: {info.get('supplier_manager', '')} / "
-        f"Tel: {info.get('supplier_phone', '')}" + (f" / E-mail: {sup_email}" if sup_email else "")
+        f"공급자: {sup_name} / "
+        + (f"담당: {sup_mgr} / " if sup_mgr else "")
+        + f"Tel: {info.get('supplier_phone', '')}" + (f" / E-mail: {sup_email}" if sup_email else "")
     )
     _set_cell(ws[f"A{r}"], font=normal, alignment=Alignment(horizontal="center", vertical="center", shrink_to_fit=True))
     ws.row_dimensions[r].height = lay["line_h"]

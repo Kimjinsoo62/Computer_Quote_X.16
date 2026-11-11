@@ -599,6 +599,13 @@ function bindSummaryCardEvents(container) {
   });
 }
 
+/** 담당자가 상호와 같으면(공백 무시) "" — 같은 이름을 두 번 쓰지 않는다 (서버 excel_export.distinct_manager 와 같은 규칙). */
+function distinctManager(manager, name) {
+  const m = String(manager || "").trim();
+  const n = String(name || "").trim();
+  return m && m.replace(/\s/g, "") === n.replace(/\s/g, "") ? "" : m;
+}
+
 function renderEstimateForm(q) {
   const apple = isAppleQuote(q);
   const shownTotal = displayTotal(q);
@@ -652,9 +659,9 @@ function renderEstimateForm(q) {
       <div class="meta-row"><span class="meta-label">모델명</span><span class="meta-value">${q.model}</span></div>
       <div class="meta-row"><span class="meta-label">상품번호</span><span class="meta-value">${q.product_no}</span></div>
       ${quoteInfo?.customer_name || quoteInfo?.customer_manager ? `
-      <div class="meta-row"><span class="meta-label">견적처</span><span class="meta-value">${[quoteInfo.customer_name, quoteInfo.customer_manager].filter(Boolean).join(" · ")}</span></div>` : ""}
+      <div class="meta-row"><span class="meta-label">견적처</span><span class="meta-value">${[quoteInfo.customer_name, distinctManager(quoteInfo.customer_manager, quoteInfo.customer_name)].filter(Boolean).join(" · ")}</span></div>` : ""}
       ${quoteInfo?.supplier_name ? `
-      <div class="meta-row"><span class="meta-label">공급자</span><span class="meta-value">${[quoteInfo.supplier_name, quoteInfo.supplier_manager, quoteInfo.supplier_phone].filter(Boolean).join(" · ")}</span></div>` : ""}
+      <div class="meta-row"><span class="meta-label">공급자</span><span class="meta-value">${[quoteInfo.supplier_name, distinctManager(quoteInfo.supplier_manager, quoteInfo.supplier_name), quoteInfo.supplier_phone].filter(Boolean).join(" · ")}</span></div>` : ""}
       ${quoteInfo?.supplier_email ? `
       <div class="meta-row"><span class="meta-label">이메일</span><span class="meta-value">${quoteInfo.supplier_email}</span></div>` : ""}
     </div>
