@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import html as htmlmod
 import json
 import re
 import urllib.error
@@ -1567,6 +1568,114 @@ def fetch_apple_quotes(
 
 
 
+# ── 노트북 세부사양 ─────────────────────────────────────────────
+# 컴퓨존 검색 목록의 prd_subTxt 사양 요약을 견적서 품목 행으로 나눈다. 형식이 세 가지 섞여 있다.
+#   A) "노트북 / 39.6cm(15.6인치) / 1.55kg / OS미포함 / [화면] 해상도 : … / [CPU] 인텔 / … / [구성] 램 : 8GB / 용량 : 256GB / …"
+#   B) "노트북 / 운영체제(OS): … /화면정보 39.6cm … /CPU 인텔 / … /램 LPDDR4x / … /저장장치 M.2(NVMe) / 256GB / …"
+#   C) "기본제품 / 갤럭시북5 / 15형 / … / 인텔 코어 울트라 5 / 16GB RAM / 256GB SSD 이하 / Windows11 Home / …" (머리말 없음)
+# 품목 구분명은 일부러 "CPU" · "메모리" · "SSD" · "그래픽카드"를 피한다. 다나와/쿠팡 비교(app.js quoteSpecParams →
+# danawa_search.resolve_base)가 "CPU 품목이 없으면 노트북"으로 보고 모델명에서 사양을 읽기 때문이다.
+NOTEBOOK_SPEC_ROWS = [
+    ("프로세서", "cpu"),
+    ("램", "ram"),
+    ("저장장치", "ssd"),
+    ("그래픽", "gpu"),
+    ("디스플레이", "display"),
+    ("운영체제", "os"),
+    ("기타", "etc"),
+]
+_NB_HEADERS = [  # 형식 A/B 의 묶음 머리말 → 버킷 (긴 것부터)
+    ("운영체제(OS)", "os"), ("화면정보", "display"), ("저장장치", "ssd"), ("영상입출력", "etc"),
+    ("주요제원", "etc"), ("네트워크", "etc"), ("부가기능", "etc"), ("입력장치", "etc"),
+    ("그래픽", "gpu"), ("구성", "conf"), ("화면", "display"), ("단자", "etc"),
+    ("파워", "etc"), ("CPU", "cpu"), ("램", "ram"),
+]
+# 사양이 아닌 분류 · 용도 · 검색 키워드("17인치노트북", "인강", "사무용" 등)는 버린다
+_NB_DROP_RE = re.compile(
+    r"^(.*노트북.*|Copilot\+ ?PC|기본제품|용도\s*:.*|사무|인강.*|.*사무용|휴대용|웹서핑|줌|화상회의|영상시청|문서작업|Laptop)$",
+    re.I,
+)
+NB_ETC_MAX = 12  # 기타 행에 담는 항목 수 (뒤쪽은 대개 검색 키워드)
+
+
+def _nb_bucket_by_value(tok: str) -> str:
+    """머리말이 없는 값 하나를 버킷으로 분류한다 (형식 C · 형식 A/B 의 앞부분)."""
+    t = tok.strip()
+    if re.search(r"웹캠|카메라", t):
+        return "etc"
+    if re.search(r"운영체제|윈도우|Windows|프리도스|FreeDOS|OS\s*미포함|macOS|크롬OS|Chrome ?OS", t, re.I):
+        return "os"
+    if re.search(r"\d+\s*GB\s*RAM|RAM\s*\d|LPDDR|DDR\d|RAM 업그레이드", t, re.I):
+        return "ram"
+    if re.search(r"SSD|NVMe|eMMC|\d+\s*(GB|TB)\s*이하", t, re.I):
+        return "ssd"
+    if re.search(r"그래픽|Graphics|GeForce|RTX|GTX|Radeon|Adreno|Iris|\bArc\b", t, re.I):
+        return "gpu"
+    if re.search(r"인텔|Intel|코어|Core|라이젠|Ryzen|AMD|퀄컴|스냅드래곤|Snapdragon|애플\s*M\d|레이크|NPU", t, re.I):
+        return "cpu"
+    if re.search(r"\d+(\.\d+)?\s*cm|인치|\d+형|\d{3,4}\s*x\s*\d{3,4}|FHD|QHD|UHD|OLED|광시야각|IPS|\d+\s*Hz|nit", t, re.I):
+        return "display"
+    return "etc"
+
+
+def parse_notebook_specs(text: str) -> list[tuple[str, str]]:
+    """사양 요약 문자열 → [(품목 구분, 사양 문구)]. 사양이 없으면 빈 목록."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if not text:
+        return []
+    buckets: dict[str, list[str]] = {key: [] for _cat, key in NOTEBOOK_SPEC_ROWS}
+    group = ""  # 지금 읽는 묶음 (A/B 형식의 머리말)
+    for raw in re.split(r"\s*/\s*", text):
+        tok = raw.strip(" ,")
+        if not tok:
+            continue
+        # [화면] 해상도 : … 처럼 대괄호 머리말
+        m = re.match(r"^\[([^\]]+)\]\s*(.*)$", tok)
+        if m:
+            label, tok = m.group(1).strip(), m.group(2).strip()
+            group = next((b for h, b in _NB_HEADERS if label.startswith(h)), "etc")
+        else:
+            # "CPU 인텔", "운영체제(OS): 미포함" 처럼 머리말 + 값 (형식 B)
+            for h, b in _NB_HEADERS:
+                if tok.startswith(h + " ") or tok.startswith(h + ":"):
+                    rest = tok[len(h):].lstrip(" :")
+                    # "램 용량: 8GB" · "램 교체: 불가능" 은 묶음 안의 항목이다
+                    if not re.match(r"^(용량|교체)", rest):
+                        group, tok = b, rest
+                    break
+        if not tok or _NB_DROP_RE.match(tok):
+            continue
+        bucket = group
+        if bucket == "conf":  # [구성] 램 : 8GB / 램 교체 : 불가능 / 용량 : 256GB / 저장 슬롯 / 전원 / 배터리
+            if tok.startswith("램"):
+                bucket = "ram"
+            elif re.match(r"^(용량|저장)", tok):
+                bucket = "ssd"
+            else:
+                bucket = "etc"
+        elif not bucket:
+            bucket = _nb_bucket_by_value(tok)
+        # "용량 : 256GB" → "256GB", "램 : 16GB" → "16GB" (구분 칸이 이미 말해 주므로)
+        tok = re.sub(r"^(램|용량|해상도)\s*:\s*", "", tok)
+        buckets[bucket].append(tok)
+    rows = []
+    for cat, key in NOTEBOOK_SPEC_ROWS:
+        vals = list(dict.fromkeys(v for v in buckets[key] if v))
+        if key == "etc":
+            vals = vals[:NB_ETC_MAX]
+        if vals:
+            rows.append((cat, ", ".join(vals) if key == "etc" else " / ".join(vals)))
+    return rows
+
+
+def _build_notebook_parts(model: str, price: int, spec_text: str) -> list[QuotePart]:
+    """노트북 1행(본체, 판매가) + 세부사양 행(금액 0). 합계 = 판매가."""
+    parts = [QuotePart(no=1, category="노트북", name=model, qty=1, unit_price=price, amount=price)]
+    for cat, name in parse_notebook_specs(spec_text):
+        parts.append(QuotePart(no=len(parts) + 1, category=cat, name=name, qty=1, unit_price=0, amount=0))
+    return parts
+
+
 def fetch_notebook_quotes_by_price(
     min_price: int,
     max_price: int,
@@ -1630,15 +1739,24 @@ def fetch_notebook_quotes_by_price(
             sale_price = int(sp) if sp.isdigit() else 0
             price = sale_price if sale_price > 0 else list_price
             
-            chunk = html[max(0, m.start() - 4000) : m.start()]
+            # 이벤트 문구가 길면 상품명 · 사양이 가격표보다 4천 자 넘게 앞에 있다
+            chunk = html[max(0, m.start() - 12000) : m.start()]
             names = list(re.finditer(r'class="prd_info_name[^>]*>\s*([^<]+)', chunk))
             name = names[-1].group(1).strip() if names else f"Notebook {pno}"
-            
+            # 세부사양: 같은 상품번호를 가리키는 prd_subTxt 링크 글자
+            specs = list(re.finditer(
+                r'class="prd_subTxt">\s*<a[^>]*ProductNo=' + str(pno) + r'\b[^>]*>(.*?)</a>', chunk, re.S
+            ))
+            spec_text = ""
+            if specs:
+                spec_text = htmlmod.unescape(re.sub(r"<[^>]+>", " ", specs[-1].group(1)))
+
             if lo <= price <= hi:
                 items.append({
                     "pno": pno,
                     "name": name,
                     "price": price,
+                    "spec_text": spec_text,
                 })
                 
     items.sort(key=lambda x: x["price"])
@@ -1650,6 +1768,7 @@ def fetch_notebook_quotes_by_price(
         
     quotes = []
     for i, item in enumerate(items):
+        parts = _build_notebook_parts(item["name"], item["price"], item.get("spec_text", ""))
         q = Quote(
             tier=f"노트북 {i+1}",
             tier_key=f"notebook-{item['pno']}",
@@ -1659,7 +1778,7 @@ def fetch_notebook_quotes_by_price(
             product_no=item['pno'],
             url=f"https://www.compuzone.co.kr/product/product_detail.htm?ProductNo={item['pno']}",
             quote_date=date.today().isoformat(),
-            parts=[],
+            parts=parts,
             parts_subtotal=item['price'],
             total=item['price'],
             price_source="컴퓨존",
