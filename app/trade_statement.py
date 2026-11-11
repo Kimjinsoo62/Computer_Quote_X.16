@@ -82,6 +82,8 @@ def clean_record(data: dict[str, Any]) -> dict[str, Any]:
         "signed_date": str(data.get("signed_date") or "").strip()[:10],
         # 어디서 만들었는지(카드 · 작성본) 목록 표시용. 비어도 된다.
         "source": str(data.get("source") or "").strip()[:200],
+        # False 면 인쇄 · Excel 에서 품목별 금액을 비우고 합계만 남긴다(메인창 💰 단가미표시와 같은 뜻). 예전 기록은 True.
+        "show_prices": data.get("show_prices") is not False,
     }
 
 
@@ -446,7 +448,8 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
             it = items[idx]
             ws[f"A{r}"] = f"[{it['category']}] {it['name']}" if it["category"] else it["name"]
             ws[f"D{r}"] = it["qty"]
-            ws[f"F{r}"] = (it["qty"] * it["unit_price"]) or None  # 0원(노트북 세부사양 행)은 빈칸
+            # 0원(세부사양 행)과 단가미표시 명세서는 빈칸. 합계는 그대로 둔다.
+            ws[f"F{r}"] = ((it["qty"] * it["unit_price"]) or None) if rec["show_prices"] else None
         for c in range(1, 7):
             ws.cell(row=r, column=c).border = thin_bot
         _set_cell(ws[f"A{r}"], font=item_font, alignment=Alignment(horizontal="left", vertical="center", shrink_to_fit=True))

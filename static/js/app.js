@@ -5251,6 +5251,9 @@ async function openTsEditor(rec) {
   $("#tsDocTitle").value = rec?.title || "";
   $("#tsNote").value = rec?.note || "";
   $("#tsSigned").checked = !!rec?.signed;
+  // 단가 표시: 저장된 명세서는 저장한 값(예전 기록은 표시), 견적 카드 · 새 명세서는 메인창 💰 단가표시 설정을 따른다
+  $("#tsUnitPrice").checked = rec?.id ? rec.show_prices !== false
+    : (rec && "show_prices" in rec ? rec.show_prices !== false : showUnitPrices);
   $("#tsSigner").value = rec?.signer || "";
   $("#tsSignedDate").value = rec?.signed_date || "";
   const cust = rec?.customer_info && Object.values(rec.customer_info).some(Boolean) ? rec.customer_info : mqCustomerFromInfo();
@@ -5277,6 +5280,7 @@ function tsPayload() {
     title: $("#tsDocTitle").value.trim(),
     note: $("#tsNote").value.trim(),
     signed: $("#tsSigned").checked,
+    show_prices: $("#tsUnitPrice")?.checked !== false,
     signer: $("#tsSigner").value.trim(),
     signed_date: $("#tsSignedDate").value,
     customer_info: tsGetCustomer(),
