@@ -1445,7 +1445,7 @@ def build_excel(
         supply_price = int(round(q.total / 1.1))
         ws7.row_dimensions[11].height = 24.0
         ws7.cell(row=11, column=1, value=1)
-        ws7.cell(row=11, column=2, value="데스크탑 컴퓨터")
+        ws7.cell(row=11, column=2, value=_device_label(q))
         ws7.cell(row=11, column=3, value=q.model or q.tier)
         ws7.cell(row=11, column=4, value=1)
         ws7.cell(row=11, column=5, value=supply_price)
@@ -1721,6 +1721,26 @@ SAMPLE_PARTS = [
     ("모니터", "LG PC 모니터 27U411A 68cm(27인치)", 1, 180000),
     ("키보드마우스", "무선키보드마우스", 1, 30000),
 ]
+
+
+def _device_label(q) -> str:
+    """폼7 요약표 '구분/품명' 칸. 노트북 금액대로 찾기 · Apple 제품은 기기 종류로, 나머지(조립PC)는 데스크탑."""
+    key = str(getattr(q, "tier_key", "") or "").lower()
+    if key.startswith("notebook-"):
+        return "노트북 컴퓨터"
+    if str(getattr(q, "price_source", "") or "").startswith("apple") or "apple.com" in str(getattr(q, "url", "") or ""):
+        if key.startswith("macbook"):
+            return "노트북 컴퓨터"
+        if key.startswith("ipad"):
+            return "태블릿"
+        if key.startswith("iphone"):
+            return "스마트폰"
+        if "display" in key:
+            return "모니터"
+        if key.startswith(("imac", "macmini", "macstudio", "macpro")):
+            return "데스크탑 컴퓨터"
+        return "Apple 제품"
+    return "데스크탑 컴퓨터"
 
 
 def sample_result() -> TodayQuotesResult:
