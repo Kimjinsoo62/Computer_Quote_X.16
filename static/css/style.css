@@ -2012,6 +2012,8 @@ td > .mqp-in.w-email { width: 52%; }
 /* 포함/제외 전환 버튼: 제외 상태는 이모지를 흐리게 해서 글자 없이도 상태가 보이게 */
 .extra-toggle.ib.extra-off { opacity: 0.55; filter: grayscale(0.85); }
 .extra-toggle.ib.extra-on { opacity: 1; filter: none; }
+/* 포함/제외 토글은 상태 글자("모니터27 (포함됨)" 등)를 이모지 옆에 그대로 보인다 */
+.extra-toggle.ib .ib-keep { font-size: 10pt; white-space: nowrap; }
 /* 견적 카드 버튼: 이모지만 남으므로 한 줄로 촘촘히 */
 .summary-card .card-actions { grid-template-columns: repeat(auto-fit, minmax(30px, 1fr)); }
 .summary-card .card-actions .btn.ib { padding: 0 4px; font-size: 1.1rem; }
