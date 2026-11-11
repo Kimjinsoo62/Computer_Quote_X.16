@@ -615,7 +615,9 @@ function renderEstimateForm(q) {
         amountStr = "-";
       } else {
         unitPriceStr = p.qty > 0 && (p.unit_price > 0 || isDiscount) ? fmt(p.unit_price) : "";
-        amountStr = p.qty > 0 && (p.amount > 0 || isDiscount) ? fmt(p.amount) : "별도청구";
+        // 수량 0 = 별도청구(기술지원 등). 수량은 있는데 0원인 행은 노트북 세부사양 행이라 금액 칸을 비운다.
+        if (p.qty > 0 && (p.amount > 0 || isDiscount)) amountStr = fmt(p.amount);
+        else amountStr = p.qty > 0 ? "" : "별도청구";
       }
       return `
     <tr${isDiscount ? ' class="discount-row"' : ""}>
@@ -4985,7 +4987,7 @@ $("#btnOpenCalc")?.addEventListener("click", openCalcWindow);
 //  - 품목은 직접 입력하거나 견적 카드의 🧾 버튼(화면에 보이는 마진 적용 단가 그대로) · 📝 작성본에서 가져온다
 // ===================================================================
 // 거래명세표 품목 최대 행 수. app/trade_statement.py 의 MAX_ITEMS 와 같아야 한다(양쪽 주석에 명시).
-const TS_MAX_ROWS = 20;
+const TS_MAX_ROWS = 30;
 const TS_BLANK_ROWS = 5; // 새 명세서에 미리 깔아 두는 빈 행
 const tsModal = $("#tradeStatementModal");
 let tsList = [];

@@ -600,7 +600,8 @@ def build_excel(
         result = fetch_today_quotes()
 
     def _maybe_price(value):
-        return None if hide_unit_prices else value
+        # 0원(노트북 · Apple 세부사양 행, 0원 별도청구 항목)은 "0" 대신 빈칸으로 둔다
+        return None if hide_unit_prices or value == 0 else value
 
     def _pad_count(n_parts: int, base: int = 0) -> int:
         """품목 뒤에 붙일 빈 행 수: 폼 고유의 기본 빈 행(base)과 최소 행 수까지 모자란 수 중 큰 값."""

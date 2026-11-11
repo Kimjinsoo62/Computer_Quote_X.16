@@ -33,11 +33,11 @@ SIGNED_DIR = ROOT / "trade_statements"
 SHEET_TITLE = "거래명세표"
 DOC_TITLE = "거 래 명 세 표"
 COPY_LABELS = ("(공급자 보관용)", "(공급받는자 보관용)")
-# 두 벌이 A4 세로 한 장에 들어가야 하므로 품목 행은 견적서(20행)보다 적게 둔다.
-# 품목 표는 늘 MIN_ROWS 행(빈 행 포함)이라 품목 수와 상관없이 같은 모양이고, MAX_ITEMS 까지는 늘어나며 한 장에 맞춰 줄어든다.
+# 두 벌이 A4 세로 한 장에 들어가야 한다. 품목 표는 늘 MIN_ROWS 행(빈 행 포함)이라 품목이 적으면 같은 모양이고,
+# 품목이 많으면 _statement_layout() 이 품목 행 높이 · 글자(필요하면 제목 · 서명 칸도)를 좁혀 모든 행을 한 장에 담는다.
 # MAX_ITEMS 는 static/js/app.js 의 TS_MAX_ROWS 와 같아야 한다(양쪽 주석에 명시).
 MIN_ROWS = 10
-MAX_ITEMS = 20  # 새 견적 만들기(manual_quote.MAX_ITEMS)와 같아 작성본을 잘림 없이 가져온다
+MAX_ITEMS = 30  # 견적 카드(컴퓨존 품목 + 추가 항목 + 할인) · 새 견적(최대 20행)을 잘림 없이 담는다
 SIGNED_EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 MAX_SIGNED_BYTES = 20 * 1024 * 1024
 
@@ -289,9 +289,10 @@ def build_statement_excel(data: dict[str, Any]) -> BytesIO:
     # 높이로 두고 남는 높이를 그 두 줄에 나눠 쪽을 채운 뒤 세로 가운데 맞춤을 건다. 품목이 많아 Excel 이
     # 한 장에 맞추려고 축소해도 가운데 맞춤이라 절취선은 계속 쪽 한가운데에 온다.
     ws.print_options.verticalCentered = True
+    lay = _statement_layout(max(MIN_ROWS, len(rec["items"])), bool(rec["note"]))
     r = 1
     for i, label in enumerate(COPY_LABELS):
-        r = _write_copy(ws, r, rec, cust, info, doc_no, label)
+        r = _write_copy(ws, r, rec, cust, info, doc_no, label, lay)
         if i == 0:
             copy_h = sum(ws.row_dimensions[x].height or 15.0 for x in range(1, r + 1))
             gap = max(CUT_GAP_MIN_PT, (PRINTABLE_HEIGHT_PT - 2 * copy_h - CUT_LINE_PT) / 2)
@@ -312,6 +313,35 @@ CUT_LINE_PT = 16.0
 CUT_GAP_MIN_PT = 6.0
 
 
+# 한 벌의 행 높이(pt). 품목 행 수에 따라 _statement_layout() 이 아래 값을 고른다.
+_LAY_NORMAL = {"title_h": 17.0, "title_font": 20, "line_h": 18.0, "sub_h": 15.0, "total_h": 22.0, "sign_h": 30.0}
+_LAY_COMPACT = {"title_h": 13.0, "title_font": 16, "line_h": 15.0, "sub_h": 12.0, "total_h": 18.0, "sign_h": 22.0}
+ITEM_ROW_PT = 17.0      # 품목 행 기본 높이 (10pt 글자)
+ITEM_ROW_MIN_PT = 9.0   # 이보다 낮으면 읽기 어려워 Excel 의 한 장 맞춤 축소에 맡긴다
+ITEM_FONT_MAX, ITEM_FONT_MIN = 10.0, 6.5
+
+
+def _copy_fixed_height(lay: dict[str, float], note: bool) -> float:
+    """한 벌에서 품목 행을 뺀 높이: 제목 2줄 · 번호 · 공급받는자 · 납품 문구 · 표 머리 · 간격 · 합계 · 공급자 · 서명 · 비고."""
+    return (2 * lay["title_h"] + lay["sub_h"] + 3 * lay["line_h"] + 6.0 + lay["total_h"]
+            + lay["line_h"] + lay["sign_h"] + (15.0 if note else 0.0))
+
+
+def _statement_layout(n_rows: int, note: bool) -> dict[str, float]:
+    """품목 n_rows 행이 두 벌 모두 A4 한 장에 들어가도록 행 높이 · 글자 크기를 정한다."""
+    per_copy = (PRINTABLE_HEIGHT_PT - CUT_LINE_PT - 2 * CUT_GAP_MIN_PT) / 2
+    lay = dict(_LAY_NORMAL)
+    room = per_copy - _copy_fixed_height(lay, note)
+    if n_rows * ITEM_ROW_PT > room:
+        # 기본 높이로 안 들어가면 제목 · 서명 칸부터 줄여 품목 칸을 넓힌다
+        lay = dict(_LAY_COMPACT)
+        room = per_copy - _copy_fixed_height(lay, note)
+    row_h = max(ITEM_ROW_MIN_PT, min(ITEM_ROW_PT, room / n_rows))
+    lay["row_h"] = round(row_h - 0.05, 1)  # 내림 (반올림으로 쪽을 넘지 않게)
+    lay["item_font"] = max(ITEM_FONT_MIN, min(ITEM_FONT_MAX, round(row_h / ITEM_ROW_PT * ITEM_FONT_MAX * 2) / 2))
+    return lay
+
+
 def _write_cut_line(ws, r: int) -> int:
     ws.merge_cells(f"A{r}:F{r}")
     ws[f"A{r}"] = "✂ - - - - - - - - - - - - - - - -  절  취  선  - - - - - - - - - - - - - - - - ✂"
@@ -322,8 +352,9 @@ def _write_cut_line(ws, r: int) -> int:
 
 
 def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: dict[str, Any],
-                doc_no: str, copy_label: str) -> int:
+                doc_no: str, copy_label: str, lay: dict[str, float] | None = None) -> int:
     """폼5(리테일) 모양 한 벌을 r0 행부터 그린다. 마지막으로 쓴 행 번호를 돌려준다."""
+    lay = lay or _statement_layout(max(MIN_ROWS, len(rec["items"])), bool(rec["note"]))
     normal = Font(name=FONT_NAME, size=10)
     bold = Font(name=FONT_NAME, size=10, bold=True)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -334,9 +365,9 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     # 제목 (폼5: A1:F2, 22pt) — 두 벌이 한 장에 들어가도록 조금 줄였다
     ws[f"A{r0}"] = DOC_TITLE
     ws.merge_cells(f"A{r0}:F{r0 + 1}")
-    _set_cell(ws[f"A{r0}"], font=Font(name=FONT_NAME, size=20, bold=True, color="34495E"), alignment=center)
-    ws.row_dimensions[r0].height = 17.0
-    ws.row_dimensions[r0 + 1].height = 17.0
+    _set_cell(ws[f"A{r0}"], font=Font(name=FONT_NAME, size=lay["title_font"], bold=True, color="34495E"), alignment=center)
+    ws.row_dimensions[r0].height = lay["title_h"]
+    ws.row_dimensions[r0 + 1].height = lay["title_h"]
 
     r = r0 + 2
     ws[f"A{r}"] = f"No. {doc_no}" if doc_no else ""
@@ -345,7 +376,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     ws[f"D{r}"] = copy_label
     ws.merge_cells(f"D{r}:F{r}")
     _set_cell(ws[f"D{r}"], font=Font(name=FONT_NAME, size=9, bold=True, color="C0392B"), alignment=right)
-    ws.row_dimensions[r].height = 15.0
+    ws.row_dimensions[r].height = lay["sub_h"]
 
     r += 1
     cust_line = " / ".join(x for x in (cust["manager"], cust["phone"], cust["email"]) if x)
@@ -355,7 +386,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     ws[f"E{r}"] = f"발행일: {rec['issue_date']}"
     ws.merge_cells(f"E{r}:F{r}")
     _set_cell(ws[f"E{r}"], font=normal, alignment=right)
-    ws.row_dimensions[r].height = 18.0
+    ws.row_dimensions[r].height = lay["line_h"]
 
     # 폼5 의 견적유효기간 줄 자리: 납품 문구
     r += 1
@@ -363,7 +394,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     note = f" — {rec['title']}" if rec["title"] else ""
     ws[f"A{r}"] = f"▶ 아래와 같이 납품(공급)합니다.{note}"
     _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=10, bold=True, color="000080"), alignment=fit)
-    ws.row_dimensions[r].height = 18.0
+    ws.row_dimensions[r].height = lay["line_h"]
 
     # 표 머리 (폼5 와 같은 굵은 밑줄, 머리글은 한글)
     r += 1
@@ -378,9 +409,10 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     _set_cell(ws[f"A{r}"], font=bold, alignment=left)
     _set_cell(ws[f"D{r}"], font=bold, alignment=center)
     _set_cell(ws[f"F{r}"], font=bold, alignment=right)
-    ws.row_dimensions[r].height = 18.0
+    ws.row_dimensions[r].height = lay["line_h"]
 
     thin_bot = Border(bottom=Side(style="hair", color="CCCCCC"))
+    item_font = Font(name=FONT_NAME, size=lay["item_font"])
     items = rec["items"]
     for idx in range(max(MIN_ROWS, len(items))):
         r += 1
@@ -390,13 +422,13 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
             it = items[idx]
             ws[f"A{r}"] = f"[{it['category']}] {it['name']}" if it["category"] else it["name"]
             ws[f"D{r}"] = it["qty"]
-            ws[f"F{r}"] = it["qty"] * it["unit_price"]
+            ws[f"F{r}"] = (it["qty"] * it["unit_price"]) or None  # 0원(노트북 세부사양 행)은 빈칸
         for c in range(1, 7):
             ws.cell(row=r, column=c).border = thin_bot
-        _set_cell(ws[f"A{r}"], font=normal, alignment=Alignment(horizontal="left", vertical="center", shrink_to_fit=True))
-        _set_cell(ws[f"D{r}"], font=normal, alignment=center)
-        _set_cell(ws[f"F{r}"], font=normal, alignment=right, number_format="#,##0")
-        ws.row_dimensions[r].height = 17.0
+        _set_cell(ws[f"A{r}"], font=item_font, alignment=Alignment(horizontal="left", vertical="center", shrink_to_fit=True))
+        _set_cell(ws[f"D{r}"], font=item_font, alignment=center)
+        _set_cell(ws[f"F{r}"], font=item_font, alignment=right, number_format="#,##0")
+        ws.row_dimensions[r].height = lay["row_h"]
 
     r += 2
     ws.row_dimensions[r - 1].height = 6.0
@@ -409,7 +441,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     ws[f"A{r}"] = "(VAT 포함)"
     ws.merge_cells(f"A{r}:C{r}")
     _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=9, color="7F8C8D"), alignment=fit)
-    ws.row_dimensions[r].height = 22.0
+    ws.row_dimensions[r].height = lay["total_h"]
 
     # 공급자 한 줄 (폼5 와 같음)
     r += 1
@@ -420,7 +452,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
         f"Tel: {info.get('supplier_phone', '')}" + (f" / E-mail: {sup_email}" if sup_email else "")
     )
     _set_cell(ws[f"A{r}"], font=normal, alignment=Alignment(horizontal="center", vertical="center", shrink_to_fit=True))
-    ws.row_dimensions[r].height = 18.0
+    ws.row_dimensions[r].height = lay["line_h"]
 
     # 인수 확인 · 서명
     r += 1
@@ -434,7 +466,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
         ws.cell(row=r, column=c).border = Border(
             top=box, bottom=box, left=box if c == 1 else None, right=box if c == 6 else None,
         )
-    ws.row_dimensions[r].height = 30.0
+    ws.row_dimensions[r].height = lay["sign_h"]
     if rec["note"]:
         r += 1
         ws.merge_cells(f"A{r}:F{r}")
