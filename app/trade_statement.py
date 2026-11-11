@@ -285,13 +285,19 @@ def build_statement_excel(data: dict[str, Any]) -> BytesIO:
     for letter, width in FORM5_COL_WIDTHS.items():
         ws.column_dimensions[letter].width = width
 
+    # 절취선을 A4 세로 정중앙(50%)에 둔다. 위 · 아래 두 벌은 모양이 같으므로, 절취선 위아래 빈 줄을 같은
+    # 높이로 두고 남는 높이를 그 두 줄에 나눠 쪽을 채운 뒤 세로 가운데 맞춤을 건다. 품목이 많아 Excel 이
+    # 한 장에 맞추려고 축소해도 가운데 맞춤이라 절취선은 계속 쪽 한가운데에 온다.
+    ws.print_options.verticalCentered = True
     r = 1
     for i, label in enumerate(COPY_LABELS):
         r = _write_copy(ws, r, rec, cust, info, doc_no, label)
         if i == 0:
-            ws.row_dimensions[r + 1].height = 12.0
+            copy_h = sum(ws.row_dimensions[x].height or 15.0 for x in range(1, r + 1))
+            gap = max(CUT_GAP_MIN_PT, (PRINTABLE_HEIGHT_PT - 2 * copy_h - CUT_LINE_PT) / 2)
+            ws.row_dimensions[r + 1].height = round(gap, 1)
             r = _write_cut_line(ws, r + 2) + 1
-            ws.row_dimensions[r].height = 12.0
+            ws.row_dimensions[r].height = round(gap, 1)
             r += 1
     ws.print_area = f"A1:F{r}"
     buf = BytesIO()
@@ -300,12 +306,18 @@ def build_statement_excel(data: dict[str, Any]) -> BytesIO:
     return buf
 
 
+# 절취선 위치 계산용 (포인트). A4 297mm 에서 위아래 여백 10mm 씩을 뺀 인쇄 높이 277mm, 렌더링 오차 여유 6pt.
+PRINTABLE_HEIGHT_PT = 277.0 / 25.4 * 72 - 6.0
+CUT_LINE_PT = 16.0
+CUT_GAP_MIN_PT = 6.0
+
+
 def _write_cut_line(ws, r: int) -> int:
     ws.merge_cells(f"A{r}:F{r}")
     ws[f"A{r}"] = "✂ - - - - - - - - - - - - - - - -  절  취  선  - - - - - - - - - - - - - - - - ✂"
     _set_cell(ws[f"A{r}"], font=Font(name=FONT_NAME, size=9, color="7F8C8D"),
               alignment=Alignment(horizontal="center", vertical="center"))
-    ws.row_dimensions[r].height = 16.0
+    ws.row_dimensions[r].height = CUT_LINE_PT
     return r
 
 
