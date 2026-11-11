@@ -360,6 +360,64 @@ def _idle_watch() -> None:
                 _free.put(w)
 
 
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_kernel32.OpenProcess.restype = wintypes.HANDLE
+_kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+_kernel32.QueryFullProcessImageNameW.argtypes = [
+    wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)
+]
+_kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+_kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
+def _proc_name_and_start(pid: int) -> tuple[str, int] | None:
+    """(실행 파일 이름 소문자, 시작 시각 FILETIME 정수). 없거나 못 열면 None."""
+    h = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not h:
+        return None
+    try:
+        size = wintypes.DWORD(1024)
+        buf = ctypes.create_unicode_buffer(size.value)
+        if not _kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            return None
+        times = [wintypes.FILETIME() for _ in range(4)]
+        if not _kernel32.GetProcessTimes(h, *[ctypes.byref(t) for t in times]):
+            return None
+        created = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+        return os.path.basename(buf.value).lower(), created
+    finally:
+        _kernel32.CloseHandle(h)
+
+
+def cleanup_stale_workers() -> list[int]:
+    """이전 서버가 비정상 종료돼 남긴 미리보기 Excel · PowerShell 을 정리한다(앱 시작 때 1회).
+
+    서버가 죽으면 워커 PowerShell 이 Excel.Quit() 을 못 하고 끝나 '/automation' Excel 이 남을 수 있다.
+    그 PID 는 .excel_worker.pid 에 남아 있으므로 stop.bat 과 같은 규칙(EXCEL · powershell 이름만)으로
+    그것만 닫는다. PID 재사용에 대비해 이 서버보다 먼저 시작된 프로세스만 대상으로 한다. 사용자 Excel 은 건드리지 않는다.
+    """
+    try:
+        pids = [int(x) for x in WORKER_PID_FILE.read_text(encoding="ascii").split() if x.strip().isdigit()]
+    except (OSError, ValueError):
+        return []
+    me = _proc_name_and_start(os.getpid())
+    killed = []
+    for pid in pids:
+        info = _proc_name_and_start(pid)
+        if not info or info[0] not in ("excel.exe", "powershell.exe"):
+            continue
+        if me and info[1] >= me[1]:
+            continue  # 이 서버 이후에 생긴 프로세스(PID 재사용) — 건드리지 않는다
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, creationflags=_NO_WINDOW)
+        killed.append(pid)
+    try:
+        WORKER_PID_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return killed
+
+
 def prewarm(make_xlsx) -> None:
     """앱 시작 때 백그라운드에서 워커 Excel 들을 띄우고 make_xlsx() 를 한 번씩 변환해 둔다. 실패는 조용히 넘긴다.
 
@@ -477,14 +535,24 @@ def cached_pdf(key: str, make_xlsx) -> bytes:
     return cached(key, lambda: xlsx_to_pdf(make_xlsx()))
 
 
+# PDFium 은 스레드 안전하지 않다. 엑셀 견적서 창이 폼1~8 썸네일을 동시에 요청하면 FastAPI 스레드풀에서
+# 여러 스레드가 동시에 부르게 되는데, 잠금 없이 부르면 서버 프로세스가 로그 없이 통째로 죽는다(재현 3/3).
+# PDFium 을 쓰는 곳은 반드시 이 잠금 안에서만 부른다. PNG 저장(Pillow)은 잠금 밖에서 한다.
+_pdfium_lock = threading.Lock()
+
+
 def render_png(pdf_bytes: bytes, width: int) -> bytes:
     """PDF 첫 쪽을 폭 width(px) PNG 로."""
-    doc = pdfium.PdfDocument(pdf_bytes)
-    try:
-        page = doc[0]
-        img = page.render(scale=width / page.get_width()).to_pil()
-        buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
-        return buf.getvalue()
-    finally:
-        doc.close()
+    with _pdfium_lock:
+        doc = pdfium.PdfDocument(pdf_bytes)
+        try:
+            page = doc[0]
+            bitmap = page.render(scale=width / page.get_width())
+            img = bitmap.to_pil().copy()  # PDFium 버퍼와 떼어 낸 뒤 닫는다
+            bitmap.close()
+            page.close()
+        finally:
+            doc.close()
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()

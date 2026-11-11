@@ -268,8 +268,13 @@ function looksAppleModel(model) {
   return lower.startsWith("apple") || /맥북|아이맥|맥미니|맥 미니|맥스튜디오|맥 스튜디오|아이패드|아이폰|애플/.test(text);
 }
 
-function usedSearchKeyword(model, cpu, gpu) {
+function usedSearchKeyword(model, cpu, gpu, kind) {
   if (looksAppleModel(model)) return String(model || "").trim();
+  if (kind === "notebook") {
+    /* 서버(used_market.notebook_keyword) 실패 시 폴백: 사양 괄호 앞 제품명 */
+    return String(model || "").replace(/★[^★]*★|※[^※]*※/g, " ").replace(/^\s*\[([^\]]+)\]/, "$1 ")
+      .split(/[(\[]/)[0].replace(/\s+/g, " ").trim();
+  }
   /* 조립PC는 CPU + 그래픽카드만 사용 (모델명 폴백 없음) */
   const parts = [cpu, gpu].map(s => String(s || "").trim()).filter(Boolean);
   return parts.join(" ");
@@ -279,11 +284,12 @@ function usedSearchButtonAttrs(q) {
   const apple = isAppleQuote(q);
   const cpu = apple ? "" : encodeURIComponent(quotePartName(q, "CPU") || "");
   const vga = apple ? "" : encodeURIComponent(quotePartName(q, "그래픽카드") || "");
-  return `data-keyword="${encodeURIComponent(q.model || "")}" data-cpu="${cpu}" data-vga="${vga}"`;
+  const kind = String(q.tier_key || "").startsWith("notebook-") ? "notebook" : "";
+  return `data-keyword="${encodeURIComponent(q.model || "")}" data-cpu="${cpu}" data-vga="${vga}" data-kind="${kind}"`;
 }
 
-function fallbackUsedLinks(model, cpu, gpu) {
-  const keyword = usedSearchKeyword(model, cpu, gpu);
+function fallbackUsedLinks(model, cpu, gpu, kind) {
+  const keyword = usedSearchKeyword(model, cpu, gpu, kind);
   if (!keyword) return { keyword: "", bunjang_url: "", joongna_url: "" };
   return {
     keyword,
@@ -300,21 +306,24 @@ async function openUsedMarketDirect(source, market, event) {
   let model = "";
   let cpu = "";
   let gpu = "";
+  let kind = "";
   if (source && source.dataset) {
     model = decodeURIComponent(source.dataset.keyword || "");
     cpu = decodeURIComponent(source.dataset.cpu || "");
     gpu = decodeURIComponent(source.dataset.vga || "");
+    kind = source.dataset.kind || "";
   } else {
     model = String(source || "").trim();
   }
   if (!model && !cpu && !gpu) return;
-  let links = fallbackUsedLinks(model, cpu, gpu);
+  let links = fallbackUsedLinks(model, cpu, gpu, kind);
   showBusy("중고 시세 검색어 준비 중…");
   try {
     const params = new URLSearchParams();
     if (model) params.set("q", model);
     if (cpu) params.set("cpu", cpu);
     if (gpu) params.set("gpu", gpu);
+    if (kind) params.set("kind", kind);
     const res = await fetch(`/api/used/links?${params.toString()}`);
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.bunjang_url) {

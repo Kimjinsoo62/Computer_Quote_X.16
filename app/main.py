@@ -83,6 +83,8 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 @app.on_event("startup")
 def _prewarm_pdf_export() -> None:
+    # 지난 서버가 비정상 종료돼 남긴 미리보기 Excel 부터 정리한다(.excel_worker.pid 에 적힌 것만)
+    pdf_export.cleanup_stale_workers()
     # 견적서 미리보기(Excel → PDF)용 Excel 을 미리 띄워 예열한다(백그라운드, Excel 없으면 아무것도 안 함)
     pdf_export.prewarm(
         lambda: build_excel(sample_result(), forms=sorted(FORM_LABELS), gallery=False).getvalue()
@@ -282,14 +284,14 @@ def api_logic():
 
 
 @app.get("/api/used/links")
-def api_used_links(q: str = "", cpu: str = "", gpu: str = ""):
+def api_used_links(q: str = "", cpu: str = "", gpu: str = "", kind: str = ""):
     model = (q or "").strip()
     cpu_name = (cpu or "").strip()
     gpu_name = (gpu or "").strip()
     if not (model or cpu_name or gpu_name):
         raise HTTPException(status_code=400, detail="검색어(q) 또는 CPU/그래픽카드가 필요합니다.")
     try:
-        return used_market_links(model, cpu=cpu_name, gpu=gpu_name)
+        return used_market_links(model, cpu=cpu_name, gpu=gpu_name, kind=(kind or "").strip())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
