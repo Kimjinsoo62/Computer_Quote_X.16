@@ -26,7 +26,10 @@ if not exist "%~dp0.git" (
     echo.
     goto deps
 )
-call :fixremote & git pull origin main
+REM Public repo: pull anonymously so no GitHub login window pops up
+set "GIT_TERMINAL_PROMPT=0"
+set "GCM_INTERACTIVE=never"
+call :fixremote & git -c credential.helper= pull --ff-only origin main
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [WARNING] Git pull failed.
@@ -66,6 +69,8 @@ for /f "delims=" %%u in ('git remote get-url origin 2^>nul') do set "url=%%u"
 if not defined url goto :eof
 set "newurl=!url:/Computer_Quote_9.0=/Computer_Quote_X.16!"
 set "newurl=!newurl:/Computer_Quote_X.15=/Computer_Quote_X.16!"
+REM SSH or user@ URLs ask for a login: use the anonymous HTTPS address
+echo !newurl! | findstr /i /c:"Computer_Quote_X.16" >nul && set "newurl=https://github.com/Kimjinsoo62/Computer_Quote_X.16.git"
 if not "!newurl!"=="!url!" (
     echo Repository renamed - switching remote to !newurl!
     git remote set-url origin "!newurl!"
