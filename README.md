@@ -1,10 +1,14 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XII.10
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XII.11
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
 
 ---
 
-## 🆕 Ver XII.10 주요 변경
+## 🆕 Ver XII.11 주요 변경
+
+1. **🔓 로그인 없는 업데이트** — 다른 PC로 옮긴 설치본에서 [업데이트]를 누르면 GitHub 로그인 창이 뜨던 문제를 고쳤습니다. 원격 주소가 SSH(`git@github.com:...`)나 아이디가 붙은 주소(`https://아이디@github.com/...`)면 공개 HTTPS 주소로 바꾸고, 자격 증명 도우미 · 로그인 창을 끈 채 익명으로 받습니다(`update_service.REPO_URL`, `update.bat`도 같음). 받기에 실패하면 로그인 창 대신 바로 오류 팝업을 띄웁니다.
+
+## Ver XII.10 주요 변경
 
 1. **🛡️ 서식 미리보기 중 서버 꺼짐 수정** — 카드의 📥 엑셀 견적서 창이 폼1~8 썸네일을 동시에 요청하면 PDFium(스레드 안전하지 않음)이 여러 스레드에서 동시에 불려 서버 프로세스가 로그 없이 꺼지던 문제를 고쳤습니다. `pdf_export.render_png`가 잠금(`_pdfium_lock`) 안에서만 그립니다.
 2. **🧹 남은 미리보기 Excel 자동 정리** — 서버가 비정상 종료돼 남은 미리보기용 Excel · PowerShell 을 다음 시작 때 `.excel_worker.pid` 기준으로 정리합니다(`cleanup_stale_workers`, 이 서버보다 먼저 시작된 EXCEL/powershell 만. 사용자 Excel 은 건드리지 않음).
