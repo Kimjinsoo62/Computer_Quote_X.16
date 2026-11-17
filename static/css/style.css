@@ -2080,3 +2080,460 @@ td > .mqp-in.w-email { width: 52%; }
 .nav-sub { display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: 32px; border-top: 1px solid var(--border); }
 .nav-sub .nav-store { margin-left: 0; }
 .nav-toggles { display: flex; gap: 4px; align-items: center; padding-left: 8px; border-left: 1px solid var(--border); }
+
+/* ── 🛠️ 용도별 맞춤자동견적 (컴퓨존 추천 부품 3종 동시 산출) ── */
+.custom-quote-panel {
+  background: var(--card, #111827);
+  border: 1px solid var(--border, #2a3446);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cq-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cq-head-left h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.cq-head-left h3 small {
+  color: var(--muted, #94a3b8);
+  font-weight: 500;
+}
+.cq-badge {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.cq-head-right {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cq-step-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+.cq-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px;
+}
+.cq-preset-btn {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border, #2a3446);
+  border-radius: 8px;
+  padding: 9px 11px;
+  text-align: left;
+  color: var(--text, #e2e8f0);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.cq-preset-btn:hover {
+  border-color: #60a5fa;
+  background: rgba(30, 41, 59, 0.9);
+}
+.cq-preset-btn.active {
+  border-color: #3b82f6;
+  background: rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+}
+.cq-preset-title {
+  font-weight: 700;
+  font-size: 0.93rem;
+  margin-bottom: 3px;
+}
+.cq-preset-desc {
+  font-size: 0.78rem;
+  color: var(--muted, #94a3b8);
+  line-height: 1.35;
+}
+.cq-method-banner {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+.cq-method-banner strong {
+  color: #34d399;
+  display: block;
+  margin-bottom: 4px;
+}
+.cq-method-banner ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+.cq-detail-box {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border, #2a3446);
+  border-radius: 8px;
+}
+@media (max-width: 900px) {
+  .cq-detail-box { grid-template-columns: 1fr; }
+}
+.cq-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.cq-chip {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+.cq-chip:hover { border-color: #60a5fa; }
+.cq-chip.on {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #fff;
+  font-weight: 600;
+}
+.cq-chip small {
+  font-size: 0.68rem;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.cq-game-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+}
+.cq-opt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.78rem;
+  color: var(--muted, #94a3b8);
+}
+.cq-opt-field select, .cq-budget-field input {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+.cq-boost-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #fbbf24;
+  cursor: pointer;
+  margin-top: 14px;
+}
+.cq-pref-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding-top: 4px;
+}
+.cq-budget-field .manwon-field {
+  width: 120px;
+}
+.cq-submit-btn {
+  margin-left: auto;
+  padding: 7px 16px;
+  font-weight: 700;
+}
+
+/* 3종 비교표 (.custom-compare-wrap) */
+.custom-compare-wrap {
+  background: var(--card, #111827);
+  border: 1px solid var(--border, #2a3446);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.cq-cmp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cq-cmp-sub {
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+  margin-left: 8px;
+}
+.cq-cmp-table-wrap {
+  overflow-x: auto;
+}
+.cq-cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.cq-cmp-table th, .cq-cmp-table td {
+  border: 1px solid var(--border, #2a3446);
+  padding: 7px 9px;
+  vertical-align: top;
+}
+.cq-cmp-table tbody th {
+  background: rgba(15, 23, 42, 0.8);
+  color: #cbd5e1;
+  font-weight: 700;
+  text-align: center;
+}
+.cq-cmp-col, .cq-cmp-table td[data-idx] {
+  cursor: pointer;
+  width: 30%;
+}
+.cq-cmp-col.is-active, .cq-cmp-table td.is-active {
+  background: rgba(37, 99, 235, 0.12);
+}
+.cq-cmp-price {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #60a5fa;
+  margin-top: 4px;
+}
+.cq-cmp-diff {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-weight: 400;
+  margin-top: 3px;
+}
+.cq-cmp-part {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.cq-cmp-meta {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+.cq-cmp-none {
+  color: #64748b;
+  font-style: italic;
+}
+.cq-cmp-fps-chip {
+  display: inline-block;
+  background: rgba(16, 185, 129, 0.14);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  margin: 1px 2px;
+}
+.cq-swap-open {
+  margin-top: 6px;
+  width: 100%;
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  font-weight: 700;
+}
+.cq-swap-open:hover, .cq-swap-open.is-open {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* 비교표에서 고른 견적 한 건의 부품 교체 · 재취합 패널 (.cq-swap-panel) */
+.cq-swap-panel {
+  background: var(--card, #111827);
+  border: 1px solid rgba(96, 165, 250, 0.55);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.cq-swap-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.cq-swap-sum {
+  margin-top: 4px;
+  font-size: 0.86rem;
+  color: #cbd5e1;
+}
+.cq-swap-now { color: #60a5fa; }
+.cq-swap-diff.is-up { color: #f87171; }
+.cq-swap-diff.is-down { color: #34d399; }
+.cq-swap-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cq-swap-filter {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.cq-swap-issues, .cq-swap-autonotes {
+  margin: 0 0 8px 0;
+  padding: 6px 10px 6px 26px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.cq-swap-issues { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fecaca; }
+.cq-swap-autonotes { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.4); color: #fde68a; }
+.cq-swap-table tr.is-changed td { background: rgba(37, 99, 235, 0.1); }
+.cq-swap-cur { font-weight: 600; color: #f1f5f9; }
+.cq-swap-note { font-size: 0.76rem; color: #94a3b8; margin-top: 2px; }
+.cq-swap-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #2563eb;
+  color: #fff;
+}
+.cq-swap-badge.is-auto { background: #b45309; }
+.cq-swap-select {
+  margin-top: 5px;
+  width: 100%;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+.cq-swap-price {
+  text-align: right;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+.cq-swap-hint {
+  margin: 8px 0 0;
+  font-size: 0.76rem;
+  color: #94a3b8;
+}
+
+/* 상세 견적서 내 부품별 선정 사유 & 드롭다운 교체 */
+.part-main-name {
+  font-weight: 600;
+}
+.cq-part-reason {
+  margin-top: 3px;
+  font-size: 0.78rem;
+  color: #38bdf8;
+}
+.cq-part-swap {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cq-swap-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.cq-part-select {
+  max-width: 440px;
+  width: 100%;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.78rem;
+}
+.cq-part-link {
+  font-size: 0.75rem;
+  color: #60a5fa;
+  text-decoration: none;
+}
+.cq-part-link:hover { text-decoration: underline; }
+.cq-tier-report {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+.cq-notes-box, .cq-fps-box {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border, #2a3446);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.cq-notes-box h4, .cq-fps-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 0.9rem;
+  color: #93c5fd;
+}
+.cq-notes-box ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+.cq-fps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+.cq-fps-card {
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.cq-fps-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.cq-fps-val {
+  font-size: 0.88rem;
+  color: #34d399;
+  margin-top: 2px;
+}
+.cq-fps-sub {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}

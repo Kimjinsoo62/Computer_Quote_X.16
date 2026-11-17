@@ -28,6 +28,7 @@ from app.config import (
 from app.excel_export import FORM_LABELS, build_excel, sample_result
 from app.image_lookup import find_representative_image
 from app.apple_scraper import fetch_apple_cto_live, fetch_apple_cto_options
+from app.custom_builder import build_custom_quotes, get_custom_builder_options
 from app import coupang_search
 from app.danawa_search import find_similar as danawa_find_similar
 from app.used_market import used_market_links
@@ -68,7 +69,7 @@ from app.task_report import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-app = FastAPI(title="AI PC & Apple Store 견적 추출기", version="XII.11")
+app = FastAPI(title="AI PC & Apple Store 견적 추출기", version="XII.12")
 
 app.add_middleware(
     CORSMiddleware,
@@ -457,6 +458,17 @@ def api_category(cat_key: str, monitor: int = 0, keyboard: int = 0, setup: int =
             "quotes": [],
             "needs_price_wizard": True,
         }
+    if cat_key in ("custom", "custom-quote"):
+        return {
+            "quote_date": date.today().isoformat(),
+            "event_url": "https://www.compuzone.co.kr/online/online_main.htm",
+            "event_title": "맞춤자동견적",
+            "series": "컴퓨존 추천 부품 맞춤자동견적",
+            "disclaimer": QUOTE_DISCLAIMER,
+            "logic_steps": get_logic_steps(),
+            "quotes": [],
+            "needs_custom_wizard": True,
+        }
     if cat_key not in ASSEMBLED_CATEGORIES:
         raise HTTPException(status_code=404, detail=f"Unknown category: {cat_key}")
     result = _shared_fetch(True, fetch_assembled_quotes,
@@ -542,6 +554,116 @@ def api_price_search(payload: dict = Body(...)):
         raise HTTPException(status_code=502, detail=str(e)) from e
     data = today_quotes_to_dict(result)
     data.update(meta)
+    return data
+
+
+def _normalize_custom_kwargs(
+    usage: str = "game_fhd",
+    games: list[str] | str | None = None,
+    apps: list[str] | str | None = None,
+    resolution: str = "",
+    target_fps: int = 0,
+    boost: bool | int = False,
+    budget_manwon: int = 0,
+    cpu_vendor: str = "auto",
+    gpu_vendor: str = "auto",
+    ram_gb: int = 0,
+    ssd_gb: int = 0,
+    color: str = "auto",
+    overrides: dict | str | None = None,
+    include_monitor: bool = False,
+    include_keyboard: bool = False,
+    include_setup: bool = False,
+) -> dict:
+    if isinstance(games, str):
+        game_list = sorted({g.strip() for g in games.split("|") if g.strip()})
+    else:
+        game_list = sorted({str(g).strip() for g in (games or []) if str(g).strip()})
+    if isinstance(apps, str):
+        app_list = sorted({a.strip() for a in apps.split("|") if a.strip()})
+    else:
+        app_list = sorted({str(a).strip() for a in (apps or []) if str(a).strip()})
+
+    parsed_overrides: dict[str, dict[str, int]] = {}
+    raw_ov = overrides
+    if isinstance(raw_ov, str) and raw_ov.strip():
+        try:
+            raw_ov = json.loads(raw_ov)
+        except ValueError:
+            raw_ov = {}
+    if isinstance(raw_ov, dict):
+        for tk, mp in raw_ov.items():
+            if isinstance(mp, dict):
+                clean_mp: dict[str, int] = {}
+                for cat_k, pno_v in mp.items():
+                    try:
+                        pno_int = int(pno_v)
+                    except (TypeError, ValueError):
+                        continue
+                    if pno_int > 0:
+                        clean_mp[str(cat_k)] = pno_int
+                if clean_mp:
+                    parsed_overrides[str(tk)] = clean_mp
+
+    return {
+        "usage": str(usage or "game_fhd").strip(),
+        "games": game_list,
+        "apps": app_list,
+        "resolution": str(resolution or "").strip().upper(),
+        "target_fps": int(target_fps or 0),
+        "boost": bool(int(boost)) if isinstance(boost, (int, bool)) or str(boost).isdigit() else bool(boost),
+        "budget_manwon": max(0, int(budget_manwon or 0)),
+        "cpu_vendor": str(cpu_vendor or "auto").strip().lower(),
+        "gpu_vendor": str(gpu_vendor or "auto").strip().lower(),
+        "ram_gb": max(0, int(ram_gb or 0)),
+        "ssd_gb": max(0, int(ssd_gb or 0)),
+        "color": str(color or "auto").strip().lower(),
+        "overrides": parsed_overrides,
+        "include_monitor": bool(include_monitor),
+        "include_keyboard": bool(include_keyboard),
+        "include_setup": bool(include_setup),
+    }
+
+
+@app.get("/api/custom-quote/options")
+def api_custom_quote_options():
+    """맞춤자동견적 위자드 옵션(용도 프리셋·게임·작업 프로그램·해상도·목표 프레임) 반환"""
+    return get_custom_builder_options()
+
+
+@app.post("/api/custom-quote/build")
+def api_custom_quote_build(payload: dict = Body(default={})):
+    """컴퓨존 추천 부품으로 [최저가 · 추천가 · 최고가] 3종 단가 견적 동시 생성"""
+    kwargs = _normalize_custom_kwargs(
+        usage=payload.get("usage", "game_fhd"),
+        games=payload.get("games"),
+        apps=payload.get("apps"),
+        resolution=payload.get("resolution", ""),
+        target_fps=payload.get("target_fps", 0),
+        boost=payload.get("boost", False),
+        budget_manwon=payload.get("budget_manwon", 0),
+        cpu_vendor=payload.get("cpu_vendor", "auto"),
+        gpu_vendor=payload.get("gpu_vendor", "auto"),
+        ram_gb=payload.get("ram_gb", 0),
+        ssd_gb=payload.get("ssd_gb", 0),
+        color=payload.get("color", "auto"),
+        overrides=payload.get("overrides"),
+        include_monitor=bool(payload.get("monitor", 0)),
+        include_keyboard=bool(payload.get("keyboard", 0)),
+        include_setup=bool(payload.get("setup", 0)),
+    )
+    force_refresh = bool(payload.get("force_refresh", False))
+    try:
+        result, extra_meta = _shared_fetch(
+            True,
+            build_custom_quotes,
+            force_refresh=force_refresh,
+            **kwargs,
+        )
+    except (RuntimeError, OSError, TimeoutError) as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    data = today_quotes_to_dict(result)
+    data.update(extra_meta)
     return data
 
 
@@ -706,6 +828,17 @@ def download_excel(
     min_price: int = 0,
     max_price: int = 0,
     price_type: str = "assembled",
+    usage: str = "game_fhd",
+    apps: str = "",
+    target_fps: int = 0,
+    boost: int = 0,
+    budget_manwon: int = 0,
+    cpu_vendor: str = "auto",
+    gpu_vendor: str = "auto",
+    ram_gb: int = 0,
+    ssd_gb: int = 0,
+    color: str = "auto",
+    overrides: str = "",
     index: int = -1,
     cto: str = "",
     forms: str = "",
@@ -798,6 +931,35 @@ def download_excel(
             raise HTTPException(status_code=404, detail=str(e)) from e
         kind = "노트북금액대로찾기" if is_notebook else "금액대로찾기"
         kr_label = f"{kind}_{min_price}_{max_price}_견적"
+    elif cat in ("custom", "custom-quote"):
+        custom_kwargs = _normalize_custom_kwargs(
+            usage=usage,
+            games=games,
+            apps=apps,
+            resolution=resolution,
+            target_fps=target_fps,
+            boost=boost,
+            budget_manwon=budget_manwon,
+            cpu_vendor=cpu_vendor,
+            gpu_vendor=gpu_vendor,
+            ram_gb=ram_gb,
+            ssd_gb=ssd_gb,
+            color=color,
+            overrides=overrides,
+            include_monitor=include_monitor,
+            include_keyboard=include_keyboard,
+            include_setup=include_setup,
+        )
+        try:
+            result, _custom_meta = _shared_fetch(
+                False,
+                build_custom_quotes,
+                force_refresh=False,
+                **custom_kwargs,
+            )
+        except (RuntimeError, OSError, TimeoutError) as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        kr_label = f"맞춤자동견적_{custom_kwargs['usage']}_견적"
     elif cat.startswith("apple_") or cat == "apple":
         apple_sub = cat.replace("apple_", "") if cat != "apple" else "macbook"
         try:

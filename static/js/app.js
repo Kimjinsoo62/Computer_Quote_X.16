@@ -13,6 +13,9 @@ const tierClass = {
   "game-s": "tier-standard",
   "game-p": "tier-expert",
   price: "tier-standard",
+  "custom-low": "tier-entry",
+  "custom-mid": "tier-standard",
+  "custom-high": "tier-expert-5090",
 };
 
 let currentStore = "compuzone"; // "compuzone" | "apple"
@@ -41,6 +44,27 @@ let lastGameQuery = null; // {games, titles, resolution}
 let lastPriceQuery = null; // {min_price, max_price, type} 원 단위
 let priceTargetType = "assembled"; // 금액대로 찾기 대상: "assembled" | "notebook"
 let resultView = "card"; // "card" | "list"
+
+// 용도별 맞춤자동견적 (컴퓨존 추천 부품 3종 동시 산출)
+let customBuilderMeta = null; // /api/custom-quote/options 응답
+let customState = {
+  usage: "game_fhd",
+  games: ["pubg", "lol", "valorant"],
+  apps: [],
+  resolution: "FHD",
+  target_fps: 144,
+  boost: false,
+  budget_manwon: 0,
+  cpu_vendor: "auto",
+  gpu_vendor: "auto",
+  ram_gb: 0,
+  ssd_gb: 0,
+  color: "auto",
+  overrides: {}, // { "custom-low": {"CPU": pno, ...}, ... }
+  swapTier: "", // 부품 교체 패널을 연 견적의 tier_key ("" = 닫힘)
+  swapCompatOnly: true, // 교체 후보를 호환 부품만 보여 줄지
+};
+let lastCustomQuery = null;
 
 // CTO 관련 상태
 let activeCtoTierKey = null;
@@ -615,6 +639,94 @@ function distinctManager(manager, name) {
   return m && m.replace(/\s/g, "") === n.replace(/\s/g, "") ? "" : m;
 }
 
+function renderCustomPartExtraHtml(q, p) {
+  if (currentCat !== "custom" || !quoteData?.custom_meta) return "";
+  const cmeta = quoteData.custom_meta;
+  const tierMeta = (cmeta.tiers || []).find((t) => t.tier_key === q.tier_key);
+  if (!tierMeta) return "";
+  const detail = (tierMeta.part_details || []).find((d) => d.category === p.category);
+  const reason = detail?.reason || tierMeta.part_reasons?.[p.category] || "";
+  const cands = cmeta.part_candidates?.[p.category] || [];
+  let selectHtml = "";
+  if (cands.length > 1) {
+    // 메인보드·메모리는 현재 선택된 CPU 소켓 / 보드 메모리 규격과 호환되는 후보만 필터링
+    const cpuPno = tierMeta.selected_pnos?.["CPU"];
+    const mbPno = tierMeta.selected_pnos?.["메인보드"];
+    const cpuObj = (cmeta.part_candidates?.["CPU"] || []).find((x) => x.pno === cpuPno);
+    const mbObj = (cmeta.part_candidates?.["메인보드"] || []).find((x) => x.pno === mbPno);
+    const filtered = cands.filter((c) => {
+      if (p.category === "메인보드" && cpuObj?.meta?.socket) {
+        return c.meta?.socket === cpuObj.meta.socket;
+      }
+      if (p.category === "메모리" && mbObj?.meta?.mem_type) {
+        return c.meta?.mem_type === mbObj.meta.mem_type;
+      }
+      return true;
+    });
+    const list = filtered.length ? filtered : cands;
+    const curPno = detail?.pno || tierMeta.selected_pnos?.[p.category] || 0;
+    const pct = activeMarginPercent();
+    const opts = list
+      .map((c) => {
+        const shownPrice = displayAmount(markedUpAmount(c.price, pct));
+        const sel = Number(c.pno) === Number(curPno) ? " selected" : "";
+        return `<option value="${c.pno}"${sel}>${escapeHtml(c.name)} (${fmt(shownPrice)})</option>`;
+      })
+      .join("");
+    selectHtml = `
+      <div class="cq-part-swap">
+        <label class="cq-swap-label">🔧 추천부품 교체:</label>
+        <select class="cq-part-select" data-tierkey="${escapeHtml(q.tier_key)}" data-cat="${escapeHtml(p.category)}">
+          ${opts}
+        </select>
+        ${detail?.url ? `<a href="${escapeHtml(detail.url)}" target="_blank" rel="noopener" class="cq-part-link" title="컴퓨존에서 이 부품 상세 보기">부품상세 ↗</a>` : ""}
+      </div>`;
+  }
+  const reasonHtml = reason
+    ? `<div class="cq-part-reason">💡 <strong>선정 사유:</strong> ${escapeHtml(reason)}</div>`
+    : "";
+  return reasonHtml + selectHtml;
+}
+
+function renderCustomTierSummaryBox(q) {
+  if (currentCat !== "custom" || !quoteData?.custom_meta) return "";
+  const cmeta = quoteData.custom_meta;
+  const tierMeta = (cmeta.tiers || []).find((t) => t.tier_key === q.tier_key);
+  if (!tierMeta) return "";
+
+  const notes = (tierMeta.assembly_notes || [])
+    .map((n) => `<li>${escapeHtml(n)}</li>`)
+    .join("");
+  const fpsList = tierMeta.fps_estimates || [];
+  const fpsHtml = fpsList.length
+    ? `
+    <div class="cq-fps-box">
+      <h4>🎮 예상 게임 프레임 (${escapeHtml(cmeta.resolution || "FHD")} 해상도${cmeta.boost ? " · 업스케일/FG 부스트 켜짐" : ""})</h4>
+      <div class="cq-fps-grid">
+        ${fpsList
+          .map(
+            (f) => `
+          <div class="cq-fps-card">
+            <div class="cq-fps-title">${escapeHtml(f.label)}</div>
+            <div class="cq-fps-val">평균 <strong>${escapeHtml(f.range)}</strong></div>
+            <div class="cq-fps-sub">하위 1% Low: ${escapeHtml(f.low_1pct)} · 병목: ${escapeHtml(f.bottleneck)}</div>
+          </div>`
+          )
+          .join("")}
+      </div>
+    </div>`
+    : "";
+
+  return `
+    <div class="cq-tier-report">
+      <div class="cq-notes-box">
+        <h4>🛠️ 조립 호환성 · 전력 밸런스 검증 리포트 (${escapeHtml(q.tab_label || q.tier)})</h4>
+        <ul>${notes}</ul>
+      </div>
+      ${fpsHtml}
+    </div>`;
+}
+
 function renderEstimateForm(q) {
   const apple = isAppleQuote(q);
   const shownTotal = displayTotal(q);
@@ -635,11 +747,12 @@ function renderEstimateForm(q) {
         if (p.qty > 0 && (p.amount > 0 || isDiscount)) amountStr = fmt(p.amount);
         else amountStr = p.qty > 0 ? "" : "별도청구";
       }
+      const extraHtml = renderCustomPartExtraHtml(q, p);
       return `
     <tr${isDiscount ? ' class="discount-row"' : ""}>
       <td class="col-no">${p.no}</td>
       <td class="col-cat">${p.category}</td>
-      <td class="col-name">${p.name}</td>
+      <td class="col-name"><div class="part-main-name">${escapeHtml(p.name)}</div>${extraHtml}</td>
       <td class="col-qty">${p.qty > 0 ? p.qty : "1"}</td>
       <td class="col-price">${unitPriceStr}</td>
       <td class="col-amount">${amountStr}</td>
@@ -697,6 +810,7 @@ function renderEstimateForm(q) {
         </tfoot>
       </table>
     </div>
+    ${renderCustomTierSummaryBox(q)}
     <div class="estimate-footer">
       <p class="estimate-disclaimer">※ 윈도우, 오피스 별도 · 기술지원비 별도청구</p>
       ${unitPriceNotice}
@@ -775,6 +889,8 @@ function renderDetail(quotes) {
   if (!detailArea) return;
 
   detailArea.innerHTML = renderEstimateForm(q);
+  bindCustomPartSelects(detailArea);
+  renderCustomCompareTable(quotes);
   loadDetailImage(detailArea);
 }
 
@@ -798,6 +914,24 @@ function excelQueryParams(index) {
     params.set("min_price", String(lastPriceQuery.min_price));
     params.set("max_price", String(lastPriceQuery.max_price));
     params.set("price_type", lastPriceQuery.type || "assembled");
+  }
+  if (currentCat === "custom" && lastCustomQuery) {
+    params.set("usage", lastCustomQuery.usage || "game_fhd");
+    params.set("games", (lastCustomQuery.games || []).join("|"));
+    params.set("apps", (lastCustomQuery.apps || []).join("|"));
+    params.set("resolution", lastCustomQuery.resolution || "");
+    params.set("target_fps", String(lastCustomQuery.target_fps || 0));
+    params.set("boost", lastCustomQuery.boost ? "1" : "0");
+    params.set("budget_manwon", String(lastCustomQuery.budget_manwon || 0));
+    params.set("cpu_vendor", lastCustomQuery.cpu_vendor || "auto");
+    params.set("gpu_vendor", lastCustomQuery.gpu_vendor || "auto");
+    params.set("ram_gb", String(lastCustomQuery.ram_gb || 0));
+    params.set("ssd_gb", String(lastCustomQuery.ssd_gb || 0));
+    params.set("color", lastCustomQuery.color || "auto");
+    const ovKeys = Object.keys(lastCustomQuery.overrides || {});
+    if (ovKeys.length) {
+      params.set("overrides", JSON.stringify(lastCustomQuery.overrides));
+    }
   }
   params.set("index", String(index));
   const cto = ctoUpgradesForExcel(index);
@@ -1618,6 +1752,8 @@ function toggleExtraAndReload(kind) {
     submitGamePcRecommend();
   } else if (currentCat === "price" && lastPriceQuery) {
     submitPriceSearch({ keepView: true });
+  } else if (currentCat === "custom") {
+    submitCustomQuote({ keepTab: true });
   } else {
     // Apple 세팅비 토글처럼 같은 목록을 다시 불러올 때 적용해 둔 CTO 구성을 유지한다.
     fetchQuotes(currentCat, false, { ctoCarry: snapshotCto(quoteData?.quotes) });
@@ -1829,6 +1965,8 @@ function qiReloadQuotesIfNeeded() {
     submitGamePcRecommend();
   } else if (currentCat === "price" && lastPriceQuery) {
     submitPriceSearch({ keepView: true });
+  } else if (currentCat === "custom") {
+    submitCustomQuote({ keepTab: true });
   } else {
     fetchQuotes(currentCat);
   }
@@ -2477,10 +2615,11 @@ function switchStore(store) {
   const groupCompuzone = $("#compuzoneCatGroup");
   const groupApple = $("#appleCatGroup");
   hidePriceResultChrome();
+  hideCustomQuoteChrome();
   updateEmptyStateCopy();
   // 자동으로 여는 첫 카테고리 버튼을 선택 상태로 표시한다.
   const firstCat = store === "compuzone" ? "ai" : "apple_macbook";
-  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .apple-cat-btn").forEach((b) =>
+  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn, .apple-cat-btn").forEach((b) =>
     b.classList.toggle("active", b.dataset.cat === firstCat)
   );
   if (store === "compuzone") {
@@ -2506,36 +2645,35 @@ $("#storeBtnApple")?.addEventListener("click", () => switchStore("apple"));
 $$(".cat-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const cat = btn.dataset.cat;
-    if (!cat || cat === "game-pc" || cat === "price") return;
-    $$(".cat-btn").forEach((b) => b.classList.remove("active"));
-    $$(".game-cat-btn").forEach((b) => b.classList.remove("active"));
-    $$(".price-cat-btn").forEach((b) => b.classList.remove("active"));
+    if (!cat || cat === "game-pc" || cat === "price" || cat === "custom") return;
+    $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     fetchQuotes(cat);
   });
 });
 
 $("#btnGamePc")?.addEventListener("click", () => {
-  $$(".cat-btn").forEach((b) => b.classList.remove("active"));
+  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn").forEach((b) => b.classList.remove("active"));
   $$(".game-cat-btn").forEach((b) => b.classList.add("active"));
-  $$(".price-cat-btn").forEach((b) => b.classList.remove("active"));
   openGamePcModal();
 });
 
 $("#btnPriceSearch")?.addEventListener("click", () => {
-  $$(".cat-btn").forEach((b) => b.classList.remove("active"));
-  $$(".game-cat-btn").forEach((b) => b.classList.remove("active"));
-  $$(".price-cat-btn").forEach((b) => b.classList.remove("active"));
+  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn").forEach((b) => b.classList.remove("active"));
   $("#btnPriceSearch")?.classList.add("active");
   activatePriceSearch("assembled");
 });
 
 $("#btnNotebookPriceSearch")?.addEventListener("click", () => {
-  $$(".cat-btn").forEach((b) => b.classList.remove("active"));
-  $$(".game-cat-btn").forEach((b) => b.classList.remove("active"));
-  $$(".price-cat-btn").forEach((b) => b.classList.remove("active"));
+  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn").forEach((b) => b.classList.remove("active"));
   $("#btnNotebookPriceSearch")?.classList.add("active");
   activatePriceSearch("notebook");
+});
+
+$("#btnCustomQuote")?.addEventListener("click", () => {
+  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn").forEach((b) => b.classList.remove("active"));
+  $("#btnCustomQuote")?.classList.add("active");
+  activateCustomQuote();
 });
 
 $$(".apple-cat-btn").forEach((btn) => {
@@ -2567,6 +2705,12 @@ function hidePriceSearchBar() {
   hide($("#priceSearchBar"));
 }
 
+function hideCustomQuoteChrome() {
+  hide($("#customQuoteBar"));
+  hide($("#customCompareWrap"));
+  hide($("#customSwapPanel"));
+}
+
 function hidePriceResultChrome() {
   hidePriceSearchBar();
   hideResultChrome();
@@ -2595,11 +2739,13 @@ function isStaleQuoteRequest(seq) {
   return seq !== quoteRequestSeq;
 }
 
-function applyQuotePayload(data) {
+function applyQuotePayload(data, opts = {}) {
   renderCatalogWarnings(data?.warnings);
   quoteData = data;
   hasLoadedOnce = true;
-  activeTab = 0;
+  if (!opts.keepTab || activeTab >= (quoteData.quotes?.length || 0)) {
+    activeTab = 0;
+  }
   renderTabs(quoteData.quotes);
   renderDetail(quoteData.quotes);
   hide($("#loading"));
@@ -2617,10 +2763,15 @@ async function fetchQuotes(cat = "ai", forceRefresh = false, opts = {}) {
     activatePriceSearch(priceTargetType);
     return;
   }
+  if (cat === "custom" || cat === "custom-quote") {
+    activateCustomQuote();
+    return;
+  }
 
   currentCat = cat;
   updateExtrasUI();
   hidePriceSearchBar();
+  hideCustomQuoteChrome();
   hideResultChrome();
   const loading = $("#loading");
   const errorBox = $("#error");
@@ -2864,6 +3015,7 @@ async function submitGamePcRecommend() {
   hide(summaryCards);
   hide(quoteTabs);
   hidePriceSearchBar();
+  hideCustomQuoteChrome();
   hideResultChrome();
 
   const seq = beginQuoteRequest();
@@ -3087,6 +3239,7 @@ function activatePriceSearch(targetType = "assembled") {
   if (scope) scope.textContent = PRICE_SCOPE_TEXT[targetType] || PRICE_SCOPE_TEXT.assembled;
   updateExtrasUI();
 
+  hideCustomQuoteChrome();
   hide($("#error"));
   hide($("#loading"));
   hide($("#emptyState"));
@@ -3220,6 +3373,521 @@ $("#btnResultViewToggle")?.addEventListener("click", () => {
       submitPriceSearch();
     }
   });
+});
+
+// ---------- 🛠️ 용도별 맞춤자동견적 (컴퓨존 추천 부품 실시간 연동 · 최저/추천/최고 3종 동시 산출) ----------
+function cqSetStatus(msg, ok = true) {
+  const el = $("#cqStatus");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.style.color = ok ? "var(--accent, #4caf50)" : "#e53935";
+}
+
+async function ensureCustomOptions() {
+  if (customBuilderMeta) return customBuilderMeta;
+  const res = await fetch("/api/custom-quote/options");
+  if (!res.ok) throw new Error(`맞춤견적 옵션 로드 실패 (${res.status})`);
+  customBuilderMeta = await res.json();
+  return customBuilderMeta;
+}
+
+function renderCustomMethodBanner(preset) {
+  const titleEl = $("#cqMethodTitle");
+  const listEl = $("#cqMethodRules");
+  if (!titleEl || !listEl || !preset) return;
+  titleEl.textContent = `📐 ${preset.method_title || "용도별 조립 구성 공식"} — ${preset.desc || ""}`;
+  listEl.innerHTML = (preset.method_rules || [])
+    .map((r) => `<li>${escapeHtml(r)}</li>`)
+    .join("");
+}
+
+function renderCustomWizardUI() {
+  if (!customBuilderMeta) return;
+  const presets = customBuilderMeta.presets || [];
+  const pGrid = $("#cqPresetGrid");
+  if (pGrid) {
+    pGrid.innerHTML = presets
+      .map((p) => {
+        const on = p.id === customState.usage;
+        return `
+        <button type="button" class="cq-preset-btn ${on ? "active" : ""}" data-usage="${escapeHtml(p.id)}">
+          <div class="cq-preset-title">${escapeHtml(p.label)}</div>
+          <div class="cq-preset-desc">${escapeHtml(p.desc)}</div>
+        </button>`;
+      })
+      .join("");
+    pGrid.querySelectorAll(".cq-preset-btn").forEach((btn) => {
+      btn.addEventListener("click", () => selectCustomPreset(btn.dataset.usage, true));
+    });
+  }
+
+  const curPreset = presets.find((p) => p.id === customState.usage) || presets[0];
+  renderCustomMethodBanner(curPreset);
+
+  const gBox = $("#cqGameChips");
+  if (gBox) {
+    gBox.innerHTML = (customBuilderMeta.games || [])
+      .map((g) => {
+        const on = customState.games.includes(g.id);
+        return `<button type="button" class="cq-chip ${on ? "on" : ""}" data-gid="${escapeHtml(g.id)}">${escapeHtml(g.label)}${g.fg ? ' <small>FG</small>' : ""}</button>`;
+      })
+      .join("");
+    gBox.querySelectorAll(".cq-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const gid = chip.dataset.gid;
+        const idx = customState.games.indexOf(gid);
+        if (idx >= 0) customState.games.splice(idx, 1);
+        else customState.games.push(gid);
+        customState.overrides = {};
+        renderCustomWizardUI();
+      });
+    });
+  }
+
+  const aBox = $("#cqAppChips");
+  if (aBox) {
+    aBox.innerHTML = (customBuilderMeta.apps || [])
+      .map((a) => {
+        const on = customState.apps.includes(a.id);
+        return `<button type="button" class="cq-chip ${on ? "on" : ""}" data-aid="${escapeHtml(a.id)}">${escapeHtml(a.label)}</button>`;
+      })
+      .join("");
+    aBox.querySelectorAll(".cq-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const aid = chip.dataset.aid;
+        const idx = customState.apps.indexOf(aid);
+        if (idx >= 0) customState.apps.splice(idx, 1);
+        else customState.apps.push(aid);
+        customState.overrides = {};
+        renderCustomWizardUI();
+      });
+    });
+  }
+
+  if ($("#cqResolution")) $("#cqResolution").value = customState.resolution || "FHD";
+  if ($("#cqTargetFps")) $("#cqTargetFps").value = String(customState.target_fps || 144);
+  if ($("#cqBoost")) $("#cqBoost").checked = Boolean(customState.boost);
+  if ($("#cqCpuVendor")) $("#cqCpuVendor").value = customState.cpu_vendor || "auto";
+  if ($("#cqGpuVendor")) $("#cqGpuVendor").value = customState.gpu_vendor || "auto";
+  if ($("#cqRamGb")) $("#cqRamGb").value = String(customState.ram_gb || 0);
+  if ($("#cqSsdGb")) $("#cqSsdGb").value = String(customState.ssd_gb || 0);
+  if ($("#cqColor")) $("#cqColor").value = customState.color || "auto";
+  if ($("#cqBudgetManwon")) {
+    $("#cqBudgetManwon").value = customState.budget_manwon ? String(customState.budget_manwon) : "";
+  }
+}
+
+function selectCustomPreset(usageId, autoSubmit = false) {
+  if (!customBuilderMeta) return;
+  const preset = (customBuilderMeta.presets || []).find((p) => p.id === usageId);
+  if (!preset) return;
+  customState.usage = preset.id;
+  customState.resolution = preset.default_res || "FHD";
+  customState.target_fps = preset.default_fps || 144;
+  customState.games = [...(preset.default_games || [])];
+  customState.apps = [...(preset.default_apps || [])];
+  customState.overrides = {};
+  renderCustomWizardUI();
+  if (autoSubmit) {
+    submitCustomQuote();
+  }
+}
+
+function syncCustomStateFromControls() {
+  customState.resolution = $("#cqResolution")?.value || customState.resolution || "FHD";
+  customState.target_fps = parseInt($("#cqTargetFps")?.value || "144", 10) || 144;
+  customState.boost = Boolean($("#cqBoost")?.checked);
+  customState.cpu_vendor = $("#cqCpuVendor")?.value || "auto";
+  customState.gpu_vendor = $("#cqGpuVendor")?.value || "auto";
+  customState.ram_gb = parseInt($("#cqRamGb")?.value || "0", 10) || 0;
+  customState.ssd_gb = parseInt($("#cqSsdGb")?.value || "0", 10) || 0;
+  customState.color = $("#cqColor")?.value || "auto";
+  customState.budget_manwon = parseManwonInput($("#cqBudgetManwon")?.value);
+}
+
+function renderCustomCompareTable(quotes) {
+  const wrap = $("#customCompareWrap");
+  if (!wrap) return;
+  if (currentCat !== "custom" || !quotes?.length || !quoteData?.custom_meta) {
+    hide(wrap);
+    wrap.innerHTML = "";
+    renderCustomSwapPanel(null);
+    return;
+  }
+  const cmeta = quoteData.custom_meta;
+  const compareCats = ["CPU", "쿨러/특수냉각", "메인보드", "메모리", "그래픽카드", "SSD", "케이스", "파워"];
+  const pct = activeMarginPercent();
+
+  const headerCols = quotes
+    .map(
+      (q, i) => `
+      <th class="cq-cmp-col ${i === activeTab ? "is-active" : ""}" data-idx="${i}">
+        <span class="tier-badge ${badgeClass(q.tier_key)}">${escapeHtml(q.tab_label || q.tier)}</span>
+        <div class="cq-cmp-price">${fmt(displayTotal(q))}</div>
+        <div class="cq-cmp-diff">${escapeHtml(cmeta.tiers?.[i]?.diff_line || "")}</div>
+        <button type="button" class="btn btn-sm cq-swap-open ${customState.swapTier === q.tier_key ? "is-open" : ""}" data-swap-idx="${i}" title="이 견적을 기준으로 부품을 다른 컴퓨존 추천 부품으로 바꾸고 총액 · 호환성을 다시 취합합니다">🛠️ 이 견적 선택 · 부품 교체</button>
+      </th>`
+    )
+    .join("");
+
+  const bodyRows = compareCats
+    .map((cat) => {
+      const cells = quotes
+        .map((q, i) => {
+          const p = (q.parts || []).find((x) => x.category === cat);
+          if (!p) {
+            return `<td class="${i === activeTab ? "is-active" : ""}" data-idx="${i}"><span class="cq-cmp-none">${cat === "그래픽카드" ? "내장그래픽 사용" : (cat === "쿨러/특수냉각" ? "CPU 기본 쿨러" : "-")}</span></td>`;
+          }
+          const shownAmt = displayAmount(markedUpAmount(p.unit_price, pct)) * (p.qty || 1);
+          const qtyTag = p.qty > 1 ? ` <strong>×${p.qty}개</strong>` : "";
+          const reason = cmeta.tiers?.[i]?.part_reasons?.[cat] || "";
+          return `
+            <td class="${i === activeTab ? "is-active" : ""}" data-idx="${i}">
+              <div class="cq-cmp-part">${escapeHtml(p.name)}${qtyTag}</div>
+              <div class="cq-cmp-meta">${showUnitPrices ? fmt(shownAmt) : ""}${reason ? ` · ${escapeHtml(reason)}` : ""}</div>
+            </td>`;
+        })
+        .join("");
+      return `<tr><th>${escapeHtml(cat)}</th>${cells}</tr>`;
+    })
+    .join("");
+
+  const powerCells = quotes
+    .map((_, i) => {
+      const ps = cmeta.tiers?.[i]?.power_summary;
+      if (!ps) return `<td class="${i === activeTab ? "is-active" : ""}" data-idx="${i}">-</td>`;
+      return `<td class="${i === activeTab ? "is-active" : ""}" data-idx="${i}">실소비 약 ${ps.sustained_w}W · 피크 ${ps.peak_w}W (권장 ${ps.need_w}W+)</td>`;
+    })
+    .join("");
+
+  const fpsCells = quotes
+    .map((_, i) => {
+      const fps = cmeta.tiers?.[i]?.fps_estimates || [];
+      if (!fps.length) return `<td class="${i === activeTab ? "is-active" : ""}" data-idx="${i}">사무 · 작업 최적화</td>`;
+      return `<td class="${i === activeTab ? "is-active" : ""}" data-idx="${i}">${fps
+        .slice(0, 3)
+        .map((f) => `<span class="cq-cmp-fps-chip">${escapeHtml(f.label)}: <b>${escapeHtml(f.range)}</b></span>`)
+        .join(" ")}</td>`;
+    })
+    .join("");
+
+  wrap.innerHTML = `
+    <div class="cq-cmp-header">
+      <div>
+        <strong>📊 최저가 · 추천가 · 최고가 3종 한눈에 비교표</strong>
+        <span class="cq-cmp-sub">열을 클릭하면 아래 상세 견적서가 해당 등급으로 전환됩니다 · 컴퓨존 추천 부품 기준 (${escapeHtml(cmeta.synced_at || "")})</span>
+      </div>
+    </div>
+    <div class="cq-cmp-table-wrap">
+      <table class="cq-cmp-table">
+        <thead>
+          <tr>
+            <th style="width:110px;">부품 구분</th>
+            ${headerCols}
+          </tr>
+        </thead>
+        <tbody>
+          ${bodyRows}
+          <tr><th>전력 밸런스</th>${powerCells}</tr>
+          <tr><th>예상 프레임</th>${fpsCells}</tr>
+        </tbody>
+      </table>
+    </div>`;
+  show(wrap);
+
+  wrap.querySelectorAll("[data-idx]").forEach((el) => {
+    el.addEventListener("click", () => {
+      activeTab = parseInt(el.dataset.idx, 10) || 0;
+      renderTabs(quotes);
+      renderDetail(quotes);
+      applyResultView();
+    });
+  });
+  wrap.querySelectorAll(".cq-swap-open").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.swapIdx, 10) || 0;
+      customState.swapTier = quotes[idx]?.tier_key || "";
+      activeTab = idx;
+      renderTabs(quotes);
+      renderDetail(quotes);
+      applyResultView();
+      $("#customSwapPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  renderCustomSwapPanel(quotes);
+}
+
+const CUSTOM_SWAP_CATS = ["CPU", "쿨러/특수냉각", "메인보드", "메모리", "그래픽카드", "SSD", "케이스", "파워"];
+
+/** 등급 하나의 부품을 바꾸고 3종을 다시 취합한다. 소켓 · 메모리 규격은 서버가 자동으로 맞춘다. */
+function applyCustomOverride(tierKey, cat, pno) {
+  if (!tierKey || !cat || !pno) return;
+  if (!customState.overrides[tierKey]) customState.overrides[tierKey] = {};
+  customState.overrides[tierKey][cat] = pno;
+  // CPU를 바꾸면 소켓이 달라질 수 있으므로 메인보드/메모리 수동 고정은 해제하여 자동 호환 매칭되도록 한다
+  if (cat === "CPU") {
+    delete customState.overrides[tierKey]["메인보드"];
+    delete customState.overrides[tierKey]["메모리"];
+  } else if (cat === "메인보드") {
+    delete customState.overrides[tierKey]["메모리"];
+  }
+  submitCustomQuote({ keepTab: true });
+}
+
+function bindCustomPartSelects(container) {
+  if (!container || currentCat !== "custom") return;
+  container.querySelectorAll(".cq-part-select").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      applyCustomOverride(sel.dataset.tierkey, sel.dataset.cat, parseInt(sel.value, 10) || 0);
+    });
+  });
+}
+
+function renderCustomSwapPanel(quotes) {
+  const panel = $("#customSwapPanel");
+  if (!panel) return;
+  const cmeta = quoteData?.custom_meta;
+  const idx = (quotes || []).findIndex((q) => q.tier_key === customState.swapTier);
+  if (currentCat !== "custom" || !cmeta || idx < 0) {
+    hide(panel);
+    panel.innerHTML = "";
+    return;
+  }
+  const q = quotes[idx];
+  const tierMeta = cmeta.tiers?.[idx] || {};
+  const pct = activeMarginPercent();
+  const shownPrice = (won) => displayAmount(markedUpAmount(won, pct));
+  const shownNow = displayTotal(q);
+  const baseTotal = q.total - ((tierMeta.body_total || 0) - (tierMeta.base_body_total || 0));
+  const shownBase = displayTotal({ ...q, total: baseTotal });
+  const diff = shownNow - shownBase;
+  const signed = (n) => (n > 0 ? `+${fmt(n)}` : n < 0 ? `-${fmt(-n)}` : "±0원");
+  const changed = new Map((tierMeta.changed_parts || []).map((c) => [c.category, c.auto]));
+  const onlyOk = customState.swapCompatOnly;
+
+  const rows = CUSTOM_SWAP_CATS.map((cat) => {
+    const cur = (q.parts || []).find((p) => p.category === cat);
+    const curPno = Number(tierMeta.selected_pnos?.[cat] || 0);
+    const compat = tierMeta.part_compat?.[cat] || {};
+    const curUnit = cur ? shownPrice(cur.unit_price) : 0;
+    const cands = [...(cmeta.part_candidates?.[cat] || [])].sort((a, b) => a.price - b.price);
+    const opts = cands
+      .filter((c) => !onlyOk || Number(c.pno) === curPno || (compat[String(c.pno)] || [true])[0])
+      .map((c) => {
+        const [ok, note] = compat[String(c.pno)] || [true, ""];
+        const isCur = Number(c.pno) === curPno;
+        const delta = shownPrice(c.price) - curUnit;
+        const tail = isCur ? "현재" : signed(delta);
+        return `<option value="${c.pno}"${isCur ? " selected" : ""} title="${escapeHtml(note)}">${ok ? "✅" : "⛔"} ${escapeHtml(c.name)} · ${fmt(shownPrice(c.price))} (${tail})</option>`;
+      })
+      .join("");
+    const placeholder = curPno
+      ? ""
+      : `<option value="" selected>${cat === "그래픽카드" ? "내장그래픽 사용 (그래픽카드 없음)" : "CPU 기본 쿨러 사용"}</option>`;
+    const curNote = curPno ? (compat[String(curPno)] || [true, ""])[1] : "";
+    const badge = changed.has(cat)
+      ? `<span class="cq-swap-badge ${changed.get(cat) ? "is-auto" : ""}">${changed.get(cat) ? "자동 연동" : "변경됨"}</span>`
+      : "";
+    const qtyTag = cur && cur.qty > 1 ? ` <strong>×${cur.qty}</strong>` : "";
+    return `
+      <tr class="${changed.has(cat) ? "is-changed" : ""}">
+        <th>${escapeHtml(cat)}</th>
+        <td>
+          <div class="cq-swap-cur">${cur ? escapeHtml(cur.name) + qtyTag : `<span class="cq-cmp-none">${cat === "그래픽카드" ? "내장그래픽 사용" : "CPU 기본 쿨러"}</span>`} ${badge}</div>
+          ${curNote ? `<div class="cq-swap-note">${escapeHtml(curNote)}</div>` : ""}
+          <select class="cq-swap-select" data-cat="${escapeHtml(cat)}">${placeholder}${opts}</select>
+        </td>
+        <td class="cq-swap-price">${cur ? fmt(curUnit * (cur.qty || 1)) : "-"}</td>
+      </tr>`;
+  }).join("");
+
+  const issues = (tierMeta.compat_issues || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+  const notes = (tierMeta.auto_adjust_notes || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+  const hasOverrides = Object.keys(customState.overrides[q.tier_key] || {}).length > 0;
+
+  panel.innerHTML = `
+    <div class="cq-swap-head">
+      <div>
+        <strong>🛠️ 부품 교체 및 재취합 — <span class="tier-badge ${badgeClass(q.tier_key)}">${escapeHtml(q.tab_label || q.tier)}</span></strong>
+        <div class="cq-swap-sum">
+          원래 견적 <b>${fmt(shownBase)}</b> → 재취합 견적 <b class="cq-swap-now">${fmt(shownNow)}</b>
+          <span class="cq-swap-diff ${diff > 0 ? "is-up" : diff < 0 ? "is-down" : ""}">(${signed(diff)})</span>
+          · 변경 부품 ${changed.size}개
+        </div>
+      </div>
+      <div class="cq-swap-actions">
+        <label class="cq-swap-filter"><input type="checkbox" id="cqSwapCompatOnly" ${onlyOk ? "checked" : ""} /> 호환 부품만 보기</label>
+        <button type="button" class="btn btn-outline btn-sm" id="cqSwapReset" ${hasOverrides ? "" : "disabled"}>↺ 원래 견적으로</button>
+        <button type="button" class="btn btn-outline btn-sm" id="cqSwapClose">✕ 닫기</button>
+      </div>
+    </div>
+    ${issues ? `<ul class="cq-swap-issues">${issues}</ul>` : ""}
+    ${notes ? `<ul class="cq-swap-autonotes">${notes}</ul>` : ""}
+    <div class="cq-cmp-table-wrap">
+      <table class="cq-cmp-table cq-swap-table">
+        <thead><tr><th style="width:110px;">부품 구분</th><th>현재 부품 · 교체할 부품 선택</th><th style="width:130px;">금액</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="cq-swap-hint">부품을 고르면 이 견적을 바로 다시 취합합니다(✅ 호환 · ⛔ 호환 불가, 괄호는 현재 부품 대비 차액). CPU · 메인보드를 바꾸면 소켓 · 메모리 규격, 그래픽카드를 바꾸면 파워 용량을 자동으로 맞춥니다. 아래 견적서 · 📥 엑셀 견적서 · 🧾 거래명세서에도 바뀐 구성이 그대로 들어갑니다.</p>`;
+  show(panel);
+
+  panel.querySelectorAll(".cq-swap-select").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      applyCustomOverride(q.tier_key, sel.dataset.cat, parseInt(sel.value, 10) || 0);
+    });
+  });
+  $("#cqSwapCompatOnly")?.addEventListener("change", (e) => {
+    customState.swapCompatOnly = e.target.checked;
+    renderCustomSwapPanel(quotes);
+  });
+  $("#cqSwapReset")?.addEventListener("click", () => {
+    delete customState.overrides[q.tier_key];
+    submitCustomQuote({ keepTab: true });
+  });
+  $("#cqSwapClose")?.addEventListener("click", () => {
+    customState.swapTier = "";
+    renderCustomCompareTable(quotes);
+  });
+}
+
+async function activateCustomQuote() {
+  currentCat = "custom";
+  updateExtrasUI();
+  hidePriceSearchBar();
+  hideResultChrome();
+  hide($("#error"));
+  hide($("#emptyState"));
+  show($("#customQuoteBar"));
+
+  try {
+    await ensureCustomOptions();
+    renderCustomWizardUI();
+  } catch (e) {
+    cqSetStatus(e.message, false);
+    return;
+  }
+
+  // 이미 맞춤자동견적 결과가 있으면 바로 표시하고, 없으면 즉시 첫 3종 견적을 산출한다
+  if (quoteData?.engine === "custom_405_compuzone" && quoteData?.quotes?.length) {
+    applyResultView();
+    renderCustomCompareTable(quoteData.quotes);
+  } else {
+    await submitCustomQuote();
+  }
+  $("#quote")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function submitCustomQuote(opts = {}) {
+  const keepTab = Boolean(opts.keepTab);
+  const forceRefresh = Boolean(opts.forceRefresh);
+  syncCustomStateFromControls();
+  currentCat = "custom";
+  updateExtrasUI();
+  $$(".cat-btn, .game-cat-btn, .price-cat-btn, .custom-cat-btn").forEach((b) => b.classList.remove("active"));
+  $("#btnCustomQuote")?.classList.add("active");
+  show($("#customQuoteBar"));
+
+  const payload = {
+    usage: customState.usage,
+    games: customState.games,
+    apps: customState.apps,
+    resolution: customState.resolution,
+    target_fps: customState.target_fps,
+    boost: customState.boost,
+    budget_manwon: customState.budget_manwon,
+    cpu_vendor: customState.cpu_vendor,
+    gpu_vendor: customState.gpu_vendor,
+    ram_gb: customState.ram_gb,
+    ssd_gb: customState.ssd_gb,
+    color: customState.color,
+    overrides: customState.overrides,
+    monitor: includeMonitor ? 1 : 0,
+    keyboard: includeKeyboard ? 1 : 0,
+    setup: includeSetup ? 1 : 0,
+    force_refresh: forceRefresh,
+  };
+  lastCustomQuery = JSON.parse(JSON.stringify(payload));
+
+  const loading = $("#loading");
+  const errorBox = $("#error");
+  const emptyState = $("#emptyState");
+  const summaryCards = $("#summaryCards");
+  const quoteTabs = $("#quoteTabs");
+  const submitBtn = $("#cqSubmitBtn");
+
+  cqSetStatus("컴퓨존 추천 부품으로 [최저가 · 추천가 · 최고가] 3종 맞춤 견적을 구성하는 중…");
+  if (submitBtn) submitBtn.disabled = true;
+  show(loading);
+  setLoadingMessage("컴퓨존 추천 부품 호환성 매칭 및 3종 견적 동시 산출 중…");
+  hide(errorBox);
+  hide(emptyState);
+  hide(summaryCards);
+  hide(quoteTabs);
+  hide($("#customCompareWrap"));
+  hide($("#customSwapPanel"));
+  hideResultChrome();
+
+  const seq = beginQuoteRequest();
+  try {
+    const res = await fetch("/api/custom-quote/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (isStaleQuoteRequest(seq)) return;
+    if (!res.ok) throw new Error(data.detail || `HTTP error ${res.status}`);
+    applyQuotePayload(data, { keepTab });
+    renderCustomCompareTable(data.quotes);
+    const notes = data.custom_meta?.why_notes || [];
+    cqSetStatus(
+      `✔ 최저가 · 추천가 · 최고가 3종 견적 산출 완료${notes.length ? ` (${notes.join(" · ")})` : ""}`
+    );
+  } catch (e) {
+    if (isStaleQuoteRequest(seq)) return;
+    hide(loading);
+    hide(summaryCards);
+    hide(quoteTabs);
+    hide($("#customCompareWrap"));
+    hide($("#customSwapPanel"));
+    cqSetStatus(e.message, false);
+    if (errorBox) {
+      errorBox.textContent = `맞춤자동견적 생성 실패: ${e.message}`;
+      show(errorBox);
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+    setLoadingMessage(LOADING_TEXT_COMPUZONE);
+  }
+}
+
+$("#cqSubmitBtn")?.addEventListener("click", () => submitCustomQuote());
+$("#cqBtnForceRefresh")?.addEventListener("click", () => submitCustomQuote({ keepTab: true, forceRefresh: true }));
+$("#cqBtnResetOverrides")?.addEventListener("click", () => {
+  customState.overrides = {};
+  submitCustomQuote({ keepTab: true });
+});
+$("#cqBtnToggleDetail")?.addEventListener("click", (e) => {
+  const box = $("#cqDetailBox");
+  if (!box) return;
+  const open = box.classList.contains("hidden");
+  box.classList.toggle("hidden", !open);
+  e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  e.currentTarget.textContent = open ? "🎯 세부 게임 · 작업 접기 ▴" : "🎯 세부 게임 · 작업 선택 ▾";
+});
+["#cqResolution", "#cqTargetFps", "#cqBoost", "#cqCpuVendor", "#cqGpuVendor", "#cqRamGb", "#cqSsdGb", "#cqColor"].forEach((sel) => {
+  $(sel)?.addEventListener("change", () => {
+    customState.overrides = {};
+    submitCustomQuote({ keepTab: true });
+  });
+});
+$("#cqBudgetManwon")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    submitCustomQuote({ keepTab: true });
+  }
 });
 
 document.addEventListener("DOMContentLoaded", () => {

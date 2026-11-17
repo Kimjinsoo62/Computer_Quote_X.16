@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>사용설명서 — 컴퓨존 견적 자동화 Ver XII.11</title>
+  <title>사용설명서 — 컴퓨존 견적 자동화 Ver XII.12</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -87,7 +87,7 @@
       <div class="nav-brand">
         <a href="/" class="logo">
           <span class="logo-icon">⚡</span>
-          <span>컴퓨존 <strong>견적 자동화 Ver XII.11</strong></span>
+          <span>컴퓨존 <strong>견적 자동화 Ver XII.12</strong></span>
         </a>
       </div>
       <div class="nav-links">
@@ -100,10 +100,14 @@
   <div class="manual-wrap">
     <div class="manual-head">
       <h1>📖 사용설명서</h1>
-      <p>컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 통합 업무 솔루션입니다. <strong>Ver XII.11</strong></p>
+      <p>컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 통합 업무 솔루션입니다. <strong>Ver XII.12</strong></p>
 
       <div class="manual-note">
-        <strong>🆕 Ver XII.11 주요 변경</strong>
+        <strong>🆕 Ver XII.12 주요 변경</strong>
+        <ul>
+          <li><strong>🛠️ 맞춤자동견적 (최저가 · 추천가 · 최고가 3종 동시 산출)</strong>: 컴퓨존 온라인 견적의 <strong>추천부품 8종</strong>(CPU · 쿨러 · 메인보드 · 메모리 · 그래픽카드 · SSD · 케이스 · 파워 + 조립비 30,000원)을 기반으로 용도별(사무/FHD/QHD/4K/영상편집/AI) 조립PC 3종 견적을 한 번에 구성합니다. 용도별 조립 구성 공식, 품목별 선정 사유, 예상 게임 FPS, 3종 나란히 비교표, 호환 부품 실시간 교체 기능을 지원합니다. (<a href="#s4">4번 항목</a>)</li>
+        </ul>
+        <strong>Ver XII.11 주요 변경</strong>
         <ul>
           <li><strong>🔓 로그인 없는 업데이트</strong>: 다른 PC로 옮긴 설치본에서 [업데이트]를 누르면 GitHub 로그인 창이 뜨던 문제를 고쳤습니다. 이제 로그인 없이 바로 확인 · 업데이트됩니다. (<a href="#s1">1번 항목</a>)</li>
         </ul>
@@ -723,7 +727,7 @@
         <tr>
           <td>카테고리 버튼 바</td>
           <td>
-            <strong>컴퓨존</strong>: AI PC, 프리미엄PC, 아이웍스PC, 추천조립PC, 게임으로PC찾기, 조립PC 금액대로 찾기, 노트북 금액대로 찾기<br />
+            <strong>컴퓨존</strong>: AI PC, 프리미엄PC, 아이웍스PC, 추천조립PC, 🛠️ 맞춤자동견적, 게임으로PC찾기, 조립PC 금액대로 찾기, 노트북 금액대로 찾기<br />
             <strong>Apple Store</strong>: MacBook, iMac, Mac mini, Mac Studio, iPad & iPhone, 주변기기 & Care+, 전제품 통합 + <strong>[🔄 공홈 실시간 새로고침]</strong>
           </td>
         </tr>
@@ -747,6 +751,8 @@
         <tr><td>💎 프리미엄PC</td><td>고사양 3D/렌더링/하이엔드 게임용 프리미엄 조립PC</td></tr>
         <tr><td>🏆 아이웍스PC</td><td>컴퓨존 대표 자체 브랜드 아이웍스(iWorks) 시리즈</td></tr>
         <tr><td>👍 추천조립PC</td><td>가성비 및 인기 구성의 추천 조립PC</td></tr>
+        <tr><td>🛠️ 맞춤자동견적</td><td>컴퓨존 실시간 <strong>추천부품 8종 + 조립비</strong>로 용도별(사무 · FHD/QHD/4K 게임 · 영상편집 · AI) <strong>🟢 최저가 · 🔵 추천가 · 🟣 최고가 3종 견적을 동시에 자동 산출</strong>합니다. 용도별 조립 구성 공식, 3종 나란히 비교표, 예상 게임 프레임(FPS), 품목별 선정 사유 및 호환 추천부품 실시간 교체를 지원합니다.<br />
+          비교표 각 열의 <strong>🛠️ 이 견적 선택 · 부품 교체</strong>를 누르면 비교표 아래에 <strong>부품 교체 및 재취합</strong> 창이 열립니다. 부품 8종마다 교체 후보가 ✅ 호환 · ⛔ 호환 불가와 현재 부품 대비 차액으로 표시되고(<strong>호환 부품만 보기</strong>로 거르기), 고르면 그 견적을 바로 다시 취합해 <strong>원래 견적 → 재취합 견적 금액과 차액</strong>, 변경된 부품(<strong>변경됨</strong> · 다른 교체에 맞춘 <strong>자동 연동</strong>), 호환성 경고를 보여 줍니다. CPU · 메인보드를 바꾸면 소켓 · 메모리 규격이, 그래픽카드를 바꾸면 파워 용량이 자동으로 맞춰집니다. <strong>↺ 원래 견적으로</strong>는 그 견적의 교체만 되돌립니다. 바뀐 구성은 아래 견적서 · 📥 엑셀 견적서 · 🧾 거래명세서에 그대로 들어갑니다.</td></tr>
         <tr><td>🎮 게임으로PC찾기</td><td>즐길 게임과 모니터 해상도를 선택하여 최적 PC 추천 (<a href="#s6">6번 항목</a>)</td></tr>
         <tr><td>💵 조립PC 금액대로 찾기</td><td>예산 범위(예: 80~120만원)를 만원 단위로 입력해 추천조립PC · 아이웍스PC · 프리미엄PC에서 실시간 검색 (<a href="#s7">7번 항목</a>)</td></tr>
         <tr><td>💻 노트북 금액대로 찾기</td><td>같은 방식으로 컴퓨존 노트북을 예산 범위로 검색 (<a href="#s7">7번 항목</a>)</td></tr>
@@ -1130,7 +1136,7 @@
     </section>
 
     <div class="manual-footer">
-      <p>컴퓨존 견적 자동화 Ver XII.11 · 개발 애플아저씨 · 기술 지원 및 문의 <a href="mailto:jskimjskim@gmail.com">jskimjskim@gmail.com</a></p>
+      <p>컴퓨존 견적 자동화 Ver XII.12 · 개발 애플아저씨 · 기술 지원 및 문의 <a href="mailto:jskimjskim@gmail.com">jskimjskim@gmail.com</a></p>
       <p>본 프로그램은 컴퓨존 및 Apple 공식 스토어의 실시간 정보를 바탕으로 작동하며, 가격 및 프로모션은 공식 홈페이지 기준에 따릅니다.</p>
     </div>
   </div>

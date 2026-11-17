@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI PC & Apple 견적 추출기 — 컴퓨존 견적 자동화 Ver XII.11</title>
+  <title>AI PC & Apple 견적 추출기 — 컴퓨존 견적 자동화 Ver XII.12</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -15,7 +15,7 @@
       <div class="nav-brand">
         <a href="/" class="logo">
           <span class="logo-icon">⚡</span>
-          <span>컴퓨존 <strong>견적 자동화 Ver XII.11</strong></span>
+          <span>컴퓨존 <strong>견적 자동화 Ver XII.12</strong></span>
         </a>
         <!-- 설정관리 바로가기: 제목 바로 오른쪽. 견적서 관리 · 작업내역서는 설정관리 창의 해당 탭을 바로 연다 -->
         <div class="nav-quick">
@@ -123,6 +123,9 @@
         <button id="btnNotebookPriceSearch" class="btn btn-primary btn-lg price-cat-btn" data-type="notebook" type="button">
           <span class="btn-icon">💻</span> 노트북 금액대로 찾기
         </button>
+        <button id="btnCustomQuote" class="btn btn-primary btn-lg custom-cat-btn" data-cat="custom" type="button" title="컴퓨존 추천 부품으로 용도별 최저가·추천가·최고가 3종 견적을 한 번에 뽑습니다">
+          <span class="btn-icon">🛠️</span> 맞춤자동견적
+        </button>
       </div>
 
       <div id="appleCatGroup" class="hero-actions cat-group hidden">
@@ -195,6 +198,127 @@
         <p id="priceSearchStatus" class="modal-status"></p>
       </div>
 
+      <!-- 🛠️ 용도별 맞춤자동견적 위자드 (컴퓨존 추천 부품 실시간 매칭 · 최저/추천/최고 3종 동시 산출) -->
+      <div id="customQuoteBar" class="custom-quote-panel hidden">
+        <div class="cq-head">
+          <div class="cq-head-left">
+            <span class="cq-badge">컴퓨존 추천 부품 실시간 연동</span>
+            <h3>🛠️ 용도별 맞춤 자동 견적 <small>— 최저가 · 추천가 · 최고가 3종 동시 산출</small></h3>
+          </div>
+          <div class="cq-head-right">
+            <button type="button" class="btn btn-outline btn-sm" id="cqBtnToggleDetail" aria-expanded="false">🎯 세부 게임 · 작업 선택 ▾</button>
+            <button type="button" class="btn btn-outline btn-sm" id="cqBtnResetOverrides" title="수동으로 교체한 부품을 자동 추천 상태로 되돌립니다">↺ 부품교체 초기화</button>
+            <button type="button" class="btn btn-outline btn-sm" id="cqBtnForceRefresh" title="컴퓨존 온라인 견적 추천 부품 목록을 새로 수집합니다">🔄 부품 실시간 재수집</button>
+          </div>
+        </div>
+
+        <!-- 1단계: 주 용도 프리셋 6종 -->
+        <div class="cq-step">
+          <div class="cq-step-label">1. 사용 용도 선택</div>
+          <div id="cqPresetGrid" class="cq-preset-grid"></div>
+        </div>
+
+        <!-- 선택 용도의 핵심 조립 구성 방법 요약 배너 -->
+        <div id="cqMethodBanner" class="cq-method-banner">
+          <strong id="cqMethodTitle">📐 용도별 조립 구성 공식</strong>
+          <ul id="cqMethodRules"></ul>
+        </div>
+
+        <!-- 2단계: 세부 게임(해상도·목표 프레임·부스트) 및 작업 프로그램 다중 선택 (접기/펼치기) -->
+        <div id="cqDetailBox" class="cq-detail-box hidden">
+          <div class="cq-detail-col">
+            <div class="cq-step-label">🎮 플레이할 게임 선택 (복수 선택 시 가장 높은 사양 기준 역산)</div>
+            <div id="cqGameChips" class="cq-chip-grid"></div>
+            <div class="cq-game-opts">
+              <label class="cq-opt-field">
+                <span>모니터 해상도</span>
+                <select id="cqResolution">
+                  <option value="FHD">FHD (1920×1080)</option>
+                  <option value="QHD">QHD (2560×1440)</option>
+                  <option value="UHD">4K UHD (3840×2160)</option>
+                </select>
+              </label>
+              <label class="cq-opt-field">
+                <span>목표 주사율(프레임)</span>
+                <select id="cqTargetFps">
+                  <option value="60">60 fps (일반 모니터)</option>
+                  <option value="100">100 fps (준고주사율)</option>
+                  <option value="120">120 fps (고주사율)</option>
+                  <option value="144" selected>144 fps (게이밍 표준)</option>
+                  <option value="165">165 fps (고주사율)</option>
+                  <option value="180">180 fps (상급 게이밍)</option>
+                  <option value="240">240 fps (e스포츠 경쟁)</option>
+                </select>
+              </label>
+              <label class="cq-boost-check" title="DLSS / FSR 업스케일링 및 프레임 생성(FG) 지원 게임에서 체감 프레임을 반영하여 사양을 계산합니다">
+                <input type="checkbox" id="cqBoost" />
+                <span>⚡ 업스케일(DLSS/FSR) + 프레임 생성(FG) 부스트 반영</span>
+              </label>
+            </div>
+          </div>
+          <div class="cq-detail-col">
+            <div class="cq-step-label">💼 주로 쓰는 작업 프로그램 선택 (복수 선택 가능)</div>
+            <div id="cqAppChips" class="cq-chip-grid"></div>
+          </div>
+        </div>
+
+        <!-- 3단계: 선호 옵션 및 즉시 산출 -->
+        <div class="cq-pref-bar">
+          <label class="cq-opt-field">
+            <span>CPU 선호</span>
+            <select id="cqCpuVendor">
+              <option value="auto">자동 (가성비·성능 최적)</option>
+              <option value="amd">AMD 라이젠 우선</option>
+              <option value="intel">인텔 코어 우선</option>
+            </select>
+          </label>
+          <label class="cq-opt-field">
+            <span>그래픽카드 선호</span>
+            <select id="cqGpuVendor">
+              <option value="auto">자동 (용도별 최적)</option>
+              <option value="nvidia">NVIDIA 지포스 우선</option>
+              <option value="amd">AMD 라데온 우선</option>
+            </select>
+          </label>
+          <label class="cq-opt-field">
+            <span>메모리(RAM)</span>
+            <select id="cqRamGb">
+              <option value="0">용도별 자동 (16~64GB)</option>
+              <option value="16">16GB 고정</option>
+              <option value="32">32GB 고정</option>
+              <option value="64">64GB 고정</option>
+            </select>
+          </label>
+          <label class="cq-opt-field">
+            <span>저장장치(SSD)</span>
+            <select id="cqSsdGb">
+              <option value="0">용도별 자동 (500GB~4TB)</option>
+              <option value="500">500GB 고정</option>
+              <option value="1000">1TB 고정</option>
+              <option value="2000">2TB 고정</option>
+              <option value="4000">4TB 고정</option>
+            </select>
+          </label>
+          <label class="cq-opt-field">
+            <span>색상 테마</span>
+            <select id="cqColor">
+              <option value="auto">자동 (블랙 중심)</option>
+              <option value="black">블랙 (Black)</option>
+              <option value="white">화이트 (White)</option>
+            </select>
+          </label>
+          <label class="cq-opt-field cq-budget-field">
+            <span>예산 참고 상한</span>
+            <div class="manwon-field">
+              <input type="text" id="cqBudgetManwon" inputmode="numeric" placeholder="제한없음" autocomplete="off" />
+              <span class="manwon-unit">만원</span>
+            </div>
+          </label>
+          <button type="button" class="btn btn-primary cq-submit-btn" id="cqSubmitBtn">⚡ 최저·추천·최고 3종 견적 뽑기</button>
+        </div>
+        <p id="cqStatus" class="modal-status"></p>
+      </div>
+
       <div id="resultViewBar" class="price-search-toolbar hidden">
         <span id="resultViewMeta"></span>
         <button type="button" class="btn btn-outline btn-sm" id="btnResultViewToggle">📃 리스트로보기</button>
@@ -214,6 +338,11 @@
           <tbody id="resultListBody"></tbody>
         </table>
       </div>
+
+      <!-- 📊 맞춤자동견적 전용: 최저가 · 추천가 · 최고가 3종 한눈에 비교표 & 예상 프레임 리포트 -->
+      <div id="customCompareWrap" class="custom-compare-wrap hidden"></div>
+      <!-- 🛠️ 맞춤자동견적 전용: 비교표에서 고른 견적 한 건의 부품 교체 · 재취합 패널 -->
+      <div id="customSwapPanel" class="cq-swap-panel hidden"></div>
 
       <div id="quoteTabs" class="quote-tabs hidden">
         <div class="tab-bar" id="tabBar"></div>

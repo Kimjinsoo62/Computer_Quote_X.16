@@ -195,3 +195,23 @@ APPLE_CATALOG_SOURCES = {
 APPLE_PRODUCTS: dict[str, list[dict]] = {}
 APPLE_FALLBACK_BOM: dict[str, list[tuple]] = {}
 APPLE_CTO_OPTIONS: dict[str, list[dict]] = {}
+
+# ---------------------------------------------------------------------------
+# 컴퓨존 온라인 견적 추천 부품 기반 맞춤자동견적 (최저가 · 추천가 · 최고가 동시 산출)
+# ---------------------------------------------------------------------------
+ONLINE_MAIN_URL = "https://www.compuzone.co.kr/online/online_main.htm"
+ONLINE_LIST_URL = "https://www.compuzone.co.kr/online/online_list.php"
+
+# 컴퓨존 컴퓨터부품(BigDivNo=4) 추천순(PreOrder=recommand) 카테고리 매핑
+COMPUZONE_PART_DIVS = {
+    "cpu": {"mid": "1012", "category": "CPU", "pages": 4},
+    "cooler": {"mid": "1020", "category": "쿨러/특수냉각", "pages": 3},
+    "motherboard": {"mid": "1013", "category": "메인보드", "pages": 4},
+    "ram": {"mid": "1014", "category": "메모리", "pages": 4},
+    "gpu": {"mid": "1016", "category": "그래픽카드", "pages": 4},
+    "ssd": {"mid": "1276", "category": "SSD", "pages": 3},
+    "case": {"mid": "1147", "category": "케이스", "pages": 3},
+    "psu": {"mid": "1148", "category": "파워", "pages": 3},
+}
+COMPUZONE_ASSEMBLY_PART = ("조립비", "[컴퓨존] 일반조립비 (하드웨어조립/OS는 설치되지않습니다)", 30000, 1, 3877)
+

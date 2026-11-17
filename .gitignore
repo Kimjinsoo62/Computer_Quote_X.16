@@ -1,5 +1,6 @@
 .env
 apple_catalog_cache.json
+compuzone_parts_cache.json
 coupang_config.json
 .venv/
 __pycache__/
