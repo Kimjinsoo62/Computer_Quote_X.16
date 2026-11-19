@@ -1314,6 +1314,7 @@ let hubPage = 1;
 let hubKind = "all"; // all | manual | archive
 
 function qaFormsLabel(e) {
+  if (e.kind === "upload") return "올린 파일";
   const forms = Array.isArray(e.forms) ? e.forms : [];
   const formText = forms.length === 1
     ? `폼${forms[0]} ${EXCEL_FORM_LABELS[forms[0]] || ""}`.trim()
@@ -1329,6 +1330,7 @@ function qaFmtSize(bytes) {
 
 /** 보관 파일의 출처 배지: 직접 작성 / Apple / 컴퓨존 */
 function hubSourceBadge(e) {
+  if (e.kind === "upload") return `<span class="hub-src hub-src-upload" title="📤 견적서 올리기로 넣은 Excel 파일">📤 올림</span>`;
   if (e.kind === "manual") return `<span class="hub-src hub-src-manual">📝 직접작성</span>`;
   if (String(e.category || "").startsWith("apple")) return `<span class="hub-src hub-src-apple">🍎 Apple</span>`;
   return `<span class="hub-src hub-src-cz">💻 컴퓨존</span>`;
@@ -1352,7 +1354,10 @@ function hubAllRows() {
     form: `폼${r.form} ${EXCEL_FORM_LABELS[r.form] || ""}`.trim(),
     total: r.total || 0,
     files: qaEntries.filter((e) => hubOriginOf(e)?.id === r.id).length,
-    search: [r.title, r.customer, r.customer_info?.manager, r.customer_info?.phone],
+    source_pdf: r.source_pdf || "",
+    import_warnings: Array.isArray(r.import_warnings) ? r.import_warnings : [],
+    source_file: r.source_file || "",
+    search: [r.title, r.customer, r.customer_info?.manager, r.customer_info?.phone, r.source_file],
   }));
   const archive = qaEntries.map((e) => ({
     kind: "archive",
@@ -1376,7 +1381,7 @@ function hubRowHtml(r) {
     return `
     <tr class="hub-row-manual" title="${escapeHtml(tip)}">
       <td>${date}</td>
-      <td><span class="hub-kind hub-kind-manual">📝 작성본</span></td>
+      <td><span class="hub-kind hub-kind-manual">📝 작성본</span>${r.source_pdf ? `<span class="hub-src hub-src-upload" title="📤 PDF 에서 읽어 만든 작성본">📤 PDF</span>` : ""}${r.import_warnings.length ? `<span class="hub-src hub-src-warn" title="${escapeHtml("PDF 에서 읽은 내용을 확인해 주세요 (✏️ 열기 → 💾 저장하면 사라짐)\n· " + r.import_warnings.join("\n· "))}">⚠️ 확인</span>` : ""}</td>
       <td class="qa-ellip">${escapeHtml(r.customer || "-")}</td>
       <td class="qa-ellip">${escapeHtml(r.title)}${r.files ? ` <span class="hub-files" title="이 작성본에서 만든 보관 파일 수">📥${r.files}</span>` : ""}</td>
       <td class="qa-ellip">${escapeHtml(r.form)}</td>
@@ -1385,6 +1390,7 @@ function hubRowHtml(r) {
         <div class="tr-list-actions">
           <button type="button" class="btn btn-xs btn-primary" data-act="edit" data-kind="manual" data-id="${id}" title="작성 창에서 열어 고치거나 미리보기 · 이메일로 보냅니다">✏️ 열기</button>
           <button type="button" class="btn btn-xs btn-outline" data-act="excel" data-kind="manual" data-id="${id}" title="저장된 서식으로 Excel 을 받고 보관 파일로도 남깁니다">📥 Excel</button>
+          ${r.source_pdf ? `<button type="button" class="btn btn-xs btn-outline" data-act="srcpdf" data-kind="manual" data-id="${id}" title="📤 올린 원본 PDF(${escapeHtml(r.source_file || "")})를 새 탭으로 엽니다">📄 원본</button>` : ""}
           <button type="button" class="btn btn-xs btn-shutdown" data-act="del" data-kind="manual" data-id="${id}" title="작성본 삭제 (보관 파일은 남습니다)">✕ 삭제</button>
         </div>
       </td>
@@ -1624,6 +1630,7 @@ $("#qaTbody")?.addEventListener("click", (e) => {
     const rec = mqList.find((r) => r.id === id);
     if (act === "edit" && rec) openMqEditor(rec);
     else if (act === "excel" && rec) downloadMqExcel(rec);
+    else if (act === "srcpdf") window.open(`/api/manual-quotes/${encodeURIComponent(id)}/source-pdf`, "_blank", "noopener");
     else if (act === "del") deleteMq(id);
     return;
   }
@@ -1636,6 +1643,52 @@ $("#qaTbody")?.addEventListener("click", (e) => {
     if (rec) openMqEditor(rec);
   }
 });
+// 📤 견적서 올리기: Excel 은 보관 파일로, PDF 는 읽어서 작성본으로 (서버 app/quote_import.py)
+$("#qaBtnUpload")?.addEventListener("click", () => {
+  const inp = $("#qaUploadFile");
+  if (!inp) return;
+  inp.value = "";
+  inp.click();
+});
+$("#qaUploadFile")?.addEventListener("change", async (e) => {
+  const files = [...(e.target.files || [])];
+  if (!files.length) return;
+  const done = [];
+  const failed = [];
+  let lastManual = null;
+  for (let i = 0; i < files.length; i += 1) {
+    const f = files[i];
+    showBusy(`견적서 올리는 중… (${i + 1}/${files.length}) ${f.name}${/\.pdf$/i.test(f.name) ? " — PDF 품목 읽는 중" : ""}`);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await fetch("/api/quotes/upload", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `올리기 실패 (${res.status})`);
+      if (data.kind === "manual") {
+        lastManual = data.quote;
+        const q = data.quote;
+        const head = `📝 ${f.name} → 작성본 (품목 ${q.items.length}줄 · ${fmt(data.items_total)}원${data.grand_total ? ` / PDF 합계 ${fmt(data.grand_total)}원` : ""})`;
+        done.push([head, ...(data.warnings || []).map((w) => `   ⚠️ ${w}`)].join("\n"));
+      } else {
+        const en = data.entry;
+        done.push(`📥 ${f.name} → 보관 파일${en.customer ? ` (거래처 ${en.customer})` : ""}${en.total ? ` · ${fmt(en.total)}원` : ""}`);
+      }
+    } catch (err) {
+      failed.push(`✕ ${f.name}: ${err.message}`);
+    }
+  }
+  hideBusy();
+  await refreshQuoteHub();
+  const lines = [];
+  if (done.length) lines.push(`✔ ${done.length}개 올림`, ...done);
+  if (failed.length) lines.push("", `✕ ${failed.length}개 실패`, ...failed);
+  const one = files.length === 1 && lastManual;
+  if (one) lines.push("", "확인을 누르면 작성 창이 열립니다. PDF 에서 읽은 품목 · 견적처가 맞는지 확인하고 필요하면 고쳐 💾 저장하세요.");
+  alert(lines.join("\n"));
+  if (one) openMqEditor(mqList.find((r) => r.id === lastManual.id) || lastManual);
+});
+
 // 시작 시 견적서 탭의 건수 배지 (작성본은 아래 새 견적 만들기 코드 끝에서 읽는다)
 loadQuoteArchive();
 

@@ -1881,6 +1881,8 @@ html.calc-html body {
 .hub-kind-manual { background: rgba(59, 130, 246, 0.18); color: #60a5fa; }
 .hub-kind-archive { background: rgba(148, 163, 184, 0.18); color: var(--muted); }
 .hub-src { display: inline-block; margin-left: 4px; font-size: 0.85em; color: var(--muted); white-space: nowrap; }
+.hub-src-upload { color: #0ea5e9; }
+.hub-src-warn { color: #f59e0b; font-weight: 700; }
 .hub-files { font-size: 0.85em; color: var(--muted); margin-left: 4px; }
 .hub-table .tr-list-actions { flex-wrap: nowrap; }
 .hub-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }

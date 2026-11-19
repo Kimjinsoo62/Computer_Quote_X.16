@@ -1456,8 +1456,73 @@ def api_get_manual_quotes():
 
 @app.post("/api/manual-quotes")
 def api_save_manual_quote(data: dict = Body(...)):
-    """id 가 있으면 수정, 없으면 새로 저장."""
-    return {"status": "ok", "quote": manual_quote.save_manual_quote(data)}
+    """id 가 있으면 수정, 없으면 새로 저장. 작성 창에서 저장하면 📤 PDF 가져오기 경고(import_warnings)는 확인한 것으로 지운다."""
+    rec = manual_quote.save_manual_quote(data)
+    if rec.get("import_warnings"):
+        rec = manual_quote.set_fields(rec["id"], import_warnings=[]) or rec
+    return {"status": "ok", "quote": rec}
+
+
+@app.post("/api/quotes/upload")
+async def api_quote_upload(file: UploadFile = File(...)):
+    """📤 견적서 올리기. Excel(.xlsx)은 그대로 보관 파일로, PDF 는 품목을 읽어 📝 작성본(폼1)으로 만든다(app/quote_import.py)."""
+    from starlette.concurrency import run_in_threadpool
+
+    from app import quote_import
+
+    name = file.filename or ""
+    low = name.lower()
+    content = await file.read(quote_import.MAX_UPLOAD_BYTES + 1)
+    if len(content) > quote_import.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="파일이 너무 큽니다(20MB 이하).")
+    title = quote_import.title_from_filename(name)
+    try:
+        if low.endswith(".xlsx"):
+            quote_import.check_xlsx(content)
+            summary = await run_in_threadpool(quote_import.summarize_xlsx, content)
+            entry = quote_archive.add_entry(content, filename=name, meta={
+                "kind": "upload",
+                "model": title,
+                "customer": summary["customer"],
+                "total": summary["total"],
+                "quote_date": summary["quote_date"],
+                "forms": [],
+            })
+            return {"kind": "archive", "entry": entry}
+        if low.endswith(".pdf"):
+            # PDF 읽기는 PDFium 잠금을 기다릴 수 있어 이벤트 루프 밖에서 한다(다른 요청이 멈추지 않게)
+            parsed = await run_in_threadpool(quote_import.parse_pdf, content)
+            rec = manual_quote.save_manual_quote({
+                "form": 1,
+                "title": title,
+                "quote_date": parsed["quote_date"] or date.today().isoformat(),
+                "customer_info": parsed["customer_info"],
+                "items": parsed["items"],
+            })
+            manual_quote.MANUAL_PDF_DIR.mkdir(parents=True, exist_ok=True)
+            (manual_quote.MANUAL_PDF_DIR / f"{rec['id']}.pdf").write_bytes(content)
+            rec = manual_quote.set_fields(rec["id"], source_pdf=f"{rec['id']}.pdf", source_file=name[:200],
+                                          import_warnings=parsed["warnings"]) or rec
+            return {"kind": "manual", "quote": rec, "warnings": parsed["warnings"],
+                    "items_total": parsed["items_total"], "grand_total": parsed["grand_total"]}
+        if low.endswith((".xls", ".xlsm")):
+            raise quote_import.ImportError_("예전 형식(.xls) · 매크로 파일(.xlsm)은 넣을 수 없습니다. Excel 에서 [다른 이름으로 저장 → "
+                                            "Excel 통합 문서(.xlsx)]로 바꿔 올려 주세요.")
+        raise quote_import.ImportError_("Excel(.xlsx) 또는 PDF 파일만 올릴 수 있습니다.")
+    except quote_import.ImportError_ as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/api/manual-quotes/{quote_id}/source-pdf")
+def api_manual_quote_source_pdf(quote_id: str):
+    """📤 PDF 에서 만든 작성본의 원본 PDF 를 새 탭으로 본다."""
+    rec = manual_quote.get_manual_quote(quote_id)
+    path = manual_quote.source_pdf_path(rec) if rec else None
+    if not path:
+        raise HTTPException(status_code=404, detail="원본 PDF 가 없습니다.")
+    stem = quote_archive.safe_filename_part(rec.get("source_file") or f"{quote_id}.pdf", 120) or "견적서.pdf"
+    return Response(content=path.read_bytes(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=\"source.pdf\"; filename*=UTF-8''{quote(stem)}"})
 
 
 @app.delete("/api/manual-quotes/{quote_id}")

@@ -7,7 +7,7 @@
       customers/                  customers.json(거래처 목록)
       trade_statements/           trade_statements.json(거래명세서 목록) + signed/(서명받은 명세서 스캔 · 사진)
       task_reports/               task_reports.json(작업내역서)
-      manual_quotes/              manual_quotes.json(📝 새 견적 만들기 작성본)
+      manual_quotes/              manual_quotes.json(📝 새 견적 만들기 작성본) + pdf/(📤 올린 PDF 원본)
       quote_archive/              index.json + 보관한 견적서 xlsx
       cache/                      Apple · 컴퓨존 수집 스냅샷(지워도 다시 받음)
 
@@ -41,6 +41,7 @@ README_TEXT = """컴퓨존 견적 자동화 — 데이터 폴더
   trade_statements\\signed\\          서명받은 거래명세서 스캔 · 사진
   task_reports\\task_reports.json    📋 작업내역서
   manual_quotes\\manual_quotes.json  📝 새 견적 만들기 작성본
+  manual_quotes\\pdf\\              📤 견적서 올리기로 넣은 PDF 원본 (작성본마다 하나)
   quote_archive\\                    🗂️ 견적서 보관함 (index.json + 견적서 xlsx)
   cache\\                            Apple · 컴퓨존 수집 스냅샷 (지워도 다음 수집 때 다시 만들어짐)
 
@@ -134,6 +135,8 @@ MANUAL_QUOTES_FILE: Path = _P["manual_quotes"]
 QUOTE_ARCHIVE_DIR: Path = _P["quote_archive"]
 APPLE_CACHE_FILE: Path = _P["apple_cache"]
 PARTS_CACHE_FILE: Path = _P["parts_cache"]
+# 📤 견적서 올리기로 PDF 에서 만든 작성본의 원본 PDF (옛 위치 없음 — 이전 대상 아님)
+MANUAL_PDF_DIR: Path = MANUAL_QUOTES_FILE.parent / "pdf"
 
 
 def describe() -> dict[str, str]:

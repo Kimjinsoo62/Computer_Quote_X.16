@@ -17,6 +17,7 @@ from app.quote_engine import Quote, QuotePart, TodayQuotesResult
 from app.quote_info import load_quote_info
 
 from app.data_paths import MANUAL_QUOTES_FILE as DATA_FILE  # data/manual_quotes/manual_quotes.json
+from app.data_paths import MANUAL_PDF_DIR  # data/manual_quotes/pdf/ (📤 올린 PDF 원본)
 TAB_LABEL = "직접견적"
 # 폼 시트는 A4 세로 1페이지로 강제되므로 행이 너무 많으면 글자가 읽기 어려울 만큼 줄어든다.
 MAX_ITEMS = 20
@@ -163,10 +164,38 @@ def save_manual_quote(data: dict[str, Any]) -> dict[str, Any]:
     return rec
 
 
+def set_fields(quote_id: str, **fields: Any) -> dict[str, Any] | None:
+    """작성본에 화면에서 고치지 않는 값(가져온 PDF 원본 파일명 등)을 붙인다. save_manual_quote 는 이 값을 그대로 둔다."""
+    records = load_manual_quotes()
+    for rec in records:
+        if rec.get("id") == quote_id:
+            rec.update(fields)
+            _save_all(records)
+            return rec
+    return None
+
+
+def source_pdf_path(rec: dict[str, Any]) -> Path | None:
+    """📤 PDF 에서 만든 작성본의 원본 PDF 경로(없으면 None). 파일 이름은 서버가 정한 '{id}.pdf' 만 쓴다."""
+    name = str(rec.get("source_pdf") or "")
+    if not name or name != f"{rec.get('id')}.pdf":
+        return None
+    p = MANUAL_PDF_DIR / name
+    return p if p.is_file() else None
+
+
 def delete_manual_quote(quote_id: str) -> bool:
     records = load_manual_quotes()
     kept = [r for r in records if r.get("id") != quote_id]
     if len(kept) == len(records):
         return False
+    for r in records:
+        if r.get("id") == quote_id:
+            p = source_pdf_path(r)
+            if p:
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
     _save_all(kept)
     return True

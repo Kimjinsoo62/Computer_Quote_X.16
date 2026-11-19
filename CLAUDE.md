@@ -47,6 +47,7 @@ templates/index.html + static/js/app.js  ──fetch──▶  app/main.py (모�
 - 카테고리 키: 컴퓨존 `ai`(AI PC 기획전) · `premium`/`iworks`/`recommend`(`config.ASSEMBLED_CATEGORIES`) · `custom`(`custom_builder.py` 컴퓨존 추천부품 기반 최저가·추천가·최고가 3종 맞춤자동견적. 목록 API 는 `needs_custom_wizard`만 돌려주고 실제 견적은 `GET /api/custom-quote/options` → `POST /api/custom-quote/build`. 부품 카탈로그는 8개 부품군을 병렬 수집해 메모리 15분(`PART_CATALOG_TTL_SEC`) 캐시, 필수 부품군이 하나라도 비면 `compuzone_parts_cache.json` 스냅샷으로 폴백) · `game`(게임으로 PC 찾기, 위자드) · `price`(금액대로 찾기, `price_type=assembled|notebook`) · Apple `apple_<cat>`(`config.APPLE_CATEGORIES`).
 - 수집은 **urllib + 정규식 + 페이지에 내장된 JSON 파싱만** 쓴다. README는 BeautifulSoup을 언급하지만 `requirements.txt`에도 없고 import하지 않는다. 새 수집 코드도 urllib 기반으로 맞춘다.
 - 서비스 모듈: `shutdown_service.py`(종료 API 실제 동작), `update_service.py`(git fetch/pull/재시작), `calc_window.py`(계산기를 별도 브라우저 프로세스로 띄움, 프로필 `AI-PC-Quote-Calc`), `quote_info.py` · `task_report.py`(JSON 파일 저장).
+- 📤 견적서 올리기(`POST /api/quotes/upload`, `app/quote_import.py`): `.xlsx`는 그대로 보관 파일(`kind: "upload"`)로, PDF 는 품목을 읽어 📝 작성본(폼1)으로 만들고 원본을 `data/manual_quotes/pdf/{id}.pdf`(`data_paths.MANUAL_PDF_DIR`, 작성본 `source_pdf`)에 둔다. PDF 글자 순서는 서식마다 뒤섞이므로(폼3 · 폼5) **pypdfium2 text rect 위치로 줄 · 칸을 다시 세운다**. 품목 줄 = 수량×단가=금액 또는 수량+금액, 머리글에 구분 칸이 있으면 첫 글자 칸을 구분으로. 읽은 합계를 PDF 의 합계와 비교해 `warnings`로 돌려주고(공급가로 보이면 ×1.1, 요약 줄 제거), 스캔 PDF · 품목 0줄은 저장하지 않고 400. PDFium 호출은 모두 `pdf_export._pdfium_lock` 안에서. 폼1~8 PDF(앱이 만든 것)로만 시험했으므로 손으로 만든 견적서 모양을 고치면 `_item_from_row` · `_extract_meta`를 본다.
 - 포트 8091은 어느 코드도 바인딩하지 않는다. 종료 스크립트가 8090과 함께 정리하는 예약 포트일 뿐이다.
 
 ### 프론트엔드
