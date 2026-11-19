@@ -1885,6 +1885,9 @@ html.calc-html body {
 .hub-src-warn { color: #f59e0b; font-weight: 700; }
 .hub-files { font-size: 0.85em; color: var(--muted); margin-left: 4px; }
 .hub-table .tr-list-actions { flex-wrap: nowrap; }
+/* 설정 창 목록의 버튼은 한글까지 보이므로(iconbtn 제외) 한 줄에 붙여 놓는다 */
+.settings-panel .tr-list-actions { flex-wrap: nowrap; gap: 3px; }
+.settings-panel .tr-list-actions .btn { white-space: nowrap; }
 .hub-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .hub-foot .qa-hint { flex: 1; margin: 0; }
 .hub-pager { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
@@ -2545,3 +2548,5 @@ td > .mqp-in.w-email { width: 52%; }
   color: #94a3b8;
   margin-top: 2px;
 }
+/* 거래처 목록: 연락처는 한 줄로 */
+#custTbody td:nth-child(3) { white-space: nowrap; }

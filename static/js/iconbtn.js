@@ -7,14 +7,16 @@
  *   말풍선은 마우스를 올린 그 순간의 글자를 읽는다.
  * - 데이터 표시(마진 · 건수 배지 · 포함/제외 토글 상태)는 IB_KEEP 으로 계속 보이게 둔다.
  *   📇 거래처명 · 🌐 IP 주소는 숨기고 말풍선에 보여 준다.
- * - 제외: 게임/해상도 카드 · 서식 카드 · 견적 탭 · 폼 탭 등 내용 카드, 견적 카테고리 줄(.hero-actions)(IB_SKIP), 또는 data-ib-skip.
+ * - 제외: 게임/해상도 카드 · 서식 카드 · 견적 탭 · 폼 탭 등 내용 카드, 견적 카테고리 줄(.hero-actions),
+ *   ⚙️ 설정 창(#settingsModal) 안의 탭 · 도구 · 목록 버튼(IB_SKIP), 또는 data-ib-skip.
  * - data-tip="제목" 을 주면 그 글자를 말풍선 제목으로 쓰고, 숨긴 글자가 있으면 뒤에 붙인다(예: "네트워크 접속 주소 192.168.0.13:8090").
  */
 (function () {
   "use strict";
 
   const IB_CANDIDATE = "button, a.btn, .store-tab";
-  const IB_SKIP = ".game-card, .resolution-card, .mq-form-card, .tab-btn, .fg-tab, .game-step-tab, .game-chip-x, .cq-preset-btn, .cq-chip, .custom-quote-panel button, .hero-actions button, .cq-swap-open, .cq-swap-panel button, [data-ib-skip]";
+  // #settingsModal: 설정 창은 탭 · 도구 · 목록 버튼이 많아 이모지만으로는 알아보기 어려워 한글을 그대로 보인다
+  const IB_SKIP = ".game-card, .resolution-card, .mq-form-card, .tab-btn, .fg-tab, .game-step-tab, .game-chip-x, .cq-preset-btn, .cq-chip, .custom-quote-panel button, .hero-actions button, .cq-swap-open, .cq-swap-panel button, #settingsModal button, [data-ib-skip]";
   const IB_KEEP = ".ib-keep, #marginCycleLabel, .archive-count, [data-hub-count]";
   // 맨 앞 이모지(변형 선택자 · ZWJ 결합 포함) + 메뉴에 쓰는 기호
   const LEAD_RE = /^\s*((?:\p{Extended_Pictographic}|[✕×↺⬅＋←])(?:️|‍(?:\p{Extended_Pictographic}))*)/u;
