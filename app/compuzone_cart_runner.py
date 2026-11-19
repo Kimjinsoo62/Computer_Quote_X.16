@@ -165,15 +165,29 @@ class Runner:
             pause(0.3, 0.8)
             self.type_like_human("#member_password", password)
             pause(0.5, 1.2)
+            # 입력한 값이 저장된 값과 똑같은지 되읽어 확인한다(기록에는 길이만 남긴다). 다르면 그대로 다시 넣는다
+            got_id = self.page.locator("#member_id").first.input_value()
+            got_pw = self.page.locator("#member_password").first.input_value()
+            if got_id != user or got_pw != password:
+                emit(job, "log", msg=f"입력 확인: 칸 값이 달라 다시 넣습니다(아이디 {len(got_id)}/{len(user)}자 · 비밀번호 {len(got_pw)}/{len(password)}자)")
+                self.page.locator("#member_id").first.fill(user)
+                self.page.locator("#member_password").first.fill(password)
+                pause(0.3, 0.7)
+            else:
+                emit(job, "log", msg=f"입력 확인: 아이디 {len(user)}자 · 비밀번호 {len(password)}자 — 저장된 값과 같음")
             self.page.locator("#login-btn").first.click()
-            for _ in range(30):
+            # 제출하면 login_function.php 로 갔다가, 틀렸으면 그 페이지에서 알림을 띄우고 로그인 화면으로 돌아온다.
+            # 알림이 늦게 뜰 수 있으므로 '알림이 떴다' 또는 '로그인 · 처리 페이지가 아닌 곳에 도착했다' 중 하나가 될 때까지 기다린다
+            for _ in range(40):
                 wait(0.5)
-                if self.dialogs or "login.htm" not in self.page.url:
+                url = self.page.url
+                if self.dialogs or ("login.htm" not in url and "login_function" not in url):
                     break
             try:
                 self.page.wait_for_load_state("domcontentloaded", timeout=20000)
             except Exception:
                 pass
+            wait(1.0)  # 늦게 뜨는 알림까지 받는다
         finally:
             self.auto_dialogs = False
         if "login.htm" not in self.page.url and self.logged_in(job):
@@ -181,8 +195,12 @@ class Runner:
             return True
         msg = self.dialogs[-1] if self.dialogs else ""
         if msg and any(k in msg for k in ("일치", "확인", "잘못", "틀", "없는")):
-            emit(job, "error", msg=f"로그인 실패: {msg} — ⚙️ 설정에서 컴퓨존 아이디 · 비밀번호를 확인해 주세요.")
-            return False
+            # 컴퓨존이 아이디 · 비밀번호를 거절했다. 다시 자동으로 넣지 않는다(5회 넘게 틀리면 컴퓨존이 보안 인증을 요구한다).
+            # 대신 열린 창에서 직접 로그인하면 이어서 담는다
+            emit(job, "need_user", msg=f"컴퓨존이 로그인을 거절했습니다: '{msg.strip()[:60]}'. 저장된 아이디 · 비밀번호가 컴퓨존과 다릅니다"
+                                       "(카카오 · 네이버로 가입한 계정은 컴퓨존 비밀번호가 따로 없습니다). 열린 창에서 직접 로그인하시면 이어서 담습니다 — "
+                                       f"{USER_WAIT_SEC // 60}분 동안 기다립니다. ⚙️ 설정의 컴퓨존 계정도 고쳐 주세요.")
+            return self.wait_user_login(job)
         emit(job, "need_user", msg="로그인에 보안 확인(캡차 · 추가 인증 등)이 필요합니다. 열린 창에서 직접 로그인을 마쳐 주세요. "
                                    f"{USER_WAIT_SEC // 60}분 동안 기다립니다.")
         return self.wait_user_login(job)

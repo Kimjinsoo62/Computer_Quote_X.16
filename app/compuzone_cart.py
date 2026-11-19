@@ -95,8 +95,8 @@ def _reader(proc: subprocess.Popen) -> None:
                            need_user="")
                 job["step"] = job.get("total", 1)
             elif typ == "error":
+                # 오류는 진행 창 아래 결과 칸에 한 번만 보인다(기록에 또 넣지 않음)
                 job.update(state="error", error=msg.get("msg", ""), need_user="")
-                job["log"].append("✕ " + msg.get("msg", ""))
     # 프로그램이 끝났는데 진행 중인 작업이 있으면 실패로
     with _lock:
         for j in _jobs.values():
