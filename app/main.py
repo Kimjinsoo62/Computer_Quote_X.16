@@ -1463,6 +1463,50 @@ def api_save_manual_quote(data: dict = Body(...)):
     return {"status": "ok", "quote": rec}
 
 
+# ---------------------------------------------------------------------------
+# 🛒 컴퓨존 장바구니 담기 (app/compuzone_cart.py → 작업 프로그램 app/compuzone_cart_runner.py, Playwright + Edge)
+# ---------------------------------------------------------------------------
+@app.get("/api/compuzone/account")
+def api_compuzone_account():
+    from app import compuzone_cart
+
+    return {**compuzone_cart.get_account(), "playwright": compuzone_cart.playwright_available()}
+
+
+@app.post("/api/compuzone/account")
+def api_compuzone_account_save(payload: dict = Body(...)):
+    """아이디 · 비밀번호 저장(비밀번호는 DPAPI 암호화). 비밀번호를 비우면 기존 비밀번호 유지, 아이디를 비우면 삭제."""
+    from app import compuzone_cart
+
+    try:
+        return compuzone_cart.set_account(str(payload.get("user") or ""), str(payload.get("password") or ""))
+    except (ValueError, OSError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.post("/api/compuzone/cart")
+def api_compuzone_cart(payload: dict = Body(...)):
+    """카드의 컴퓨존 상품들을 장바구니에 담는 작업을 시작한다. 진행은 GET /api/compuzone/cart/{id}."""
+    from app import compuzone_cart
+
+    try:
+        return compuzone_cart.start(payload.get("items") or [], str(payload.get("label") or ""))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@app.get("/api/compuzone/cart/{job_id}")
+def api_compuzone_cart_status(job_id: str):
+    from app import compuzone_cart
+
+    try:
+        return compuzone_cart.status(job_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="장바구니 작업을 찾을 수 없습니다.") from e
+
+
 @app.post("/api/quotes/upload")
 async def api_quote_upload(file: UploadFile = File(...)):
     """📤 견적서 올리기. Excel(.xlsx)은 그대로, PDF 는 그 모양 그대로 Excel 로 바꿔(app/pdf_to_excel.py) 📥 보관 파일로 넣는다.

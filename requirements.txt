@@ -6,3 +6,4 @@ python-multipart>=0.0.9
 python-dotenv>=1.0.0
 Pillow>=10.0.0
 pypdfium2>=4.30.0
+playwright>=1.47.0

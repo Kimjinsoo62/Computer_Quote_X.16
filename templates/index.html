@@ -365,6 +365,24 @@
     </div>
   </footer>
 
+  <!-- 🛒 컴퓨존 장바구니 담기 진행 창 (app.js startCompuzoneCart → GET /api/compuzone/cart/{id}) -->
+  <div id="czCartModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal cz-cart-modal" role="dialog" aria-labelledby="czCartTitle">
+      <div class="modal-header">
+        <h3 id="czCartTitle">🧺 컴퓨존 장바구니 담기</h3>
+        <button type="button" class="modal-close btn-modal-close" id="czCartClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <div id="czCartLabel" class="cz-cart-label"></div>
+        <div class="cz-cart-bar"><div id="czCartBarFill"></div></div>
+        <div id="czCartNeed" class="cz-cart-need hidden"></div>
+        <ol id="czCartLog" class="cz-cart-log"></ol>
+        <div id="czCartResult" class="cz-cart-result"></div>
+        <p class="qa-hint">컴퓨존 작업은 따로 열린 Edge 창에서 사람이 쓰듯 천천히 진행됩니다. 다 담으면 그 창에 컴퓨존 장바구니가 열립니다(그 창을 닫기 전까지 로그인 상태가 유지됩니다).</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ⚙️ 설정: 🧩 견적요소 | 📒 거래처 · 🗂️ 견적서 · 📋 작업내역서 를 한 곳에서 관리 -->
   <div id="settingsModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal modal-xl settings-modal" role="dialog" aria-labelledby="settingsTitle">
@@ -456,6 +474,22 @@
                     </label>
                   </div>
                   <small>계좌번호를 입력하면 모든 Excel 견적서 하단에 입금 계좌가 표시됩니다. 비워두면 표시하지 않습니다.</small>
+                </fieldset>
+                <!-- 🛒 컴퓨존 계정 (카드의 🛒 컴퓨존 장바구니용). 견적 정보와 따로 저장된다(app_settings.json, 비밀번호 DPAPI 암호화) -->
+                <fieldset class="modal-group extra-price-group cz-acct-group">
+                  <legend>🧺 컴퓨존 계정 (장바구니 담기)</legend>
+                  <div class="extra-price-grid">
+                    <label>아이디
+                      <input type="text" id="czUser" placeholder="컴퓨존 아이디" autocomplete="off" />
+                    </label>
+                    <label>비밀번호
+                      <input type="password" id="czPass" placeholder="비밀번호" autocomplete="new-password" />
+                    </label>
+                    <label>&nbsp;
+                      <button type="button" class="btn btn-outline btn-sm" id="czAcctSave" title="컴퓨존 아이디 · 비밀번호를 이 PC 에 저장합니다(비밀번호는 암호화). 비밀번호를 비우고 저장하면 아이디만 바꿉니다">💾 계정 저장</button>
+                    </label>
+                  </div>
+                  <small id="czAcctStatus">견적 카드의 🧺 컴퓨존 장바구니를 누르면 이 계정으로 로그인해 그 견적의 상품을 컴퓨존 장바구니에 담고 장바구니를 보여 줍니다. 비밀번호는 이 PC 에서만 풀리게 암호화해 저장합니다.</small>
                 </fieldset>
               </div>
             </div>

@@ -567,7 +567,10 @@ function summaryCardHtml(q, i) {
         </button>` : ""}` : `
         <a href="${q.url}" target="_blank" rel="noopener" class="btn btn-sm btn-buy" onclick="event.stopPropagation()">
           🛍️ 상품상세 ↗
-        </a>`}
+        </a>
+        <button type="button" class="btn btn-sm btn-cz-cart" title="저장한 컴퓨존 계정으로 로그인해 이 견적의 상품을 컴퓨존 장바구니에 담고 장바구니를 보여 줍니다" onclick="startCompuzoneCart(${i}, event)">
+          🧺 컴퓨존 장바구니
+        </button>`}
         ${apple ? "" : `
         <button type="button" class="btn btn-sm btn-danawa" title="컴퓨존 사양(CPU · 그래픽카드 · RAM · SSD)과 가장 비슷한 다나와 완제품 PC를 찾습니다" onclick="openSimilarCompare('danawa', ${i}, event)">
           🔍 다나와
@@ -594,6 +597,136 @@ function summaryCardHtml(q, i) {
       </div>
     </div>`;
 }
+
+// ---------- 🛒 컴퓨존 장바구니 담기 (서버 app/compuzone_cart.py → Playwright 로 Edge 를 사람처럼 조작) ----------
+/** 카드 하나에서 컴퓨존에 담을 상품 [{pno, qty, category, name}] 과 담지 못하는 줄(상품 번호 없음). */
+function compuzoneCartItems(i) {
+  const q = (quoteData?.quotes || [])[i];
+  if (!q) return { items: [], skipped: [] };
+  const tierMeta = quoteData?.engine === "custom_405_compuzone" ? quoteData?.custom_meta?.tiers?.[i] : null;
+  if (tierMeta && Array.isArray(tierMeta.part_details)) {
+    // 맞춤자동견적: 부품 8종 + 조립비를 각각(메모리 2개처럼 수량도). 모니터 · 키보드 같은 추가 품목은 상품 번호가 없어 뺀다
+    const items = tierMeta.part_details.filter((d) => d.pno).map((d) => ({ pno: d.pno, qty: d.qty || 1, category: d.category, name: d.name }));
+    const inCart = new Set(tierMeta.part_details.map((d) => d.category));
+    const skipped = (q.parts || []).filter((p) => !inCart.has(p.category) && (p.amount || 0) > 0).map((p) => `${p.category} ${p.name}`);
+    return { items, skipped };
+  }
+  if (!q.product_no) return { items: [], skipped: [] };
+  // 완제품 조립PC · 노트북: 상품 하나. 카드에 더한 모니터 · 키보드 · 세팅비 같은 추가 줄은 따로 담지 않는다
+  const extras = (q.parts || []).filter((p) => ["모니터", "키보드마우스", "초기 세팅비", "추가"].some((k) => String(p.category || "").includes(k)));
+  return {
+    items: [{ pno: q.product_no, qty: 1, category: q.tab_label || q.tier || "", name: q.model || "" }],
+    skipped: extras.map((p) => `${p.category} ${p.name}`),
+  };
+}
+
+let czCartTimer = null;
+
+async function startCompuzoneCart(i, ev) {
+  ev?.stopPropagation?.();
+  const q = (quoteData?.quotes || [])[i];
+  const { items, skipped } = compuzoneCartItems(i);
+  if (!items.length) {
+    alert("이 카드에는 컴퓨존 상품 번호가 없어 장바구니에 담을 수 없습니다.");
+    return;
+  }
+  let acct = {};
+  try {
+    acct = await (await fetch("/api/compuzone/account", { cache: "no-store" })).json();
+  } catch (_) { /* 아래에서 안내 */ }
+  if (acct.playwright === false) {
+    alert("장바구니 담기에 필요한 Playwright 가 설치되어 있지 않습니다. install.bat 을 다시 실행해 주세요.");
+    return;
+  }
+  const lines = items.map((it) => `· ${it.category ? `[${it.category}] ` : ""}${it.name}${it.qty > 1 ? ` ×${it.qty}` : ""}`);
+  const msg = [
+    `컴퓨존 장바구니에 ${items.length}개 상품을 담습니다.`,
+    acct.configured ? `계정: ${acct.user}` : "⚠️ 저장된 컴퓨존 계정이 없습니다 — 열리는 창에서 직접 로그인하시면 이어서 담습니다(⚙️ 설정 → 🧩 견적요소에서 저장할 수 있습니다).",
+    "",
+    ...lines.slice(0, 14),
+    lines.length > 14 ? `… 외 ${lines.length - 14}개` : "",
+    skipped.length ? `\n담지 않는 줄(컴퓨존 상품 번호 없음): ${skipped.join(", ")}` : "",
+  ].filter((x) => x !== "").join("\n");
+  if (!confirm(msg)) return;
+  let job;
+  try {
+    const res = await postJsonRaw("/api/compuzone/cart", { items, label: `${q?.tab_label || ""} ${q?.model || ""}`.trim() });
+    if (!res.ok) throw new Error(res.data.detail || `시작 실패 (${res.status})`);
+    job = res.data;
+  } catch (e) {
+    alert("🧺 컴퓨존 장바구니 담기를 시작하지 못했습니다\n\n" + e.message);
+    return;
+  }
+  showCzCartProgress(job);
+  clearInterval(czCartTimer);
+  czCartTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/compuzone/cart/${encodeURIComponent(job.id)}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const st = await r.json();
+      showCzCartProgress(st);
+      if (st.state !== "running") clearInterval(czCartTimer);
+    } catch (_) {
+      clearInterval(czCartTimer);
+    }
+  }, 1000);
+}
+
+function showCzCartProgress(st) {
+  const modal = $("#czCartModal");
+  if (!modal) return;
+  show(modal);
+  $("#czCartLabel").textContent = st.label || "";
+  const pct = Math.round(100 * Math.min(1, (st.step || 0) / Math.max(1, st.total || 1)));
+  const fill = $("#czCartBarFill");
+  fill.style.width = `${st.state === "done" ? 100 : pct}%`;
+  fill.classList.toggle("is-error", st.state === "error");
+  const need = $("#czCartNeed");
+  need.textContent = st.need_user || "";
+  need.classList.toggle("hidden", !st.need_user);
+  $("#czCartLog").innerHTML = (st.log || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+  const box = $("#czCartResult");
+  if (st.state === "done" && st.result) {
+    const r = st.result;
+    const fails = (r.failed || []).map((f) => `<li>✕ ${escapeHtml(f.name)} — ${escapeHtml(f.why || "")}</li>`).join("");
+    const qd = (r.qty_diff || []).map((x) => `<li>⚠️ ${escapeHtml(x.name)} — 수량 ${x.want}개 중 ${x.got}개만 담겼습니다(장바구니에서 수량을 맞춰 주세요)</li>`).join("");
+    const al = (r.already || []).map((x) => `<li>ℹ️ ${escapeHtml(x.name)} — 이미 장바구니에 있어 수량이 늘지 않았습니다(현재 ${x.qty}개)</li>`).join("");
+    const n = (st.items || 0);
+    box.innerHTML = `<p class="${r.added === n ? "cz-cart-ok" : "cz-cart-err"}">${r.added === n ? "✔" : "⚠️"} ${n}개 중 ${r.added}개가 장바구니에 담겼습니다(담기 전후 장바구니를 비교해 확인). 컴퓨존 창에 장바구니가 열려 있습니다(장바구니 ${r.in_cart}종).</p>${fails || qd || al ? `<ul>${fails}${qd}${al}</ul>` : ""}`;
+  } else if (st.state === "error") {
+    box.innerHTML = `<p class="cz-cart-err">✕ ${escapeHtml(st.error || "장바구니 담기에 실패했습니다.")}</p>`;
+  } else {
+    box.innerHTML = "";
+  }
+}
+
+$("#czCartClose")?.addEventListener("click", () => hide($("#czCartModal")));
+
+async function loadCzAccount() {
+  try {
+    const a = await (await fetch("/api/compuzone/account", { cache: "no-store" })).json();
+    if ($("#czUser")) $("#czUser").value = a.user || "";
+    if ($("#czPass")) {
+      $("#czPass").value = "";
+      $("#czPass").placeholder = a.has_password ? "저장됨 (바꿀 때만 입력)" : "비밀번호";
+    }
+    const st = $("#czAcctStatus");
+    if (st && a.playwright === false) st.textContent = "⚠️ Playwright 가 설치되어 있지 않습니다. install.bat 을 다시 실행해 주세요.";
+  } catch (_) { /* 설정 창은 그대로 */ }
+}
+
+$("#czAcctSave")?.addEventListener("click", async () => {
+  const user = ($("#czUser")?.value || "").trim();
+  const password = $("#czPass")?.value || "";
+  const res = await postJsonRaw("/api/compuzone/account", { user, password });
+  const st = $("#czAcctStatus");
+  if (!res.ok) {
+    if (st) st.textContent = "✕ " + (res.data.detail || "저장하지 못했습니다.");
+    return;
+  }
+  if (st) st.textContent = res.data.user ? `✔ 컴퓨존 계정을 저장했습니다 (${res.data.user}). 비밀번호는 이 PC 에서만 풀리게 암호화했습니다.` : "✔ 컴퓨존 계정을 지웠습니다.";
+  loadCzAccount();
+});
 
 function bindSummaryCardEvents(container) {
   if (!container) return;
@@ -2354,6 +2487,7 @@ function openSettings(tab = settingsTab) {
   if (!settingsModal) return;
   custSelectedName = "";
   qiFillForm(quoteInfo);
+  loadCzAccount();
   show(settingsModal);
   switchSettingsTab(tab);
   updateBlinkWarnings();

@@ -44,6 +44,7 @@ README_TEXT = """컴퓨존 견적 자동화 — 데이터 폴더
   manual_quotes\\pdf\\              📤 견적서 올리기로 넣은 PDF 원본 (작성본마다 하나)
   quote_archive\\                    🗂️ 견적서 보관함 (index.json + 견적서 xlsx)
   cache\\                            Apple · 컴퓨존 수집 스냅샷 (지워도 다음 수집 때 다시 만들어짐)
+  AI-PC-Quote-Compuzone\\            🧺 컴퓨존 장바구니 담기용 Edge 프로필 (컴퓨존 로그인 상태가 들어 있음 — 다른 사람에게 넘길 때는 지우세요)
 
 앱이 켜져 있을 때 이 파일들을 직접 고치지 마세요(앱이 저장하면서 덮어씁니다).
 """
@@ -137,6 +138,8 @@ APPLE_CACHE_FILE: Path = _P["apple_cache"]
 PARTS_CACHE_FILE: Path = _P["parts_cache"]
 # 📤 견적서 올리기로 PDF 에서 만든 작성본의 원본 PDF (옛 위치 없음 — 이전 대상 아님)
 MANUAL_PDF_DIR: Path = MANUAL_QUOTES_FILE.parent / "pdf"
+# 🛒 컴퓨존 장바구니 담기용 앱 전용 Edge 프로필(로그인 상태 유지). 폴더 이름이 종료 정리의 표식이므로 바꾸지 않는다.
+COMPUZONE_PROFILE_DIR: Path = DATA_DIR / "AI-PC-Quote-Compuzone"
 
 
 def describe() -> dict[str, str]:

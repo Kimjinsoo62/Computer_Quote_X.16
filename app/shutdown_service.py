@@ -135,7 +135,8 @@ def kill_uvicorn_processes(protected: set[int] | None = None) -> int:
     out = _run_ps(
         f"$keep = @({keep_csv}); $n=0; "
         "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" -ErrorAction SilentlyContinue "
-        "| Where-Object { $_.CommandLine -match 'uvicorn' -and $_.CommandLine -match 'app\\.main:app' "
+        "| Where-Object { (($_.CommandLine -match 'uvicorn' -and $_.CommandLine -match 'app\\.main:app') "
+        "    -or $_.CommandLine -match 'app\\.compuzone_cart_runner') "
         "  -and $keep -notcontains $_.ProcessId } "
         "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; "
         "Write-Output $n"
@@ -154,7 +155,7 @@ def close_app_browsers() -> int:
         "| Where-Object { "
         "  $_.Name -match '^(msedge|chrome|brave)\\.exe$' -and "
         "  ($_.CommandLine -match '--app=http://(127\\.0\\.0\\.1|localhost):(8090|8091)' "
-        "   -or $_.CommandLine -match 'AI-PC-Quote-Calc') "
+        "   -or $_.CommandLine -match 'AI-PC-Quote-Calc' -or $_.CommandLine -match 'AI-PC-Quote-Compuzone') "
         "} "
         "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; "
         "Write-Output $n"
@@ -172,6 +173,13 @@ def perform_shutdown_cleanup() -> dict[str, Any]:
 
         stop_worker()
     except Exception:  # noqa: BLE001 - 종료는 계속 진행한다
+        pass
+    # 🛒 컴퓨존 장바구니 작업 프로그램(그 Edge 창은 아래 close_app_browsers 가 프로필 이름으로 닫는다)
+    try:
+        from app.compuzone_cart import stop_runner
+
+        stop_runner()
+    except Exception:  # noqa: BLE001
         pass
     keep = protected_pids()
     cache_removed = clear_python_cache()

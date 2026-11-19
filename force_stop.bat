@@ -18,6 +18,10 @@ for %%P in (8090 8091) do (
 )
 powershell -NoProfile -Command ^
   "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'python' -and $_.CommandLine -match 'uvicorn' -and $_.CommandLine -match 'app\.main:app' } | ForEach-Object { Write-Host ('  kill uvicorn PID ' + $_.ProcessId); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+REM Compuzone cart worker and its Edge window (only the app profile AI-PC-Quote-Compuzone)
+powershell -NoProfile -Command ^
+  "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { ($_.Name -match 'python' -and $_.CommandLine -match 'app\.compuzone_cart_runner') -or ($_.Name -match '^(msedge|chrome)\.exe$' -and $_.CommandLine -match 'AI-PC-Quote-Compuzone') } | ForEach-Object { Write-Host ('   - Compuzone cart PID ' + $_.ProcessId + ' terminated'); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+
 REM Hidden Excel used for quote previews (only PIDs written by app/pdf_export.py)
 powershell -NoProfile -Command ^
   "$f='.excel_worker.pid'; if (Test-Path $f) { Get-Content $f | ForEach-Object { $p = Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue; if ($p -and $p.ProcessName -match '^(EXCEL|powershell)$') { Write-Host ('   - Preview Excel worker PID ' + $p.Id + ' terminated'); Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }; Remove-Item $f -Force -ErrorAction SilentlyContinue }"

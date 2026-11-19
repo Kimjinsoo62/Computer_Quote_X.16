@@ -140,7 +140,7 @@ echo   설치 완료
 echo.
 echo   설치된 패키지 (requirements.txt):
 echo     - fastapi, uvicorn, jinja2
-echo     - openpyxl, python-multipart, Pillow, pypdfium2
+echo     - openpyxl, python-multipart, Pillow, pypdfium2, playwright(컴퓨존 장바구니용, 없어도 앱은 실행)
 echo.
 echo   가상환경: .venv
 echo.
