@@ -2153,7 +2153,7 @@ td > .mqp-in.w-email { width: 52%; }
   background: rgba(15, 23, 42, 0.75);
   border: 1px solid var(--border, #2a3446);
   border-radius: 8px;
-  padding: 9px 11px;
+  padding: 7px 11px;
   text-align: left;
   color: var(--text, #e2e8f0);
   cursor: pointer;
@@ -2171,7 +2171,6 @@ td > .mqp-in.w-email { width: 52%; }
 .cq-preset-title {
   font-weight: 700;
   font-size: 0.93rem;
-  margin-bottom: 3px;
 }
 .cq-preset-desc {
   font-size: 0.78rem;

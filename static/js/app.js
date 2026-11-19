@@ -3717,9 +3717,8 @@ function renderCustomWizardUI() {
       .map((p) => {
         const on = p.id === customState.usage;
         return `
-        <button type="button" class="cq-preset-btn ${on ? "active" : ""}" data-usage="${escapeHtml(p.id)}">
+        <button type="button" class="cq-preset-btn ${on ? "active" : ""}" data-usage="${escapeHtml(p.id)}" title="${escapeHtml(p.desc || "")}">
           <div class="cq-preset-title">${escapeHtml(p.label)}</div>
-          <div class="cq-preset-desc">${escapeHtml(p.desc)}</div>
         </button>`;
       })
       .join("");
