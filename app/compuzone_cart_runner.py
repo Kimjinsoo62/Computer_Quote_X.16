@@ -149,12 +149,13 @@ class Runner:
 
     def goto(self, url: str) -> None:
         self.page.goto(url, wait_until="domcontentloaded", timeout=45000)
-        pause(0.8, 1.6)
+        pause(0.25, 0.7)
 
     def human_scroll(self) -> None:
-        for _ in range(random.randint(1, 3)):
-            self.page.mouse.wheel(0, random.randint(250, 650))
-            pause(0.2, 0.6)
+        # 한두 번 짧게 굴린다(사람처럼 보이되 느리지 않게)
+        for _ in range(random.randint(1, 2)):
+            self.page.mouse.wheel(0, random.randint(200, 550))
+            pause(0.08, 0.25)
 
     def type_like_human(self, selector: str, text: str) -> None:
         box = self.page.locator(selector).first
@@ -268,65 +269,67 @@ class Runner:
         return False
 
     # -- 담기 -------------------------------------------------------------------
-    def add_item(self, job: str, item: dict[str, Any]) -> tuple[bool, str]:
-        pno, qty = int(item["pno"]), max(1, int(item.get("qty") or 1))
-        self.goto(PRODUCT_URL.format(pno=pno))
-        if "product_detail" not in self.page.url:
-            return False, "판매 중인 상품이 아닙니다(상품 페이지가 열리지 않음)"
-        self.human_scroll()
-        if qty > 1:
-            plus = self.page.locator(f"button.bt_increase[onclick*='last_{pno}']").first
-            if plus.count():
-                for _ in range(qty - 1):
-                    plus.click()
-                    pause(0.25, 0.6)
-            else:
-                return False, f"수량({qty}) 칸을 찾지 못했습니다"
-        btn = None
+    def _cart_button(self):
         loc = self.page.locator("a.cart, button.cart, a[title*='장바구니 담기']")
         for i in range(loc.count()):
             el = loc.nth(i)
             try:
                 if el.is_visible():
-                    btn = el
-                    break
+                    return el
             except Exception:
                 continue
-        if btn is None:
-            return False, "장바구니 담기 버튼을 찾지 못했습니다"
-        self.dialogs.clear()
-        self.auto_dialogs = True
-        sent: list[str] = []   # 담기 요청이 나갔는지(완제품은 폼 전송 → 장바구니로 이동, 단품은 백그라운드 요청)
+        return None
+
+    def _click_add(self, btn) -> tuple[bool, str]:
+        """담기 버튼을 한 번 눌러 담기 요청이 나가고 응답이 올 때까지 기다린다.
+
+        컴퓨존 담기 요청(2026-11 확인): 완제품은 order_function.php 로 폼 POST(장바구니 화면으로 이동),
+        단품은 숨은 iframe(#common_iframe)으로 GET ../order/order_function.php?actype=basket_insert_detail2&… .
+        그래서 방식(GET/POST)과 상관없이 order_function · 장바구니 주소로 가는 요청을 본다(iframe 요청도 잡힘).
+        """
+        sent: list[str] = []
         done: list[int] = []
 
         def is_cart(u: str) -> bool:
-            return "order_function" in u or "/bsk/" in u or "basket" in u.lower()
+            return "order_function" in u or "/bsk/" in u or "basket_insert" in u
 
         def on_req(r):
-            if is_cart(r.url) and r.method == "POST":
+            if is_cart(r.url):
                 sent.append(r.url)
 
         def on_resp(r):
-            if is_cart(r.url) and r.request.method == "POST":
+            if is_cart(r.url):
                 done.append(r.status)
+
+        self.dialogs.clear()
+        self.auto_dialogs = True
         self.page.on("request", on_req)
         self.page.on("response", on_resp)
+        start_url = self.page.url
         try:
             btn.scroll_into_view_if_needed()
-            pause(0.3, 0.8)
+            pause(0.1, 0.3)
             btn.click()
             t0 = time.time()
-            while time.time() - t0 < 15:      # 요청이 나가기를 기다린다
-                wait(0.4)
-                if sent or "basket_main" in self.page.url:
+            login_box = self.page.locator("#limit_login_lypop").first
+            while time.time() - t0 < 6 and not sent and self.page.url == start_url:   # 요청은 보통 바로 나간다
+                wait(0.15)
+                if self.dialogs:
                     break
+                try:
+                    if login_box.is_visible():   # 비회원: '로그인 후 구매' 창이 바로 뜬다 — 더 기다릴 필요 없음
+                        break
+                except Exception:
+                    pass
             t0 = time.time()
-            while sent and not done and time.time() - t0 < 40:   # 요청 응답(느릴 수 있음)
-                wait(0.5)
-            try:
-                self.page.wait_for_load_state("domcontentloaded", timeout=40000)
-            except Exception:
-                pass
+            while sent and not done and time.time() - t0 < 15:                         # 응답(보통 1초 안)
+                wait(0.15)
+            if self.page.url != start_url:   # 완제품은 장바구니 화면으로 넘어간다
+                try:
+                    self.page.wait_for_load_state("domcontentloaded", timeout=30000)
+                except Exception:
+                    pass
+            wait(0.3)  # 담김 뒤 뜨는 알림까지 받는다
         finally:
             self.auto_dialogs = False
             for ev, fn in (("request", on_req), ("response", on_resp)):
@@ -334,19 +337,38 @@ class Runner:
                     self.page.remove_listener(ev, fn)
                 except Exception:
                     pass
-        hits = done or ([200] if "basket_main" in self.page.url else [])
-        # 비회원이면 컴퓨존이 '해당 상품은 로그인 후 구매하실 수 있습니다' 창(#limit_login_lypop)을 띄운다
         try:
             if self.page.locator("#limit_login_lypop").first.is_visible():
                 return False, "로그인이 필요합니다"
         except Exception:
             pass
-        if any(d for d in self.dialogs if "로그인" in d):
+        if any("로그인" in d for d in self.dialogs):
             return False, "로그인이 필요합니다"
-        if not hits and "basket_main" not in self.page.url:
-            note = self.dialogs[-1] if self.dialogs else "컴퓨존이 응답하지 않았습니다"
-            return False, note[:120]
-        pause(0.8, 1.6)
+        if done or "basket_main" in self.page.url:
+            return True, ""
+        if sent:
+            return True, "응답 확인 전"
+        return False, (self.dialogs[-1][:120] if self.dialogs else "담기 요청이 나가지 않았습니다(버튼이 반응하지 않음)")
+
+    def add_item(self, job: str, item: dict[str, Any]) -> tuple[bool, str]:
+        pno, qty = int(item["pno"]), max(1, int(item.get("qty") or 1))
+        self.goto(PRODUCT_URL.format(pno=pno))
+        if "product_detail" not in self.page.url:
+            return False, "판매 중인 상품이 아닙니다(상품 페이지가 열리지 않음)"
+        self.human_scroll()
+        # 수량: 컴퓨존 담기 버튼은 수량 1 을 고정으로 보내므로(+ 버튼이 담기 수량에 안 들어감), 같은 상품을 qty 번 담는다
+        # (같은 상품을 다시 담으면 컴퓨존이 장바구니 수량을 1 씩 늘린다 — 확인함)
+        for n in range(qty):
+            if n:
+                if "product_detail" not in self.page.url:   # 장바구니로 넘어갔으면 상품 페이지로 돌아온다
+                    self.goto(PRODUCT_URL.format(pno=pno))
+                pause(0.2, 0.5)
+            btn = self._cart_button()
+            if btn is None:
+                return False, "장바구니 담기 버튼을 찾지 못했습니다"
+            ok, why = self._click_add(btn)
+            if not ok:
+                return False, why
         return True, ""
 
     def basket_counts(self) -> dict[int, int]:
@@ -395,8 +417,8 @@ class Runner:
                         return  # login() 이 이미 오류를 알렸다
                     ok, why = self.add_item(job, it)
                 clicked[int(it["pno"])] = "" if ok else why
-                emit(job, "log", msg=("· 담기 버튼 누름: " if ok else "✕ ") + label[:70] + ("" if ok else f" — {why}"))
-                pause(0.6, 1.5)
+                emit(job, "log", msg=("· 담기 요청 보냄: " if ok else "✕ ") + label[:70] + ("" if ok else f" — {why}"))
+                pause(0.15, 0.5)
             after = self.basket_counts()
             # 판정은 장바구니 전후 수량 차이로 한다(버튼 응답만 보고 '담겼다'고 하지 않는다)
             added, failed, qty_diff, already = [], [], [], []
