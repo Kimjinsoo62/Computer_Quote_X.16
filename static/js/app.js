@@ -60,6 +60,7 @@ let customState = {
   ram_gb: 0,
   ssd_gb: 0,
   color: "auto",
+  detailOpen: true, // 용도를 고르면 게임 · 작업 세부 선택을 펼쳐 둔다
   overrides: {}, // { "custom-low": {"CPU": pno, ...}, ... }
   swapTier: "", // 부품 교체 패널을 연 견적의 tier_key ("" = 닫힘)
   swapCompatOnly: true, // 교체 후보를 호환 부품만 보여 줄지
@@ -3391,6 +3392,29 @@ async function ensureCustomOptions() {
   return customBuilderMeta;
 }
 
+/** 게임 · 해상도 · 작업 프로그램 목록을 펼치거나 접는다. 다시 그려도 이 상태를 유지한다. */
+function setCustomDetailOpen(open) {
+  customState.detailOpen = Boolean(open);
+  const box = $("#cqDetailBox");
+  const btn = $("#cqBtnToggleDetail");
+  if (box) box.classList.toggle("hidden", !customState.detailOpen);
+  if (btn) {
+    btn.setAttribute("aria-expanded", customState.detailOpen ? "true" : "false");
+    btn.textContent = customState.detailOpen ? "🎯 세부 게임 · 작업 접기 ▴" : "🎯 세부 게임 · 작업 선택 ▾";
+  }
+}
+
+/** 고정 메뉴에 가리지 않게 세부 선택 목록이 화면에 남도록 스크롤한다. */
+function revealCustomDetail() {
+  const box = $("#cqDetailBox");
+  if (!box || box.classList.contains("hidden")) return;
+  const navH = document.querySelector(".nav")?.getBoundingClientRect().height || 0;
+  const r = box.getBoundingClientRect();
+  if (r.top >= navH + 8 && r.bottom <= window.innerHeight - 8) return;
+  const top = window.scrollY + r.top - navH - 8;
+  window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+}
+
 function renderCustomMethodBanner(preset) {
   const titleEl = $("#cqMethodTitle");
   const listEl = $("#cqMethodRules");
@@ -3475,6 +3499,7 @@ function renderCustomWizardUI() {
   if ($("#cqBudgetManwon")) {
     $("#cqBudgetManwon").value = customState.budget_manwon ? String(customState.budget_manwon) : "";
   }
+  setCustomDetailOpen(customState.detailOpen);
 }
 
 function selectCustomPreset(usageId, autoSubmit = false) {
@@ -3487,7 +3512,9 @@ function selectCustomPreset(usageId, autoSubmit = false) {
   customState.games = [...(preset.default_games || [])];
   customState.apps = [...(preset.default_apps || [])];
   customState.overrides = {};
+  customState.detailOpen = true;
   renderCustomWizardUI();
+  revealCustomDetail();
   if (autoSubmit) {
     submitCustomQuote();
   }
@@ -3776,7 +3803,7 @@ async function activateCustomQuote() {
   } else {
     await submitCustomQuote();
   }
-  $("#quote")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  revealCustomDetail();
 }
 
 async function submitCustomQuote(opts = {}) {
@@ -3819,15 +3846,18 @@ async function submitCustomQuote(opts = {}) {
 
   cqSetStatus("컴퓨존 추천 부품으로 [최저가 · 추천가 · 최고가] 3종 맞춤 견적을 구성하는 중…");
   if (submitBtn) submitBtn.disabled = true;
-  show(loading);
-  setLoadingMessage("컴퓨존 추천 부품 호환성 매칭 및 3종 견적 동시 산출 중…");
+  // 위쪽 전체 로딩 칸을 켜면 용도 아래 세부 선택 목록이 화면 밖으로 밀려 사라진다.
+  hide(loading);
   hide(errorBox);
   hide(emptyState);
-  hide(summaryCards);
-  hide(quoteTabs);
-  hide($("#customCompareWrap"));
-  hide($("#customSwapPanel"));
-  hideResultChrome();
+  const keepVisibleResults = currentCat === "custom" && quoteData?.engine === "custom_405_compuzone";
+  if (!keepVisibleResults) {
+    hide(summaryCards);
+    hide(quoteTabs);
+    hide($("#customCompareWrap"));
+    hide($("#customSwapPanel"));
+    hideResultChrome();
+  }
 
   const seq = beginQuoteRequest();
   try {
@@ -3841,6 +3871,7 @@ async function submitCustomQuote(opts = {}) {
     if (!res.ok) throw new Error(data.detail || `HTTP error ${res.status}`);
     applyQuotePayload(data, { keepTab });
     renderCustomCompareTable(data.quotes);
+    revealCustomDetail();
     const notes = data.custom_meta?.why_notes || [];
     cqSetStatus(
       `✔ 최저가 · 추천가 · 최고가 3종 견적 산출 완료${notes.length ? ` (${notes.join(" · ")})` : ""}`
@@ -3869,13 +3900,9 @@ $("#cqBtnResetOverrides")?.addEventListener("click", () => {
   customState.overrides = {};
   submitCustomQuote({ keepTab: true });
 });
-$("#cqBtnToggleDetail")?.addEventListener("click", (e) => {
-  const box = $("#cqDetailBox");
-  if (!box) return;
-  const open = box.classList.contains("hidden");
-  box.classList.toggle("hidden", !open);
-  e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
-  e.currentTarget.textContent = open ? "🎯 세부 게임 · 작업 접기 ▴" : "🎯 세부 게임 · 작업 선택 ▾";
+$("#cqBtnToggleDetail")?.addEventListener("click", () => {
+  setCustomDetailOpen(!customState.detailOpen);
+  if (customState.detailOpen) revealCustomDetail();
 });
 ["#cqResolution", "#cqTargetFps", "#cqBoost", "#cqCpuVendor", "#cqGpuVendor", "#cqRamGb", "#cqSsdGb", "#cqColor"].forEach((sel) => {
   $(sel)?.addEventListener("change", () => {
