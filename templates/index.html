@@ -473,6 +473,8 @@
                 <strong>📒 거래처 목록</strong>
                 <span id="custCount" class="qa-stats"></span>
                 <div class="cust-book-head-right">
+                  <button type="button" id="custBtnImport" class="btn btn-outline btn-sm" title="정리된 거래처 목록 Excel(.xlsx) · CSV 파일을 올려 상호 · 담당자 · 연락처 · 이메일 · 주소를 뽑아 한 번에 등록합니다 (같은 상호는 갱신)">📤 엑셀 가져오기</button>
+                  <input type="file" id="custImportFile" accept=".xlsx,.xlsm,.csv,.xls" hidden />
                   <button type="button" id="custBtnBackupOpen" class="btn btn-outline btn-sm" title="백업 폴더(작업내역서 · 보관함과 같은 폴더)를 서버 PC 화면의 탐색기로 엽니다">📂 백업 폴더</button>
                   <button type="button" id="custBtnBackup" class="btn btn-outline btn-sm" title="거래처 목록과 견적정보(견적처 · 공급자 · 계좌)를 백업 폴더에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
                 </div>
@@ -541,7 +543,7 @@
             </div>
             <span id="qaStats" class="qa-stats"></span>
             <div class="qa-toolbar-right">
-              <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
+              <button type="button" id="qaBtnOpenDir" class="btn btn-outline btn-sm" title="보관 폴더(프로그램 폴더의 data\quote_archive)를 서버 PC 탐색기로 엽니다">📂 보관 폴더</button>
               <button type="button" id="qaBtnBackup" class="btn btn-outline btn-sm" title="보관 파일 전체를 백업 폴더(작업내역서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
               <button type="button" id="qaBtnRefresh" class="btn btn-outline btn-sm" title="작성본 · 보관 파일 목록을 다시 읽습니다">🔄 새로고침</button>
             </div>
@@ -786,7 +788,8 @@
         <div id="tsPreviewPane" class="mq-preview hidden">
           <div class="fg-detail-bar">
             <button type="button" id="tsPreviewBack" class="btn btn-sm btn-outline">⬅ 편집으로</button>
-            <strong>미리보기 화면의 인쇄 버튼(또는 Ctrl+P)으로 A4 한 장에 인쇄합니다</strong>
+            <button type="button" id="tsPreviewPrint" class="btn btn-sm btn-primary" title="이 거래명세표를 A4 한 장에 인쇄합니다">🖨️ 인쇄</button>
+            <strong>🖨️ 인쇄(또는 Ctrl+P)로 A4 한 장에 인쇄합니다</strong>
           </div>
           <div id="tsPreviewView" class="mq-preview-view"></div>
         </div>

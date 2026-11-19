@@ -20,3 +20,6 @@ Offline Install Package/wheels/
 Offline Install Package/python/
 trade_statements.json
 trade_statements/
+
+# 업무 데이터 폴더 (app/data_paths.py). 위의 예전 위치 항목은 옮기기 전 설치본을 위해 남겨 둔다.
+data/

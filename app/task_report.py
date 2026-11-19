@@ -20,7 +20,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from app.app_settings import get_setting, set_setting
 from app.quote_info import bank_account_line, load_quote_info
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "task_reports.json"
+from app.data_paths import TASK_REPORTS_FILE as DATA_FILE  # data/task_reports/task_reports.json
 TEMPLATE_FILE = Path(__file__).resolve().parent.parent / "컴퓨터_작업내역서.xlsx"
 # 화면 기본 행 수. Excel 도 최소 이만큼 번호를 매긴다.
 MIN_TASK_ROWS = 5
@@ -423,7 +423,7 @@ def backup_all_task_reports(folder: str) -> dict[str, Any]:
             "컴퓨존 견적 자동화 - 작업내역서 백업\n"
             f"백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"내역서 수: {len(reports)}건\n\n"
-            "task_reports.json : 프로그램이 저장한 원본 데이터(복구할 때 프로그램 폴더의 같은 이름 파일에 덮어쓰기)\n"
+            "task_reports.json : 프로그램이 저장한 원본 데이터(복구할 때 프로그램 폴더의 data\\task_reports\\task_reports.json 에 덮어쓰기)\n"
             "excel/            : 내역서마다 Excel 한 장\n",
         )
     return {

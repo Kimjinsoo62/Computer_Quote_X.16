@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.config import SUPPLIER
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "quote_info.json"
+from app.data_paths import QUOTE_INFO_FILE as DATA_FILE  # data/settings/quote_info.json
 
 DEFAULT_INFO = {
     "supplier_name": SUPPLIER.get("name", "대한민국주식회사"),

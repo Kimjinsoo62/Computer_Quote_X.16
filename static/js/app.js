@@ -2177,6 +2177,65 @@ $("#custBtnBackup")?.addEventListener("click", () => backupZipToFolder({
   doneLabel: (d) => `거래처 ${d.count}곳 + 견적정보`,
 }));
 $("#custBtnBackupOpen")?.addEventListener("click", () => openTrBackupDir());
+
+// 📤 엑셀 가져오기: 파일 → 서버가 머리글로 열을 찾아 견적처 칸 값을 뽑음(미리보기) → 확인하면 한 번에 등록
+const CUST_IMPORT_LABELS = { name: "상호", manager: "담당자", phone: "연락처", email: "이메일", address: "주소", memo: "메모" };
+$("#custBtnImport")?.addEventListener("click", () => {
+  const inp = $("#custImportFile");
+  if (!inp) return;
+  inp.value = "";
+  inp.click();
+});
+$("#custImportFile")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  let preview;
+  showBusy(`거래처 목록 읽는 중… (${file.name})`);
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/customers/import/preview", { method: "POST", body: fd });
+    preview = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(preview.detail || `파일을 읽지 못했습니다 (${res.status})`);
+  } catch (err) {
+    hideBusy();
+    alert("📤 엑셀 가져오기 오류\n\n" + err.message);
+    return;
+  }
+  hideBusy();
+  const list = preview.customers || [];
+  if (!list.length) {
+    alert("📤 엑셀 가져오기\n\n머리글은 찾았지만 상호가 적힌 줄이 없습니다.");
+    return;
+  }
+  const sheetLines = (preview.sheets || []).map((s) => {
+    const cols = Object.entries(s.columns || {})
+      .map(([k, v]) => `${CUST_IMPORT_LABELS[k] || k} ← ${v.join(", ")}`).join("\n    ");
+    return `• 시트 [${s.sheet}] ${s.header_row}행 머리글 · ${s.rows}줄\n    ${cols}`;
+  }).join("\n");
+  const sample = list.slice(0, 8).map((c) =>
+    `${c.status === "update" ? "↻" : "＋"} ${c.name}${c.manager ? ` (${c.manager})` : ""}${c.phone ? ` · ${c.phone}` : ""}`
+  ).join("\n");
+  const more = list.length > 8 ? `\n… 외 ${list.length - 8}곳` : "";
+  const ok = confirm(
+    `📤 거래처 ${list.length}곳을 찾았습니다 (신규 ${preview.new} · 갱신 ${preview.update}` +
+    `${preview.skipped ? ` · 상호 없는 줄 ${preview.skipped}개 건너뜀` : ""}).\n\n` +
+    `${sheetLines}\n\n${sample}${more}\n\n` +
+    "등록할까요? 같은 상호가 이미 있으면 파일에 값이 있는 칸만 바꿉니다."
+  );
+  if (!ok) return;
+  showBusy(`거래처 ${list.length}곳 등록 중…`);
+  try {
+    const res = await postJsonRaw("/api/customers/import", { customers: list });
+    if (!res.ok) throw new Error(res.data.detail || `등록 실패 (${res.status})`);
+    await loadCustomers();
+    hideBusy();
+    alert(`✔ 거래처 등록 완료\n\n신규 ${res.data.added}곳 · 갱신 ${res.data.updated}곳 (전체 ${res.data.total}곳)`);
+  } catch (err) {
+    hideBusy();
+    alert("📤 엑셀 가져오기 오류\n\n" + err.message);
+  }
+});
 $("#custBtnNew")?.addEventListener("click", () => {
   custFillForm({ name: "", manager: "", address: "", phone: "", email: "" });
   qiSetStatus("새 거래처를 입력한 뒤 💾 저장 또는 📒 거래처 목록에만 저장을 누르세요.");
@@ -5807,8 +5866,8 @@ function renderTsList() {
       <td class="num">${tsFmt(s.total)}</td>
       <td>${sign}</td>
       <td class="tr-list-actions">
-        <button type="button" class="btn btn-xs btn-primary" data-ts-act="edit" data-id="${id}" title="작성 창에서 열어 고치거나 서명 상태 · 서명본을 정합니다">✏️ 열기</button>
-        <button type="button" class="btn btn-xs btn-outline" data-ts-act="print" data-id="${id}" title="미리보기를 열어 인쇄합니다">🖨️ 인쇄</button>
+        <button type="button" class="btn btn-xs btn-primary" data-ts-act="edit" data-id="${id}" title="작성 창에서 고치거나 서명 상태 · 서명본을 정합니다">✏️ 수정</button>
+        <button type="button" class="btn btn-xs btn-outline" data-ts-act="print" data-id="${id}" title="거래명세서를 열어 보고 🖨️ 인쇄합니다">열기</button>
         <button type="button" class="btn btn-xs btn-outline" data-ts-act="excel" data-id="${id}" title="Excel 파일로 받습니다">📥 Excel</button>
         ${file}
         <button type="button" class="btn btn-xs btn-shutdown" data-ts-act="del" data-id="${id}" title="거래명세서 삭제 (보관된 서명본 파일도 함께 지웁니다)">✕ 삭제</button>
@@ -6073,13 +6132,27 @@ async function showTsPreview() {
     tsPdfUrl = URL.createObjectURL(await res.blob());
     hide($("#tsEditPane"));
     show($("#tsPreviewPane"));
-    $("#tsPreviewView").innerHTML = `<iframe class="fg-pdf" src="${tsPdfUrl}#view=FitV" title="거래명세표 미리보기"></iframe>`;
+    $("#tsPreviewView").innerHTML = `<iframe id="tsPreviewFrame" class="fg-pdf" src="${tsPdfUrl}#view=FitV" title="거래명세표 미리보기"></iframe>`;
   } catch (e) {
     alert("미리보기 오류: " + e.message + "\n(Excel 이 없는 PC 에서는 📥 Excel 다운로드로 받아 인쇄하세요.)");
   } finally {
     hideBusy();
   }
 }
+
+// 미리보기의 거래명세표(PDF)를 바로 인쇄한다. 브라우저가 iframe 인쇄를 막으면 새 창으로 열어 거기서 인쇄하게 한다.
+function printTsPreview() {
+  if (!tsPdfUrl) return;
+  const frame = $("#tsPreviewFrame");
+  try {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  } catch (_) {
+    const w = window.open(tsPdfUrl, "_blank");
+    if (!w) alert("인쇄 창을 열지 못했습니다. 미리보기 화면의 인쇄 버튼(또는 Ctrl+P)을 눌러 주세요.");
+  }
+}
+$("#tsPreviewPrint")?.addEventListener("click", printTsPreview);
 
 $("#tsItemsTbody")?.addEventListener("input", (e) => {
   const el = e.target;

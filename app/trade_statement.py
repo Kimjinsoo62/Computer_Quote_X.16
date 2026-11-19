@@ -6,7 +6,7 @@
   받아 한 벌은 구매자에게 주고 한 벌은 보관한다. 견적 전용 문구(견적유효기간)는 뺐다.
 - 폼1~8 은 build_excel() 한 함수 안에 순서대로 있고 1~8 범위가 여러 곳(_FORM_NO_RE, 갤러리, app.js)에
   박혀 있어 폼9 로 끼우지 않고 이 모듈의 build_statement_excel() 로 따로 만든다. 폼5 모양을 고치면 여기도 맞춘다.
-- 저장은 trade_statements.json, 서명받은 명세서 스캔/사진은 trade_statements/ 폴더(둘 다 .gitignore).
+- 저장은 data/trade_statements/trade_statements.json, 서명받은 명세서 스캔/사진은 data/trade_statements/signed/ (app.data_paths, .gitignore).
 - 품목 정리 · 견적처 칸은 manual_quote 와 같은 규칙(부가세 포함 단가, 마진 · 만원 올림 없음)을 쓴다.
 """
 from __future__ import annotations
@@ -28,8 +28,8 @@ from app.manual_quote import CUSTOMER_FIELDS, clean_customer
 from app.quote_info import load_quote_info
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_FILE = ROOT / "trade_statements.json"
-SIGNED_DIR = ROOT / "trade_statements"
+from app.data_paths import TRADE_SIGNED_DIR as SIGNED_DIR  # data/trade_statements/signed/
+from app.data_paths import TRADE_STATEMENTS_FILE as DATA_FILE  # data/trade_statements/trade_statements.json
 SHEET_TITLE = "거래명세표"
 DOC_TITLE = "거 래 명 세 표"
 COPY_LABELS = ("(공급자 보관용)", "(공급받는자 보관용)")
@@ -326,8 +326,8 @@ def backup_statements(folder: str) -> dict[str, Any]:
                 "컴퓨존 견적 자동화 - 거래명세서 백업\n"
                 f"백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"거래명세서: {len(records)}건 / 서명본 파일: {files}개\n\n"
-                "trade_statements.json : 명세서 목록(복구할 때 프로그램 폴더에 덮어쓰기)\n"
-                "signed/               : 서명받은 명세서 파일(복구할 때 trade_statements/ 폴더에 복사)\n",
+                "trade_statements.json : 명세서 목록(복구할 때 프로그램 폴더의 data\\trade_statements\\ 에 덮어쓰기)\n"
+                "signed/               : 서명받은 명세서 파일(복구할 때 data\\trade_statements\\signed\\ 에 복사)\n",
             )
     return {"path": str(zip_path), "count": len(records), "files": files}
 

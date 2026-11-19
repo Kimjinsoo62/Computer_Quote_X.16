@@ -30,7 +30,7 @@ APPLE_ORIGIN = "https://www.apple.com"
 HTML_TTL_SEC = 15 * 60
 CATALOG_TTL_SEC = 30 * 60
 FETCH_TIMEOUT_SEC = 20
-SNAPSHOT_PATH = Path(__file__).resolve().parent.parent / "apple_catalog_cache.json"
+from app.data_paths import APPLE_CACHE_FILE as SNAPSHOT_PATH  # data/cache/apple_catalog_cache.json
 CATALOG_SCHEMA = 2  # 항목의 cfg(구성하기 API 정보)는 선택 항목이라 예전 스냅샷도 그대로 쓴다
 
 USER_AGENT = (

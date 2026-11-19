@@ -15,8 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "customers.json"
-QUOTE_INFO_FILE = Path(__file__).resolve().parent.parent / "quote_info.json"
+from app.data_paths import CUSTOMERS_FILE as DATA_FILE  # data/customers/customers.json
+from app.data_paths import QUOTE_INFO_FILE  # data/settings/quote_info.json
 FIELDS = ("name", "manager", "address", "phone", "email", "memo")
 _lock = threading.Lock()
 
@@ -104,8 +104,8 @@ def backup_customers(folder: str) -> dict[str, Any]:
             "컴퓨존 견적 자동화 - 거래처 · 견적정보 백업\n"
             f"백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"거래처 수: {len(items)}곳\n\n"
-            "customers.json  : 거래처 목록(복구할 때 프로그램 폴더의 같은 이름 파일에 덮어쓰기)\n"
-            "quote_info.json : 견적처 · 공급자 · 추가 품목 금액 · 입금 계좌(복구할 때 같은 이름 파일에 덮어쓰기)\n"
+            "customers.json  : 거래처 목록(복구할 때 프로그램 폴더의 data\\customers\\customers.json 에 덮어쓰기)\n"
+            "quote_info.json : 견적처 · 공급자 · 추가 품목 금액 · 입금 계좌(복구할 때 data\\settings\\quote_info.json 에 덮어쓰기)\n"
             "거래처목록.csv   : 엑셀에서 보는 용도\n",
         )
     return {
@@ -115,3 +115,216 @@ def backup_customers(folder: str) -> dict[str, Any]:
         "count": len(items),
         "size": zip_path.stat().st_size,
     }
+
+
+# ---------------------------------------------------------------------------
+# 엑셀(.xlsx) · CSV 거래처 목록 가져오기
+# ---------------------------------------------------------------------------
+# 머리글 이름(공백 · 괄호 · 기호를 뺀 소문자)으로 열을 찾는다. 앞에 있을수록 우선이다.
+# 견적서 견적처 칸(상호 · 담당자 · 연락처 · 이메일 · 주소)에 들어갈 값만 뽑고, 사업자번호 · 업태 · 비고 등은 메모로 모은다.
+IMPORT_HEADERS: dict[str, tuple[str, ...]] = {
+    "name": ("상호명", "상호", "거래처명", "거래처", "업체명", "업체", "회사명", "회사", "법인명", "고객명", "고객사",
+             "납품처", "상호법인명", "company", "companyname", "name"),
+    "manager": ("담당자명", "담당자", "담당", "대표자명", "대표자", "대표", "성명", "이름", "manager", "contact"),
+    "phone": ("휴대폰번호", "휴대폰", "핸드폰번호", "핸드폰", "휴대전화", "연락처", "전화번호", "전화", "대표번호", "tel",
+              "phone", "mobile"),
+    "email": ("이메일주소", "이메일", "전자우편", "메일주소", "메일", "email", "mail"),
+    "address": ("사업장주소", "사업장소재지", "주소", "소재지", "address"),
+}
+MEMO_HEADERS = ("사업자등록번호", "사업자번호", "등록번호", "업태", "종목", "팩스", "fax", "비고", "메모", "참고", "memo", "note")
+IMPORT_MAX_ROWS = 5000
+IMPORT_MAX_BYTES = 10 * 1024 * 1024
+_HEAD_STRIP = str.maketrans("", "", " \t\r\n()[]{}<>·.:/_-*★☆※")
+
+
+def _norm_head(value: Any) -> str:
+    return str(value or "").strip().lower().translate(_HEAD_STRIP)
+
+
+def _cell_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    return " ".join(str(value).split())
+
+
+def _format_phone(text: str) -> str:
+    """숫자만 있는 전화번호에 - 를 넣는다. 엑셀이 숫자로 바꿔 앞의 0 이 빠진 번호(1012345678)도 되살린다."""
+    if not text or not text.isdigit():
+        return text  # 이미 - 가 있거나 글자가 섞인 값은 그대로
+    digits = text
+    if digits[0] != "0" and len(digits) in (9, 10):
+        digits = "0" + digits
+    if digits.startswith("02") and len(digits) in (9, 10):
+        return f"02-{digits[2:-4]}-{digits[-4:]}"
+    if len(digits) in (10, 11):
+        return f"{digits[:3]}-{digits[3:-4]}-{digits[-4:]}"
+    if len(digits) == 8 and digits[:2] in ("15", "16", "18"):
+        return f"{digits[:4]}-{digits[4:]}"
+    return text
+
+
+def _match_columns(header: list[Any]) -> dict[str, list[int]]:
+    """머리글 한 줄 → {필드: [열 번호(우선순)]}. 같은 열을 두 필드에 쓰지 않는다. memo 는 남은 참고 열."""
+    heads = [_norm_head(h) for h in header]
+    used: set[int] = set()
+    found: dict[str, list[int]] = {}
+    for field, names in IMPORT_HEADERS.items():
+        cols: list[int] = []
+        for exact in (True, False):  # 같은 이름을 먼저, 다음에 그 이름을 포함한 머리글(예: "거래처 상호명")
+            for name in names:
+                for i, h in enumerate(heads):
+                    if i in used or i in cols or not h:
+                        continue
+                    if (h == name) if exact else (len(name) >= 2 and name in h):
+                        cols.append(i)
+        if cols:
+            found[field] = cols
+            used.update(cols)
+    memo = [i for i, h in enumerate(heads) if i not in used and h and any(h == m or m in h for m in MEMO_HEADERS)]
+    if memo:
+        found["memo"] = memo
+    return found
+
+
+def _sheets_from_upload(filename: str, content: bytes) -> list[tuple[str, list[list[Any]]]]:
+    name = (filename or "").lower()
+    if name.endswith(".csv"):
+        text = None
+        for enc in ("utf-8-sig", "cp949"):
+            try:
+                text = content.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            raise ValueError("CSV 파일의 글자 인코딩을 읽지 못했습니다(UTF-8 또는 CP949 로 저장하세요).")
+        return [("CSV", list(csv.reader(io.StringIO(text)))[: IMPORT_MAX_ROWS + 30])]
+    if name.endswith(".xls"):
+        raise ValueError("예전 Excel 형식(.xls)은 읽지 못합니다. Excel 에서 [다른 이름으로 저장 → Excel 통합 문서(.xlsx)]로 바꿔 올려 주세요.")
+    if not name.endswith((".xlsx", ".xlsm")):
+        raise ValueError("Excel(.xlsx) 또는 CSV 파일만 올릴 수 있습니다.")
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    except Exception as e:  # 손상 · 암호 걸린 파일 등
+        raise ValueError(f"Excel 파일을 열지 못했습니다: {e}") from e
+    sheets = []
+    try:
+        for ws in wb.worksheets:
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                rows.append(list(row))
+                if len(rows) > IMPORT_MAX_ROWS + 30:
+                    break
+            sheets.append((ws.title, rows))
+    finally:
+        wb.close()
+    return sheets
+
+
+def parse_customer_upload(filename: str, content: bytes) -> dict[str, Any]:
+    """거래처 목록 파일에서 견적처 칸에 들어갈 값을 뽑는다(저장은 하지 않음).
+
+    시트마다 위쪽 30줄 안에서 상호 열 + 다른 칸 하나 이상이 있는 머리글 줄을 찾고, 그 아래 줄을 거래처로 읽는다.
+    상호가 빈 줄 · 합계 줄은 건너뛰고, 같은 상호가 여러 번 나오면 빈 칸을 서로 채워 한 곳으로 합친다.
+    """
+    if len(content) > IMPORT_MAX_BYTES:
+        raise ValueError("파일이 너무 큽니다(10MB 이하).")
+    merged: dict[str, dict[str, str]] = {}
+    sheets_used: list[dict[str, Any]] = []
+    skipped = 0
+    for title, rows in _sheets_from_upload(filename, content):
+        head_idx, cols = -1, {}
+        for i, row in enumerate(rows[:30]):
+            m = _match_columns(row)
+            if "name" in m and len(m) >= 2:
+                head_idx, cols = i, m
+                break
+        if head_idx < 0:
+            continue
+        header = rows[head_idx]
+
+        def cell(row: list[Any], c: int) -> str:
+            return _cell_text(row[c]) if c < len(row) else ""
+
+        count = 0
+        for row in rows[head_idx + 1:][:IMPORT_MAX_ROWS]:
+            got = {f: next((v for v in (cell(row, c) for c in cs) if v), "") for f, cs in cols.items() if f != "memo"}
+            name = got.get("name", "")
+            if not name or _norm_head(name) in ("합계", "총계", "소계", "계"):
+                if any(_cell_text(v) for v in row):
+                    skipped += 1
+                continue
+            memo = " / ".join(f"{_cell_text(header[c])}: {cell(row, c)}" for c in cols.get("memo", []) if cell(row, c))
+            rec = {
+                "name": name,
+                "manager": got.get("manager", ""),
+                "phone": _format_phone(got.get("phone", "")),
+                "email": got.get("email", ""),
+                "address": got.get("address", ""),
+                "memo": memo,
+            }
+            rec = {k: v[:200] for k, v in rec.items()}
+            if name in merged:
+                old = merged[name]
+                for k, v in rec.items():
+                    if v and not old.get(k):
+                        old[k] = v
+            else:
+                merged[name] = rec
+            count += 1
+        sheets_used.append({
+            "sheet": title,
+            "header_row": head_idx + 1,
+            "rows": count,
+            "columns": {f: [_cell_text(header[c]) for c in cs] for f, cs in cols.items()},
+        })
+    if not sheets_used:
+        raise ValueError(
+            "거래처 목록의 머리글 줄을 찾지 못했습니다. 위쪽 줄에 '상호(또는 거래처명 · 업체명)'와 "
+            "'담당자 · 연락처 · 이메일 · 주소' 중 하나 이상의 머리글이 있어야 합니다."
+        )
+    customers = list(merged.values())
+    with _lock:
+        existing = {c.get("name") for c in _load()}
+    for c in customers:
+        c["status"] = "update" if c["name"] in existing else "new"
+    return {
+        "customers": customers,
+        "sheets": sheets_used,
+        "skipped": skipped,
+        "new": sum(1 for c in customers if c["status"] == "new"),
+        "update": sum(1 for c in customers if c["status"] == "update"),
+    }
+
+
+def import_customers(customers: list[dict[str, Any]]) -> dict[str, int]:
+    """뽑은 거래처를 상호명 기준으로 한 번에 등록한다. 이미 있는 거래처는 파일에 값이 있는 칸만 바꾸고 빈 칸은 그대로 둔다."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+    added = updated = 0
+    with _lock:
+        items = _load()
+        by_name = {c.get("name"): c for c in items}
+        for seq, data in enumerate(customers if isinstance(customers, list) else []):
+            if not isinstance(data, dict):
+                continue
+            clean = {k: str(data.get(k) or "").strip()[:200] for k in FIELDS}
+            if not clean["name"]:
+                continue
+            found = by_name.get(clean["name"])
+            if found is None:
+                found = {"id": f"{stamp}-{seq:04d}", "created_at": now, **{k: "" for k in FIELDS}}
+                items.append(found)
+                by_name[clean["name"]] = found
+                added += 1
+            else:
+                updated += 1
+            found.update({k: v for k, v in clean.items() if v}, updated_at=now)
+        _save(items)
+    return {"added": added, "updated": updated, "total": len(items)}

@@ -41,7 +41,7 @@ from app.quote_engine import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CACHE_FILE = BASE_DIR / "compuzone_parts_cache.json"
+from app.data_paths import PARTS_CACHE_FILE as CACHE_FILE  # data/cache/compuzone_parts_cache.json
 PART_CATALOG_TTL_SEC = 15 * 60
 
 _catalog_lock = threading.Lock()

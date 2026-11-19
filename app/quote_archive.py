@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ARCHIVE_DIR = BASE_DIR / "quote_archive"
+from app.data_paths import QUOTE_ARCHIVE_DIR as ARCHIVE_DIR  # data/quote_archive/
 INDEX_FILE = ARCHIVE_DIR / "index.json"
 _lock = threading.Lock()
 _BAD_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
@@ -156,8 +156,8 @@ def backup_archive(folder: str) -> dict[str, Any]:
                 "컴퓨존 견적 자동화 - 견적서 보관함 백업\n"
                 f"백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"견적서 수: {copied}건\n\n"
-                "index.json : 보관함 목록(복구할 때 프로그램 폴더의 quote_archive/index.json 에 덮어쓰기)\n"
-                "excel/     : 보관된 Excel 견적서(복구할 때 quote_archive/ 에 그대로 복사)\n",
+                "index.json : 보관함 목록(복구할 때 프로그램 폴더의 data\\quote_archive\\index.json 에 덮어쓰기)\n"
+                "excel/     : 보관된 Excel 견적서(복구할 때 data\\quote_archive\\ 에 그대로 복사)\n",
             )
     return {
         "dir": str(target),

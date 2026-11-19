@@ -16,7 +16,7 @@ from typing import Any
 from app.quote_engine import Quote, QuotePart, TodayQuotesResult
 from app.quote_info import load_quote_info
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "manual_quotes.json"
+from app.data_paths import MANUAL_QUOTES_FILE as DATA_FILE  # data/manual_quotes/manual_quotes.json
 TAB_LABEL = "직접견적"
 # 폼 시트는 A4 세로 1페이지로 강제되므로 행이 너무 많으면 글자가 읽기 어려울 만큼 줄어든다.
 MAX_ITEMS = 20

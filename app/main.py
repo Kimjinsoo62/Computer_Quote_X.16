@@ -412,7 +412,7 @@ def api_quote_info_delete():
     return reset_quote_info()
 
 
-# 거래처 목록 (customers.json) — [설정관리 → 견적정보] 탭
+# 거래처 목록 (data/customers/customers.json) — [설정관리 → 견적정보] 탭
 @app.get("/api/customers")
 def api_customers_list():
     return {"customers": customer_book.list_customers()}
@@ -424,6 +424,25 @@ def api_customers_save(payload: dict = Body(...)):
         return {"customer": customer_book.save_customer(payload)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.post("/api/customers/import/preview")
+async def api_customers_import_preview(file: UploadFile = File(...)):
+    """거래처 목록 Excel(.xlsx) · CSV 에서 견적처 칸 값을 뽑아 보여 준다(저장 안 함)."""
+    content = await file.read(customer_book.IMPORT_MAX_BYTES + 1)
+    try:
+        return customer_book.parse_customer_upload(file.filename or "", content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.post("/api/customers/import")
+def api_customers_import(payload: dict = Body(...)):
+    """미리보기에서 확인한 거래처를 상호명 기준으로 한 번에 등록 · 갱신한다."""
+    rows = payload.get("customers") or []
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(status_code=400, detail="등록할 거래처가 없습니다.")
+    return {"ok": True, **customer_book.import_customers(rows)}
 
 
 @app.delete("/api/customers/{customer_id}")
@@ -1233,7 +1252,7 @@ def api_mail_send(payload: dict = Body(default={})):
 
 
 # ---------------------------------------------------------------------------
-# 견적서 보관함 API (quote_archive/)
+# 견적서 보관함 API (data/quote_archive/)
 # ---------------------------------------------------------------------------
 @app.get("/api/quotes/archive")
 def api_quote_archive_list():
@@ -1565,7 +1584,7 @@ def api_trade_statement_backup():
 
 @app.post("/api/trade-statements/open-dir")
 def api_trade_statement_open_dir(payload: dict = Body(default={})):
-    """서명본 폴더(trade_statements/)를 서버 PC 탐색기로 연다. id 를 주면 그 서명본 파일을 선택한 상태로."""
+    """서명본 폴더(data/trade_statements/signed/)를 서버 PC 탐색기로 연다. id 를 주면 그 서명본 파일을 선택한 상태로."""
     trade_statement.SIGNED_DIR.mkdir(parents=True, exist_ok=True)
     target = str(trade_statement.SIGNED_DIR)
     rec = trade_statement.get_statement(str(payload.get("id") or ""))

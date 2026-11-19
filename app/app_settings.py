@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SETTINGS_FILE = Path(__file__).resolve().parent.parent / "app_settings.json"
+from app.data_paths import APP_SETTINGS_FILE as SETTINGS_FILE  # data/settings/app_settings.json
 
 
 def load_settings() -> dict:
