@@ -1893,15 +1893,8 @@ function isTaskReportCompanyDummy(name, addr, phone) {
 
 // 깜박임(Blink Warning) 상태 통합 갱신 함수
 function updateBlinkWarnings() {
-  // 1. 메인창 "거래처" 표시 · "설정관리" 버튼 깜박임 처리
+  // 1. 견적처가 기본(가짜) 값이면 "설정관리" 버튼 · 경고 배너 깜박임
   const qiDummy = isQuoteInfoDummy(quoteInfo);
-  const btnQi = $("#btnCurrentCustomer");
-  const txtQi = $("#quoteInfoBtnText");
-  if (btnQi) btnQi.classList.toggle("blink-warning", qiDummy);
-  if (txtQi) {
-    txtQi.classList.toggle("blink-warning-text", qiDummy);
-    txtQi.textContent = `거래처: ${(quoteInfo?.customer_name || "").trim() || "미지정"}`;
-  }
   qiToggleWarningBanners(qiDummy);
   $("#btnSettings")?.classList.toggle("blink-warning", qiDummy);
   $("#settingsBtnText")?.classList.toggle("blink-warning-text", qiDummy);
@@ -2000,7 +1993,6 @@ function qiRerender() {
   }
 }
 
-$("#btnCurrentCustomer")?.addEventListener("click", () => openSettings("customer"));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   // 메일 발송 창 위의 앱 비밀번호 안내만 닫는다(아래 발송 창의 입력은 그대로)
