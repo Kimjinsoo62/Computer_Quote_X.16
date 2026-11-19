@@ -36,16 +36,19 @@ _jobs: dict[str, dict[str, Any]] = {}
 def get_account() -> dict[str, Any]:
     cfg = get_setting(ACCOUNT_KEY, {}) or {}
     user = str(cfg.get("user") or "")
-    return {"user": user, "has_password": bool(cfg.get("password")), "configured": bool(user and cfg.get("password"))}
+    return {"user": user, "has_password": bool(cfg.get("password")), "configured": bool(user and cfg.get("password")),
+            "saved_session": has_saved_session()}
 
 
 def set_account(user: str, password: str) -> dict[str, Any]:
     """비밀번호가 비어 있으면 아이디만 바꾸고 기존 비밀번호를 둔다. 아이디를 비우면 계정을 지운다."""
     user = (user or "").strip()
+    cfg = get_setting(ACCOUNT_KEY, {}) or {}
+    if user != str(cfg.get("user") or ""):
+        clear_saved_session()  # 다른 계정의 로그인 상태가 남지 않게
     if not user:
         set_setting(ACCOUNT_KEY, {})
         return get_account()
-    cfg = get_setting(ACCOUNT_KEY, {}) or {}
     enc = cfg.get("password") or ""
     if password:
         enc = base64.b64encode(_dpapi(password.encode("utf-8"), True)).decode()
@@ -53,6 +56,26 @@ def set_account(user: str, password: str) -> dict[str, Any]:
         raise ValueError("컴퓨존 비밀번호를 입력해 주세요.")
     set_setting(ACCOUNT_KEY, {"user": user[:80], "password": enc})
     return get_account()
+
+
+def clear_saved_session() -> bool:
+    """저장해 둔 컴퓨존 로그인 상태(암호화된 쿠키)를 지운다. 열린 창은 그대로(다음에 새로 열 때부터 다시 로그인)."""
+    from app.compuzone_cart_runner import SESSION_FILE_NAME
+
+    p = COMPUZONE_PROFILE_DIR / SESSION_FILE_NAME
+    try:
+        if p.is_file():
+            p.unlink()
+            return True
+    except OSError:
+        pass
+    return False
+
+
+def has_saved_session() -> bool:
+    from app.compuzone_cart_runner import SESSION_FILE_NAME
+
+    return (COMPUZONE_PROFILE_DIR / SESSION_FILE_NAME).is_file()
 
 
 def _password() -> str:

@@ -702,6 +702,14 @@ function showCzCartProgress(st) {
 
 $("#czCartClose")?.addEventListener("click", () => hide($("#czCartModal")));
 
+$("#czSessionClear")?.addEventListener("click", async () => {
+  if (!confirm("저장해 둔 컴퓨존 로그인 상태를 지울까요? 다음에 담을 때 다시 로그인합니다(이미 열린 컴퓨존 창은 그대로입니다).")) return;
+  const res = await postJsonRaw("/api/compuzone/session/clear", {});
+  const st = $("#czAcctStatus");
+  if (st) st.textContent = res.ok ? "✔ 저장된 로그인 상태를 지웠습니다." : "✕ 지우지 못했습니다.";
+  loadCzAccount();
+});
+
 async function loadCzAccount() {
   try {
     const a = await (await fetch("/api/compuzone/account", { cache: "no-store" })).json();
@@ -712,6 +720,9 @@ async function loadCzAccount() {
     }
     const st = $("#czAcctStatus");
     if (st && a.playwright === false) st.textContent = "⚠️ Playwright 가 설치되어 있지 않습니다. install.bat 을 다시 실행해 주세요.";
+    else if (st && a.saved_session) st.textContent = "✔ 저장된 로그인 상태가 있습니다 — 컴퓨존 창을 닫았다 다시 열어도 컴퓨존이 로그인을 끊지 않았다면 로그인을 건너뜁니다.";
+    const clr = $("#czSessionClear");
+    if (clr) clr.disabled = !a.saved_session;
   } catch (_) { /* 설정 창은 그대로 */ }
 }
 

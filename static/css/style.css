@@ -2590,3 +2590,4 @@ td > .mqp-in.w-email { width: 52%; }
 .cz-cart-ok { color: #86efac; font-weight: 700; margin: 8px 0 0; }
 .cz-cart-err { color: #fca5a5; font-weight: 700; margin: 8px 0 0; }
 .btn-cz-cart { background: #0b5ed7; color: #fff; border-color: #0b5ed7; }
+.cz-acct-btns { display: inline-flex; gap: 4px; flex-wrap: wrap; }

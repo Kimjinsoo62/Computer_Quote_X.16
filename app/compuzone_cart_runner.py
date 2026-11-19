@@ -29,6 +29,11 @@ MEMBER_PROBE_URL = BASE + "/mypage/wish_list.htm"  # 회원 전용: 비회원이
 BASKET_URL = BASE + "/bsk/basket_main.htm"
 PRODUCT_URL = BASE + "/product/product_detail.htm?ProductNo={pno}"
 USER_WAIT_SEC = 300  # 보안 확인 · 직접 로그인을 기다리는 시간
+# 로그인 상태 유지: 컴퓨존은 로그인 · 장바구니를 '세션 쿠키'(CSID, OrderCartCode 등)로 잡는데, 이 쿠키는 창을 닫으면 지워진다
+# (2026-11 확인: 창을 닫았다 다시 열면 장바구니가 비었다). 그래서 컴퓨존 쿠키를 Windows DPAPI 로 암호화해 프로필 폴더에
+# 두고, 창을 새로 열 때 되살린다. 컴퓨존 서버 쪽 세션이 아직 살아 있으면 로그인을 건너뛴다(끝났으면 평소처럼 로그인).
+SESSION_FILE_NAME = "cz_session.bin"
+
 
 
 def emit(job: str, typ: str, **kw: Any) -> None:
@@ -85,10 +90,51 @@ class Runner:
             self.profile_dir, channel="msedge", headless=os.environ.get("CZ_HEADLESS") == "1", locale="ko-KR",
             no_viewport=True, args=["--start-maximized"],
         )
+        self.restored = self.restore_session()
         self.page = self.ctx.pages[0] if self.ctx.pages else self.ctx.new_page()
         self.ctx.on("page", lambda p: self._watch(p))
         self._watch(self.page)
         _PAGE = self.page
+
+    def _session_path(self):
+        from pathlib import Path
+
+        return Path(self.profile_dir) / SESSION_FILE_NAME
+
+    def save_session(self) -> None:
+        """컴퓨존 쿠키(세션 쿠키 포함)를 암호화해 저장한다. 실패해도 작업은 계속한다."""
+        try:
+            from app.mail_send import _dpapi
+
+            cookies = [c for c in self.ctx.cookies() if "compuzone" in c.get("domain", "")]
+            if not cookies:
+                return
+            data = json.dumps(cookies, ensure_ascii=False).encode("utf-8")
+            self._session_path().write_bytes(_dpapi(data, True))
+        except Exception:
+            pass
+
+    def restore_session(self) -> int:
+        """저장한 컴퓨존 쿠키를 새 창에 넣는다. 넣은 쿠키 수(없거나 못 풀면 0)."""
+        try:
+            from app.mail_send import _dpapi
+
+            p = self._session_path()
+            if not p.is_file():
+                return 0
+            cookies = json.loads(_dpapi(p.read_bytes(), False).decode("utf-8"))
+            now = time.time()
+            keep = []
+            for c in cookies:
+                exp = c.get("expires", -1)
+                if exp not in (-1, None) and exp < now:
+                    continue  # 이미 만료된 쿠키는 버린다
+                keep.append({k: c[k] for k in ("name", "value", "domain", "path", "expires", "httpOnly", "secure", "sameSite") if k in c})
+            if keep:
+                self.ctx.add_cookies(keep)
+            return len(keep)
+        except Exception:
+            return 0
 
     def _watch(self, page) -> None:
         def on_dialog(d):
@@ -151,7 +197,8 @@ class Runner:
     def login(self, job: str, user: str, password: str) -> bool:
         self.goto(BASE + "/main/main.htm")
         if self.logged_in(job):
-            emit(job, "log", msg="이미 로그인되어 있습니다.")
+            emit(job, "log", msg="이미 로그인되어 있습니다" + (" (저장해 둔 로그인 상태를 이어서 씁니다)." if getattr(self, "restored", 0) else "."))
+            self.save_session()
             return True
         if not user or not password:
             emit(job, "need_user", msg="저장된 컴퓨존 계정이 없습니다. 열린 창에서 직접 로그인해 주세요.")
@@ -191,7 +238,8 @@ class Runner:
         finally:
             self.auto_dialogs = False
         if "login.htm" not in self.page.url and self.logged_in(job):
-            emit(job, "log", msg="로그인했습니다.")
+            emit(job, "log", msg="로그인했습니다. 로그인 상태를 저장해 다음에 창을 다시 열어도 이어서 씁니다.")
+            self.save_session()
             return True
         msg = self.dialogs[-1] if self.dialogs else ""
         if msg and any(k in msg for k in ("일치", "확인", "잘못", "틀", "없는")):
@@ -211,7 +259,8 @@ class Runner:
             wait(3)
             try:
                 if "login.htm" not in self.page.url and self.logged_in():
-                    emit(job, "log", msg="로그인을 확인했습니다. 이어서 담습니다.")
+                    emit(job, "log", msg="로그인을 확인했습니다. 로그인 상태를 저장하고 이어서 담습니다.")
+                    self.save_session()
                     return True
             except Exception:
                 pass
@@ -368,6 +417,7 @@ class Runner:
             for x in already:
                 emit(job, "log", msg=f"ℹ️ {x['name'][:60]} — 이미 장바구니에 있었고 수량이 늘지 않았습니다(현재 {x['qty']}개)")
             emit(job, "progress", step=total + 2, total=total + 2, msg="장바구니를 열었습니다.")
+            self.save_session()
             emit(job, "done", added=len(added), failed=failed, qty_diff=qty_diff, already=already,
                  missing=[], in_cart=len(after))
             try:
@@ -395,6 +445,7 @@ def main() -> None:
         runner.run(task)
     try:
         if runner.ctx:
+            runner.save_session()  # 앱이 창을 닫을 때도 최신 로그인 상태를 남긴다
             runner.ctx.close()
         if runner.pw:
             runner.pw.stop()

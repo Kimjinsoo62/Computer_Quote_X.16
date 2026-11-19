@@ -1484,6 +1484,14 @@ def api_compuzone_account_save(payload: dict = Body(...)):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@app.post("/api/compuzone/session/clear")
+def api_compuzone_session_clear():
+    """저장해 둔 컴퓨존 로그인 상태를 지운다(공용 PC 등). 다음 담기 때 다시 로그인한다."""
+    from app import compuzone_cart
+
+    return {"ok": True, "cleared": compuzone_cart.clear_saved_session()}
+
+
 @app.post("/api/compuzone/cart")
 def api_compuzone_cart(payload: dict = Body(...)):
     """카드의 컴퓨존 상품들을 장바구니에 담는 작업을 시작한다. 진행은 GET /api/compuzone/cart/{id}."""
