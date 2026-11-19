@@ -3874,23 +3874,44 @@ function renderCustomSwapPanel(quotes) {
           <div class="cq-swap-cur">${baseName}</div>
           <select class="cq-swap-select" data-cat="${escapeHtml(cat)}" title="교체할 부품을 고르면 오른쪽 재취합 견적에 바로 반영됩니다">${placeholder}${opts}</select>
         </td>
-        <td class="cq-swap-price">${baseAmt ? fmt(baseAmt) : "-"}</td>
+        <td class="cq-swap-price cq-swap-base-price">${baseAmt ? fmt(baseAmt) : "-"}</td>
         <td class="cq-swap-arrow">${isChanged ? "▶" : ""}</td>
         <td class="cq-swap-now-cell">
           <div class="cq-swap-cur">${curName} ${badge}</div>
           ${curNote ? `<div class="cq-swap-note">${escapeHtml(curNote)}</div>` : ""}
         </td>
-        <td class="cq-swap-price">${curAmt ? fmt(curAmt) : "-"}${isChanged && rowDiff ? `<div class="cq-swap-rowdiff ${rowDiff > 0 ? "is-up" : "is-down"}">${signed(rowDiff)}</div>` : ""}</td>
+        <td class="cq-swap-price cq-swap-now-price">${curAmt ? fmt(curAmt) : "-"}${isChanged && rowDiff ? `<div class="cq-swap-rowdiff ${rowDiff > 0 ? "is-up" : "is-down"}">${signed(rowDiff)}</div>` : ""}</td>
       </tr>`;
   }).join("");
+  // 맨 아래는 위 '원래 견적 → 재취합 견적' 줄과 같은 견적 총액으로 맞춘다:
+  // 부품 8종 + 조립비 · 기타(조립비 · 추가 품목 · 할인 · 만원 올림 차이) = 견적 총액
+  const baseOther = shownBase - baseSum;
+  const nowOther = shownNow - nowSum;
+  const signCls = (n) => (n > 0 ? "is-up" : n < 0 ? "is-down" : "");
   const sumRow = `
+      <tr class="cq-swap-subrow">
+        <th>부품 8종</th>
+        <td class="cq-swap-base">원래 부품 합계</td>
+        <td class="cq-swap-price cq-swap-base-price">${fmt(baseSum)}</td>
+        <td class="cq-swap-arrow"></td>
+        <td class="cq-swap-now-cell">재취합 부품 합계 <span class="cq-swap-diff ${signCls(nowSum - baseSum)}">(${signed(nowSum - baseSum)})</span></td>
+        <td class="cq-swap-price cq-swap-now-price">${fmt(nowSum)}</td>
+      </tr>
+      <tr class="cq-swap-subrow" title="조립비 · 추가 품목(모니터 등) · 번들 할인 · 만원 단위 올림으로 생기는 차이">
+        <th>조립비 · 기타</th>
+        <td class="cq-swap-base">조립비 · 추가 품목 · 할인 · 만원 올림</td>
+        <td class="cq-swap-price cq-swap-base-price">${signed(baseOther).replace("±0원", "0")}</td>
+        <td class="cq-swap-arrow"></td>
+        <td class="cq-swap-now-cell">조립비 · 추가 품목 · 할인 · 만원 올림</td>
+        <td class="cq-swap-price cq-swap-now-price">${signed(nowOther).replace("±0원", "0")}</td>
+      </tr>
       <tr class="cq-swap-sumrow">
-        <th>부품 합계</th>
-        <td>원래 견적</td>
-        <td class="cq-swap-price">${fmt(baseSum)}</td>
+        <th>견적 총액</th>
+        <td class="cq-swap-base">원래 견적</td>
+        <td class="cq-swap-price cq-swap-base-price">${fmt(shownBase)}</td>
         <td class="cq-swap-arrow">▶</td>
-        <td>재취합 견적 <span class="cq-swap-diff ${nowSum - baseSum > 0 ? "is-up" : nowSum - baseSum < 0 ? "is-down" : ""}">(${signed(nowSum - baseSum)})</span></td>
-        <td class="cq-swap-price">${fmt(nowSum)}</td>
+        <td class="cq-swap-now-cell">재취합 견적 <span class="cq-swap-diff ${signCls(diff)}">(${signed(diff)})</span></td>
+        <td class="cq-swap-price cq-swap-now-price">${fmt(shownNow)}</td>
       </tr>`;
 
   const issues = (tierMeta.compat_issues || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
@@ -3917,10 +3938,11 @@ function renderCustomSwapPanel(quotes) {
     ${notes ? `<ul class="cq-swap-autonotes">${notes}</ul>` : ""}
     <div class="cq-cmp-table-wrap">
       <table class="cq-cmp-table cq-swap-table">
-        <colgroup><col style="width:96px;" /><col /><col style="width:104px;" /><col style="width:24px;" /><col /><col style="width:112px;" /></colgroup>
+        <!-- 고정 폭 표: 부품 칸 두 개(원래 · 재취합)가 남은 폭을 똑같이 나눠 가진다 -->
+        <colgroup><col style="width:96px;" /><col /><col style="width:118px;" /><col style="width:26px;" /><col /><col style="width:118px;" /></colgroup>
         <thead>
           <tr class="cq-swap-sides"><th></th><th colspan="2" class="cq-swap-side-base">📄 원래 견적 — 부품을 골라 교체</th><th></th><th colspan="2" class="cq-swap-side-now">🛠️ 재취합 견적 (바뀐 구성)</th></tr>
-          <tr><th>부품 구분</th><th>원래 부품 · 교체할 부품 선택</th><th>금액</th><th></th><th>재취합 부품</th><th>금액</th></tr>
+          <tr><th>부품 구분</th><th class="cq-swap-side-base">원래 부품 · 교체할 부품 선택</th><th class="cq-swap-side-base">금액</th><th></th><th class="cq-swap-side-now">재취합 부품</th><th class="cq-swap-side-now">금액</th></tr>
         </thead>
         <tbody>${rows}${sumRow}</tbody>
       </table>
@@ -3977,6 +3999,10 @@ async function activateCustomQuote() {
 async function submitCustomQuote(opts = {}) {
   const keepTab = Boolean(opts.keepTab);
   const forceRefresh = Boolean(opts.forceRefresh);
+  // 부품 교체로 다시 취합할 때(keepTab)는 화면을 위 세부 선택 칸으로 올리지 않고, 교체 창이 화면의 같은 자리에 있게 한다
+  const swapPanel = $("#customSwapPanel");
+  const anchorTop = keepTab && swapPanel && !swapPanel.classList.contains("hidden")
+    ? swapPanel.getBoundingClientRect().top : null;
   syncCustomStateFromControls();
   currentCat = "custom";
   updateExtrasUI();
@@ -4039,7 +4065,11 @@ async function submitCustomQuote(opts = {}) {
     if (!res.ok) throw new Error(data.detail || `HTTP error ${res.status}`);
     applyQuotePayload(data, { keepTab });
     renderCustomCompareTable(data.quotes);
-    revealCustomDetail();
+    if (anchorTop !== null && !swapPanel.classList.contains("hidden")) {
+      window.scrollBy(0, swapPanel.getBoundingClientRect().top - anchorTop);  // 다시 그려 높이가 바뀌어도 제자리
+    } else if (!keepTab) {
+      revealCustomDetail();
+    }
     const notes = data.custom_meta?.why_notes || [];
     cqSetStatus(
       `✔ 최저가 · 추천가 · 최고가 3종 견적 산출 완료${notes.length ? ` (${notes.join(" · ")})` : ""}`
