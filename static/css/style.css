@@ -2459,6 +2459,17 @@ td > .mqp-in.w-email { width: 52%; }
   color: #e2e8f0;
   white-space: nowrap;
 }
+/* 부품 교체: 왼쪽 원래 견적 ↔ 오른쪽 재취합 견적 나란히 */
+.cq-swap-sides th { font-size: 0.82rem; padding: 5px 8px; }
+.cq-swap-side-base { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; text-align: left; }
+.cq-swap-side-now { background: rgba(37, 99, 235, 0.22); color: #bfdbfe; text-align: left; }
+.cq-swap-table td.cq-swap-base { border-right: 1px dashed rgba(148, 163, 184, 0.25); }
+.cq-swap-table td.cq-swap-now-cell { background: rgba(37, 99, 235, 0.04); }
+.cq-swap-arrow { text-align: center; color: #60a5fa; font-size: 0.8rem; padding: 0 !important; }
+.cq-swap-rowdiff { font-size: 0.74rem; font-weight: 600; }
+.cq-swap-rowdiff.is-up { color: #f87171; }
+.cq-swap-rowdiff.is-down { color: #4ade80; }
+.cq-swap-sumrow td, .cq-swap-sumrow th { border-top: 2px solid rgba(148, 163, 184, 0.4); font-weight: 700; }
 .cq-swap-hint {
   margin: 8px 0 0;
   font-size: 0.76rem;

@@ -3829,11 +3829,21 @@ function renderCustomSwapPanel(quotes) {
   const changed = new Map((tierMeta.changed_parts || []).map((c) => [c.category, c.auto]));
   const onlyOk = customState.swapCompatOnly;
 
+  // 왼쪽 = 원래 견적(교체 전 부품 + 교체 선택), 오른쪽 = 재취합 견적(지금 구성). 바뀐 행은 강조한다.
+  const baseParts = new Map((tierMeta.base_parts || []).map((b) => [b.category, b]));
+  const noneLabel = (cat) => `<span class="cq-cmp-none">${cat === "그래픽카드" ? "내장그래픽 사용" : "CPU 기본 쿨러"}</span>`;
+  let baseSum = 0;
+  let nowSum = 0;
   const rows = CUSTOM_SWAP_CATS.map((cat) => {
     const cur = (q.parts || []).find((p) => p.category === cat);
+    const base = baseParts.get(cat);
     const curPno = Number(tierMeta.selected_pnos?.[cat] || 0);
     const compat = tierMeta.part_compat?.[cat] || {};
     const curUnit = cur ? shownPrice(cur.unit_price) : 0;
+    const curAmt = cur ? curUnit * (cur.qty || 1) : 0;
+    const baseAmt = base && base.pno ? shownPrice(base.unit_price) * (base.qty || 1) : 0;
+    baseSum += baseAmt;
+    nowSum += curAmt;
     const cands = [...(cmeta.part_candidates?.[cat] || [])].sort((a, b) => a.price - b.price);
     const opts = cands
       .filter((c) => !onlyOk || Number(c.pno) === curPno || (compat[String(c.pno)] || [true])[0])
@@ -3849,21 +3859,39 @@ function renderCustomSwapPanel(quotes) {
       ? ""
       : `<option value="" selected>${cat === "그래픽카드" ? "내장그래픽 사용 (그래픽카드 없음)" : "CPU 기본 쿨러 사용"}</option>`;
     const curNote = curPno ? (compat[String(curPno)] || [true, ""])[1] : "";
-    const badge = changed.has(cat)
+    const isChanged = changed.has(cat);
+    const badge = isChanged
       ? `<span class="cq-swap-badge ${changed.get(cat) ? "is-auto" : ""}">${changed.get(cat) ? "자동 연동" : "변경됨"}</span>`
       : "";
-    const qtyTag = cur && cur.qty > 1 ? ` <strong>×${cur.qty}</strong>` : "";
+    const qtyTag = (n) => (n > 1 ? ` <strong>×${n}</strong>` : "");
+    const baseName = base && base.pno ? escapeHtml(base.name) + qtyTag(base.qty) : noneLabel(cat);
+    const curName = cur ? escapeHtml(cur.name) + qtyTag(cur.qty) : noneLabel(cat);
+    const rowDiff = curAmt - baseAmt;
     return `
-      <tr class="${changed.has(cat) ? "is-changed" : ""}">
+      <tr class="${isChanged ? "is-changed" : ""}">
         <th>${escapeHtml(cat)}</th>
-        <td>
-          <div class="cq-swap-cur">${cur ? escapeHtml(cur.name) + qtyTag : `<span class="cq-cmp-none">${cat === "그래픽카드" ? "내장그래픽 사용" : "CPU 기본 쿨러"}</span>`} ${badge}</div>
-          ${curNote ? `<div class="cq-swap-note">${escapeHtml(curNote)}</div>` : ""}
-          <select class="cq-swap-select" data-cat="${escapeHtml(cat)}">${placeholder}${opts}</select>
+        <td class="cq-swap-base">
+          <div class="cq-swap-cur">${baseName}</div>
+          <select class="cq-swap-select" data-cat="${escapeHtml(cat)}" title="교체할 부품을 고르면 오른쪽 재취합 견적에 바로 반영됩니다">${placeholder}${opts}</select>
         </td>
-        <td class="cq-swap-price">${cur ? fmt(curUnit * (cur.qty || 1)) : "-"}</td>
+        <td class="cq-swap-price">${baseAmt ? fmt(baseAmt) : "-"}</td>
+        <td class="cq-swap-arrow">${isChanged ? "▶" : ""}</td>
+        <td class="cq-swap-now-cell">
+          <div class="cq-swap-cur">${curName} ${badge}</div>
+          ${curNote ? `<div class="cq-swap-note">${escapeHtml(curNote)}</div>` : ""}
+        </td>
+        <td class="cq-swap-price">${curAmt ? fmt(curAmt) : "-"}${isChanged && rowDiff ? `<div class="cq-swap-rowdiff ${rowDiff > 0 ? "is-up" : "is-down"}">${signed(rowDiff)}</div>` : ""}</td>
       </tr>`;
   }).join("");
+  const sumRow = `
+      <tr class="cq-swap-sumrow">
+        <th>부품 합계</th>
+        <td>원래 견적</td>
+        <td class="cq-swap-price">${fmt(baseSum)}</td>
+        <td class="cq-swap-arrow">▶</td>
+        <td>재취합 견적 <span class="cq-swap-diff ${nowSum - baseSum > 0 ? "is-up" : nowSum - baseSum < 0 ? "is-down" : ""}">(${signed(nowSum - baseSum)})</span></td>
+        <td class="cq-swap-price">${fmt(nowSum)}</td>
+      </tr>`;
 
   const issues = (tierMeta.compat_issues || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
   const notes = (tierMeta.auto_adjust_notes || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
@@ -3889,11 +3917,15 @@ function renderCustomSwapPanel(quotes) {
     ${notes ? `<ul class="cq-swap-autonotes">${notes}</ul>` : ""}
     <div class="cq-cmp-table-wrap">
       <table class="cq-cmp-table cq-swap-table">
-        <thead><tr><th style="width:110px;">부품 구분</th><th>현재 부품 · 교체할 부품 선택</th><th style="width:130px;">금액</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <colgroup><col style="width:96px;" /><col /><col style="width:104px;" /><col style="width:24px;" /><col /><col style="width:112px;" /></colgroup>
+        <thead>
+          <tr class="cq-swap-sides"><th></th><th colspan="2" class="cq-swap-side-base">📄 원래 견적 — 부품을 골라 교체</th><th></th><th colspan="2" class="cq-swap-side-now">🛠️ 재취합 견적 (바뀐 구성)</th></tr>
+          <tr><th>부품 구분</th><th>원래 부품 · 교체할 부품 선택</th><th>금액</th><th></th><th>재취합 부품</th><th>금액</th></tr>
+        </thead>
+        <tbody>${rows}${sumRow}</tbody>
       </table>
     </div>
-    <p class="cq-swap-hint">부품을 고르면 이 견적을 바로 다시 취합합니다(✅ 호환 · ⛔ 호환 불가, 괄호는 현재 부품 대비 차액). CPU · 메인보드를 바꾸면 소켓 · 메모리 규격, 그래픽카드를 바꾸면 파워 용량을 자동으로 맞춥니다. 아래 견적서 · 📥 엑셀 견적서 · 🧾 거래명세서에도 바뀐 구성이 그대로 들어갑니다.</p>`;
+    <p class="cq-swap-hint">왼쪽 원래 견적에서 부품을 고르면 오른쪽 재취합 견적에 바로 반영됩니다(✅ 호환 · ⛔ 호환 불가, 괄호는 지금 부품 대비 차액). 바뀐 행은 파란색, ▶ 오른쪽 아래 숫자는 그 부품의 차액입니다. CPU · 메인보드를 바꾸면 소켓 · 메모리 규격, 그래픽카드를 바꾸면 파워 용량을 자동으로 맞춥니다. 아래 견적서 · 📥 엑셀 견적서 · 🧾 거래명세서에도 바뀐 구성이 그대로 들어갑니다.</p>`;
   show(panel);
 
   panel.querySelectorAll(".cq-swap-select").forEach((sel) => {

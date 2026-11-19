@@ -2024,9 +2024,20 @@ def _swap_report(
         part_compat[cat_ko] = {
             str(p["pno"]): list(_part_compat(key, p, cfg, psu_info)) for p in parts_pool.get(key, [])
         }
+    # 원래 견적(교체 전) 부품: 교체 창 왼쪽 '원래 견적' 칸에 나란히 보인다
+    base_parts: list[dict[str, Any]] = []
+    for cat_ko, key in SWAP_CATS:
+        base = base_cfg.get(key)
+        if not base:
+            base_parts.append({"category": cat_ko, "name": "", "pno": 0, "unit_price": 0, "qty": 0})
+            continue
+        qty = int(base_cfg.get("ram_qty") or 1) if key == "ram" else 1
+        base_parts.append({"category": cat_ko, "name": base["name"], "pno": base["pno"],
+                           "unit_price": int(base["price"]), "qty": qty})
     return {
         "body_total": _cfg_body_total(cfg),
         "base_body_total": _cfg_body_total(base_cfg),
+        "base_parts": base_parts,
         "changed_parts": changed,
         "auto_adjust_notes": auto_notes,
         "compat_issues": _compat_issues(cfg, psu_info),
