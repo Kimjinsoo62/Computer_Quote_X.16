@@ -381,6 +381,11 @@
               <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="statement" role="tab" title="납품할 때 인수자 서명을 받는 거래명세표(위아래 두 벌)를 만들고, 서명 여부와 서명본을 관리합니다">🧾 거래명세서 <span id="tsListCount" class="archive-count">0</span></button>
             </div>
           </div>
+          <!-- 지금 보고 있는 탭 이름. 탭 버튼은 이모지만 보이므로 여기 글자로 크게 보여 준다 (switchSettingsTab 이 바꿈) -->
+          <div id="settingsCurrent" class="settings-current" aria-live="polite">
+            <strong id="settingsCurrentTitle"></strong>
+            <span id="settingsCurrentDesc" class="settings-current-desc"></span>
+          </div>
         </div>
         <button type="button" class="modal-close btn-modal-close" id="settingsClose" aria-label="닫기">✕ 닫기</button>
       </div>

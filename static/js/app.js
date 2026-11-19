@@ -2255,6 +2255,14 @@ $("#custTbody")?.addEventListener("click", (e) => {
 // ---------- ⚙️ 설정 (🧩 견적요소 | 📒 거래처 · 🗂️ 견적서 · 📋 작업내역서) ----------
 const settingsModal = $("#settingsModal");
 let settingsTab = "elements";
+// 설정 창 위쪽에 크게 보이는 현재 탭 이름 · 한 줄 설명
+const SETTINGS_TAB_TITLES = {
+  elements: ["🧩 견적요소", "모든 견적서에 들어가는 공급자 · 견적일 · 추가 품목 금액 · 입금 계좌"],
+  customer: ["📒 거래처 목록", "거래처 등록 · 검색 · 엑셀 가져오기, 이번 견적서의 견적처"],
+  archive: ["🗂️ 견적서 목록", "직접 작성한 견적(작성본) · 내려받은 Excel 견적서(보관 파일) · 새 견적 만들기"],
+  taskreport: ["📋 작업내역서 목록", "출장 · 수리 작업내역서 작성 · 검색 · 열기 · 백업"],
+  statement: ["🧾 거래명세서 목록", "거래명세표 작성 · 열기 · 인쇄 · 서명본 보관"],
+};
 
 function switchSettingsTab(tab) {
   if (!settingsModal) return;
@@ -2269,6 +2277,12 @@ function switchSettingsTab(tab) {
   settingsModal.querySelectorAll(".settings-panel").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== tab);
   });
+  const [title, desc] = SETTINGS_TAB_TITLES[tab] || ["", ""];
+  const titleEl = $("#settingsCurrentTitle");
+  const descEl = $("#settingsCurrentDesc");
+  if (titleEl) titleEl.textContent = title;
+  if (descEl) descEl.textContent = desc;
+  $("#settingsCurrent")?.setAttribute("data-tab", tab);
   if (tab === "customer") loadCustomers();
   else if (tab === "archive") {
     refreshQuoteHub();
