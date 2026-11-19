@@ -2591,3 +2591,10 @@ td > .mqp-in.w-email { width: 52%; }
 .cz-cart-err { color: #fca5a5; font-weight: 700; margin: 8px 0 0; }
 .btn-cz-cart { background: #0b5ed7; color: #fff; border-color: #0b5ed7; }
 .cz-acct-btns { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+/* 🧺 장바구니 결과: 앱 카드 금액 · 컴퓨존 원가 · 장바구니 금액 나란히 */
+.cz-cart-money { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 0.82rem; }
+.cz-cart-money th, .cz-cart-money td { padding: 4px 6px; border-bottom: 1px solid rgba(148, 163, 184, 0.2); text-align: left; }
+.cz-cart-money th { width: 34%; color: #cbd5e1; font-weight: 600; }
+.cz-cart-money td:nth-child(2) { width: 22%; text-align: right; font-weight: 700; white-space: nowrap; }
+.cz-cart-money td:nth-child(3) { color: #94a3b8; }

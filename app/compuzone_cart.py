@@ -114,7 +114,8 @@ def _reader(proc: subprocess.Popen) -> None:
                 job["need_user"] = msg.get("msg", "")
                 job["log"].append("⚠️ " + msg.get("msg", ""))
             elif typ == "done":
-                job.update(state="done", result={k: msg.get(k) for k in ("added", "failed", "qty_diff", "already", "missing", "in_cart")},
+                job.update(state="done", result={k: msg.get(k) for k in ("added", "failed", "qty_diff", "already", "missing", "in_cart",
+                                                                    "added_amount", "basket_total", "before_total", "before_kinds")},
                            need_user="")
                 job["step"] = job.get("total", 1)
             elif typ == "error":

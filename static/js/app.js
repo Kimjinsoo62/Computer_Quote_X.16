@@ -606,7 +606,7 @@ function compuzoneCartItems(i) {
   const tierMeta = quoteData?.engine === "custom_405_compuzone" ? quoteData?.custom_meta?.tiers?.[i] : null;
   if (tierMeta && Array.isArray(tierMeta.part_details)) {
     // 맞춤자동견적: 부품 8종 + 조립비를 각각(메모리 2개처럼 수량도). 모니터 · 키보드 같은 추가 품목은 상품 번호가 없어 뺀다
-    const items = tierMeta.part_details.filter((d) => d.pno).map((d) => ({ pno: d.pno, qty: d.qty || 1, category: d.category, name: d.name }));
+    const items = tierMeta.part_details.filter((d) => d.pno).map((d) => ({ pno: d.pno, qty: d.qty || 1, category: d.category, name: d.name, price: d.unit_price || 0 }));
     const inCart = new Set(tierMeta.part_details.map((d) => d.category));
     const skipped = (q.parts || []).filter((p) => !inCart.has(p.category) && (p.amount || 0) > 0).map((p) => `${p.category} ${p.name}`);
     return { items, skipped };
@@ -614,13 +614,15 @@ function compuzoneCartItems(i) {
   if (!q.product_no) return { items: [], skipped: [] };
   // 완제품 조립PC · 노트북: 상품 하나. 카드에 더한 모니터 · 키보드 · 세팅비 같은 추가 줄은 따로 담지 않는다
   const extras = (q.parts || []).filter((p) => ["모니터", "키보드마우스", "초기 세팅비", "추가"].some((k) => String(p.category || "").includes(k)));
+  const extrasAmt = extras.reduce((t, p) => t + (p.amount || 0), 0);
   return {
-    items: [{ pno: q.product_no, qty: 1, category: q.tab_label || q.tier || "", name: q.model || "" }],
+    items: [{ pno: q.product_no, qty: 1, category: q.tab_label || q.tier || "", name: q.model || "", price: Math.max(0, (q.total || 0) - extrasAmt) }],
     skipped: extras.map((p) => `${p.category} ${p.name}`),
   };
 }
 
 let czCartTimer = null;
+let czCartCompare = null; // {card, cost, margin, skippedAmt} — 결과 창에서 장바구니 금액과 나란히 보여 준다
 
 async function startCompuzoneCart(i, ev) {
   ev?.stopPropagation?.();
@@ -657,6 +659,13 @@ async function startCompuzoneCart(i, ev) {
     alert("🧺 컴퓨존 장바구니 담기를 시작하지 못했습니다\n\n" + e.message);
     return;
   }
+  const pct = activeMarginPercent();
+  czCartCompare = {
+    card: displayTotal(q),
+    cost: items.reduce((t, it) => t + (it.price || 0) * (it.qty || 1), 0),
+    margin: pct,
+    skipped: skipped.length,
+  };
   showCzCartProgress(job);
   clearInterval(czCartTimer);
   czCartTimer = setInterval(async () => {
@@ -692,7 +701,17 @@ function showCzCartProgress(st) {
     const qd = (r.qty_diff || []).map((x) => `<li>⚠️ ${escapeHtml(x.name)} — 수량 ${x.want}개 중 ${x.got}개만 담겼습니다(장바구니에서 수량을 맞춰 주세요)</li>`).join("");
     const al = (r.already || []).map((x) => `<li>ℹ️ ${escapeHtml(x.name)} — 이미 장바구니에 있어 수량이 늘지 않았습니다(현재 ${x.qty}개)</li>`).join("");
     const n = (st.items || 0);
-    box.innerHTML = `<p class="${r.added === n ? "cz-cart-ok" : "cz-cart-err"}">${r.added === n ? "✔" : "⚠️"} ${n}개 중 ${r.added}개가 장바구니에 담겼습니다(담기 전후 장바구니를 비교해 확인). 컴퓨존 창에 장바구니가 열려 있습니다(장바구니 ${r.in_cart}종).</p>${fails || qd || al ? `<ul>${fails}${qd}${al}</ul>` : ""}`;
+    const c = czCartCompare || {};
+    const diffCost = (r.added_amount || 0) - (c.cost || 0);
+    const signedW = (v) => (v > 0 ? `+${fmt(v)}` : v < 0 ? `-${fmt(-v)}` : "±0원");
+    const money = c.card ? `
+      <table class="cz-cart-money">
+        <tr><th>앱 카드 금액</th><td>${fmt(c.card)}</td><td>${c.margin ? `마진 ${c.margin}% · 만원 올림 적용(소비자가)` : "원가(마진 0%)"}${c.skipped ? " · 모니터 등 담지 않은 줄 포함" : ""}</td></tr>
+        <tr><th>카드의 컴퓨존 원가</th><td>${fmt(c.cost)}</td><td>담은 상품들의 견적 당시 컴퓨존 가격 합계(마진 전)</td></tr>
+        <tr><th>이번에 담은 상품(장바구니)</th><td>${fmt(r.added_amount || 0)}</td><td>${diffCost ? `카드 원가와 ${signedW(diffCost)} — 견적 뒤 컴퓨존 가격이 바뀌었거나 일부가 덜 담김` : "카드 원가와 같음"}</td></tr>
+        <tr><th>장바구니 전체 합계</th><td>${fmt(r.basket_total || 0)}</td><td>${r.before_kinds ? `원래 있던 ${r.before_kinds}종(${fmt(r.before_total || 0)}) 포함` : "이번에 담은 상품만"}</td></tr>
+      </table>` : "";
+    box.innerHTML = `<p class="${r.added === n ? "cz-cart-ok" : "cz-cart-err"}">${r.added === n ? "✔" : "⚠️"} ${n}개 중 ${r.added}개가 장바구니에 담겼습니다(담기 전후 장바구니를 비교해 확인). 컴퓨존 창에 장바구니가 열려 있습니다(장바구니 ${r.in_cart}종).</p>${money}${fails || qd || al ? `<ul>${fails}${qd}${al}</ul>` : ""}`;
   } else if (st.state === "error") {
     box.innerHTML = `<p class="cz-cart-err">✕ ${escapeHtml(st.error || "장바구니 담기에 실패했습니다.")}</p>`;
   } else {

@@ -371,26 +371,39 @@ class Runner:
                 return False, why
         return True, ""
 
-    def basket_counts(self) -> dict[int, int]:
-        """장바구니의 상품 번호 → 수량(수량 0 인 선택 서비스 줄은 뺀다). 담기 전후를 비교해 실제로 담겼는지 본다."""
+    def basket_state(self) -> dict[str, Any]:
+        """장바구니: 상품 번호 → 수량 · 줄 금액(판매가 × 수량), 전체 합계. 수량 0 인 선택 서비스 줄은 뺀다.
+        (2026-11 확인: 행 input[name="SelectOrderCartNo[]"][data-pno], 수량 input[name="ea[<장바구니번호>]"],
+         줄 금액 #list_price_<장바구니번호>, 합계 .CardTotalPrice)"""
         self.goto(BASKET_URL)
         try:
-            rows = self.page.evaluate("""() => Array.from(document.querySelectorAll('input[name="SelectOrderCartNo[]"]')).map(cb => {
-                const row = cb.closest('tr') || cb.closest('li') || cb.parentElement;
-                const ea = row ? row.querySelector('input[name^="ea["]') : null;
-                return [cb.dataset.pno, ea ? ea.value : '1'];
-            })""")
+            data = self.page.evaluate("""() => {
+                const num = (t) => parseInt(String(t || '').replace(/[^0-9]/g, ''), 10) || 0;
+                const rows = Array.from(document.querySelectorAll('input[name="SelectOrderCartNo[]"]')).map(cb => {
+                    const row = cb.closest('tr') || cb.closest('li') || cb.parentElement;
+                    const ea = row ? row.querySelector('input[name^="ea["]') : null;
+                    const amt = cb.value ? document.getElementById('list_price_' + cb.value) : null;
+                    return [cb.dataset.pno, ea ? ea.value : '1', amt ? num(amt.innerText) : 0];
+                });
+                const tot = document.querySelector('.CardTotalPrice');
+                return {rows, total: tot ? num(tot.innerText) : 0};
+            }""")
         except Exception:
-            return {}
-        out: dict[int, int] = {}
-        for pno, ea in rows:
+            return {"counts": {}, "amounts": {}, "total": 0}
+        counts: dict[int, int] = {}
+        amounts: dict[int, int] = {}
+        for pno, ea, amt in data.get("rows") or []:
             try:
                 n = int(str(ea).replace(",", "") or 0)
             except ValueError:
                 n = 0
             if pno and str(pno).isdigit() and n > 0:
-                out[int(pno)] = out.get(int(pno), 0) + n
-        return out
+                counts[int(pno)] = counts.get(int(pno), 0) + n
+                amounts[int(pno)] = amounts.get(int(pno), 0) + int(amt or 0)
+        return {"counts": counts, "amounts": amounts, "total": int(data.get("total") or 0)}
+
+    def basket_counts(self) -> dict[int, int]:
+        return self.basket_state()["counts"]
 
     def run(self, task: dict[str, Any]) -> None:
         job = str(task.get("job") or "")
@@ -404,8 +417,9 @@ class Runner:
             elif not self.login(job, str(task.get("user") or ""), str(task.get("password") or "")):
                 return
             emit(job, "progress", step=1, total=total + 2, msg="로그인 확인")
-            before = self.basket_counts()
-            emit(job, "log", msg=f"담기 전 장바구니: {len(before)}종")
+            before_st = self.basket_state()
+            before = before_st["counts"]
+            emit(job, "log", msg=f"담기 전 장바구니: {len(before)}종 · 합계 {before_st['total']:,}원")
             clicked: dict[int, str] = {}
             for k, it in enumerate(items, 1):
                 label = f"{it.get('category') or ''} {it.get('name') or it['pno']}".strip()
@@ -419,7 +433,8 @@ class Runner:
                 clicked[int(it["pno"])] = "" if ok else why
                 emit(job, "log", msg=("· 담기 요청 보냄: " if ok else "✕ ") + label[:70] + ("" if ok else f" — {why}"))
                 pause(0.15, 0.5)
-            after = self.basket_counts()
+            after_st = self.basket_state()
+            after = after_st["counts"]
             # 판정은 장바구니 전후 수량 차이로 한다(버튼 응답만 보고 '담겼다'고 하지 않는다)
             added, failed, qty_diff, already = [], [], [], []
             for it in items:
@@ -439,9 +454,16 @@ class Runner:
             for x in already:
                 emit(job, "log", msg=f"ℹ️ {x['name'][:60]} — 이미 장바구니에 있었고 수량이 늘지 않았습니다(현재 {x['qty']}개)")
             emit(job, "progress", step=total + 2, total=total + 2, msg="장바구니를 열었습니다.")
+            # 금액: 이번에 늘어난 줄 금액(컴퓨존 판매가) 합계와 장바구니 전체 합계(원래 있던 상품 포함)
+            added_amount = 0
+            for it in items:
+                pno = int(it["pno"])
+                added_amount += max(0, after_st["amounts"].get(pno, 0) - before_st["amounts"].get(pno, 0))
+            emit(job, "log", msg=f"담은 상품 컴퓨존 합계 {added_amount:,}원 · 장바구니 전체 합계 {after_st['total']:,}원")
             self.save_session()
             emit(job, "done", added=len(added), failed=failed, qty_diff=qty_diff, already=already,
-                 missing=[], in_cart=len(after))
+                 missing=[], in_cart=len(after), added_amount=added_amount, basket_total=after_st["total"],
+                 before_total=before_st["total"], before_kinds=len(before))
             try:
                 self.page.bring_to_front()
             except Exception:
