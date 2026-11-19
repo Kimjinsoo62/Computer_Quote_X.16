@@ -3567,6 +3567,23 @@ function renderCustomWizardUI() {
   const curPreset = presets.find((p) => p.id === customState.usage) || presets[0];
   renderCustomMethodBanner(curPreset);
 
+  // 용도에 맞는 세부 항목만: 게임 용도면 게임 + 해상도 · 주사율, 사무 · 영상 · AI 면 그 용도 작업 프로그램만 (서버 USAGE_DETAIL)
+  const showGames = curPreset?.show_games !== false;
+  const allowedApps = Array.isArray(curPreset?.apps) ? curPreset.apps : (customBuilderMeta.apps || []).map((a) => a.id);
+  const appList = (customBuilderMeta.apps || []).filter((a) => allowedApps.includes(a.id));
+  // 숨긴 항목에 남은 선택은 지운다(다른 용도에서 고른 게임 · 프로그램이 이 견적에 섞이지 않게)
+  if (!showGames) customState.games = [];
+  customState.apps = customState.apps.filter((id) => allowedApps.includes(id));
+  $("#cqGameCol")?.classList.toggle("hidden", !showGames);
+  $("#cqAppCol")?.classList.toggle("hidden", !appList.length);
+  $("#cqDetailBox")?.classList.toggle("cq-detail-single", !showGames || !appList.length);
+  const appLabel = $("#cqAppLabel");
+  if (appLabel) {
+    appLabel.textContent = showGames
+      ? "🎙️ 게임하면서 함께 쓰는 프로그램 (선택)"
+      : `💼 ${curPreset?.short || ""} 작업 프로그램 선택 (복수 선택 가능)`;
+  }
+
   const gBox = $("#cqGameChips");
   if (gBox) {
     gBox.innerHTML = (customBuilderMeta.games || [])
@@ -3589,7 +3606,7 @@ function renderCustomWizardUI() {
 
   const aBox = $("#cqAppChips");
   if (aBox) {
-    aBox.innerHTML = (customBuilderMeta.apps || [])
+    aBox.innerHTML = appList
       .map((a) => {
         const on = customState.apps.includes(a.id);
         return `<button type="button" class="cq-chip ${on ? "on" : ""}" data-aid="${escapeHtml(a.id)}">${escapeHtml(a.label)}</button>`;

@@ -221,8 +221,9 @@
         </div>
 
         <!-- 2단계: 세부 게임(해상도·목표 프레임·부스트) 및 작업 프로그램 다중 선택 (접기/펼치기) -->
+        <!-- 용도에 맞는 칸만 보인다(app.js renderCustomWizardUI · 서버 custom_builder.USAGE_DETAIL) -->
         <div id="cqDetailBox" class="cq-detail-box">
-          <div class="cq-detail-col">
+          <div id="cqGameCol" class="cq-detail-col">
             <div class="cq-step-label">🎮 플레이할 게임 선택 (복수 선택 시 가장 높은 사양 기준 역산)</div>
             <div id="cqGameChips" class="cq-chip-grid"></div>
             <div class="cq-game-opts">
@@ -252,8 +253,8 @@
               </label>
             </div>
           </div>
-          <div class="cq-detail-col">
-            <div class="cq-step-label">💼 주로 쓰는 작업 프로그램 선택 (복수 선택 가능)</div>
+          <div id="cqAppCol" class="cq-detail-col">
+            <div id="cqAppLabel" class="cq-step-label">💼 주로 쓰는 작업 프로그램 선택 (복수 선택 가능)</div>
             <div id="cqAppChips" class="cq-chip-grid"></div>
           </div>
         </div>

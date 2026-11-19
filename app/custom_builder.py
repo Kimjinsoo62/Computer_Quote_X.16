@@ -185,6 +185,23 @@ USAGE_PRESETS: list[dict[str, Any]] = [
 USAGE_PRESET_MAP: dict[str, dict[str, Any]] = {p["id"]: p for p in USAGE_PRESETS}
 
 # 해상도 메타데이터 (405.kr resInfo 대응)
+# 용도별로 하단 세부 선택에 보일 것: 게임(+ 해상도 · 주사율) 칸을 보일지, 어떤 작업 프로그램을 보일지.
+# 화면은 이 목록만 보여 주고, 견적 계산도 여기 없는 게임 · 프로그램은 뺀다(숨겨진 선택이 결과에 섞이지 않게).
+USAGE_DETAIL: dict[str, dict[str, Any]] = {
+    "office": {"games": False, "apps": ["office_doc", "web_multi"]},
+    "game_fhd": {"games": True, "apps": ["streaming"]},
+    "game_qhd": {"games": True, "apps": ["streaming"]},
+    "game_4k": {"games": True, "apps": ["streaming"]},
+    "creator": {"games": False, "apps": ["photoshop", "premiere_fhd", "premiere_4k", "aftereffects", "blender", "cad_3d", "streaming"]},
+    "ai_work": {"games": False, "apps": ["local_llm", "coding_docker"]},
+}
+
+
+def usage_detail(usage_id: str) -> dict[str, Any]:
+    """용도의 세부 선택 범위. 모르는 용도면 모두 보인다."""
+    return USAGE_DETAIL.get(usage_id) or {"games": True, "apps": [a["id"] for a in CUSTOM_APPS]}
+
+
 RESOLUTION_INFO: dict[str, dict[str, Any]] = {
     "FHD": {"id": "FHD", "label": "FHD (1920×1080)", "ko": "FHD", "mp": 2_073_600, "idx": 0, "vram_min": 6},
     "QHD": {"id": "QHD", "label": "QHD (2560×1440)", "ko": "QHD", "mp": 3_686_400, "idx": 1, "vram_min": 8},
@@ -799,8 +816,9 @@ def calculate_floors(
     res = RESOLUTION_INFO[res_key]
     fps = int(target_fps or preset.get("default_fps") or 144)
 
-    game_ids = [g for g in (games or []) if g in GAME_MAP]
-    app_ids = [a for a in (apps or []) if a in APP_MAP]
+    detail = usage_detail(preset["id"])
+    game_ids = [g for g in (games or []) if g in GAME_MAP] if detail["games"] else []
+    app_ids = [a for a in (apps or []) if a in APP_MAP and a in detail["apps"]]
 
     # 프리셋 기본 요구치 복사
     base_min = dict(preset["floors"]["min"])
@@ -2194,6 +2212,9 @@ def get_custom_builder_options() -> dict[str, Any]:
                 "default_fps": p["default_fps"],
                 "default_games": p.get("default_games", []),
                 "default_apps": p.get("default_apps", []),
+                # 하단 세부 선택에 보일 범위(USAGE_DETAIL)
+                "show_games": usage_detail(p["id"])["games"],
+                "apps": usage_detail(p["id"])["apps"],
                 "method_title": p["method_title"],
                 "method_rules": p["method_rules"],
             }

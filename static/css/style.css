@@ -2208,6 +2208,9 @@ td > .mqp-in.w-email { width: 52%; }
 @media (max-width: 900px) {
   .cq-detail-box { grid-template-columns: 1fr; }
 }
+/* 용도에 맞는 칸이 하나뿐일 때(사무 · 영상 · AI 는 작업 프로그램만) 한 칸으로 */
+.cq-detail-box.cq-detail-single { grid-template-columns: 1fr; }
+.cq-detail-col.hidden { display: none; }
 .cq-chip-grid {
   display: flex;
   flex-wrap: wrap;
