@@ -3763,6 +3763,7 @@ function renderCustomWizardUI() {
         else customState.games.push(gid);
         customState.overrides = {};
         renderCustomWizardUI();
+        scheduleCustomRebuild();
       });
     });
   }
@@ -3783,6 +3784,7 @@ function renderCustomWizardUI() {
         else customState.apps.push(aid);
         customState.overrides = {};
         renderCustomWizardUI();
+        scheduleCustomRebuild();
       });
     });
   }
@@ -4255,7 +4257,13 @@ async function submitCustomQuote(opts = {}) {
   }
 }
 
-$("#cqSubmitBtn")?.addEventListener("click", () => submitCustomQuote());
+// 게임 · 프로그램 칩과 예산은 여러 번 연달아 바꾸는 일이 많아, 마지막으로 바꾼 뒤 잠깐 기다렸다 한 번만 다시 뽑는다.
+// (다른 선택 칸은 바꾸는 즉시 다시 뽑는다 — 그래서 [3종 견적 뽑기] 버튼은 없앴다)
+let customRebuildTimer = null;
+function scheduleCustomRebuild(delay = 700) {
+  clearTimeout(customRebuildTimer);
+  customRebuildTimer = setTimeout(() => submitCustomQuote({ keepTab: true }), delay);
+}
 $("#cqBtnForceRefresh")?.addEventListener("click", () => submitCustomQuote({ keepTab: true, forceRefresh: true }));
 $("#cqBtnResetOverrides")?.addEventListener("click", () => {
   customState.overrides = {};
@@ -4274,8 +4282,13 @@ $("#cqBtnToggleDetail")?.addEventListener("click", () => {
 $("#cqBudgetManwon")?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
+    clearTimeout(customRebuildTimer);
     submitCustomQuote({ keepTab: true });
   }
+});
+$("#cqBudgetManwon")?.addEventListener("input", () => {
+  customState.overrides = {};
+  scheduleCustomRebuild(1200);  // 숫자를 다 칠 때까지 기다린다
 });
 
 document.addEventListener("DOMContentLoaded", () => {
