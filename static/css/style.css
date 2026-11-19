@@ -2463,15 +2463,19 @@ td > .mqp-in.w-email { width: 52%; }
 .cq-swap-table { table-layout: fixed; width: 100%; }
 .cq-swap-table td, .cq-swap-table th { overflow-wrap: anywhere; }
 .cq-swap-sides th { font-size: 0.85rem; padding: 6px 8px; }
-.cq-swap-table th.cq-swap-side-base { background: rgba(148, 163, 184, 0.18); color: #e2e8f0; text-align: left; }
+.cq-swap-table th.cq-swap-side-base { background: #a16207; color: #fff; text-align: left; }
+/* 원래 견적 쪽(노랑)은 재취합 쪽(파랑)과 같은 모양: 진한 머리줄 + 옅은 칸 · 부품 구분 열도 같은 노랑 */
+.cq-swap-table thead th:first-child { background: #a16207; color: #fff; }
+.cq-swap-table tbody th:first-child { background: rgba(234, 179, 8, 0.13); color: #fef3c7; border-right: 3px solid #eab308; }
+.cq-swap-table tbody tr.cq-swap-sumrow th:first-child, .cq-swap-table tbody tr.cq-swap-subrow th:first-child { background: rgba(234, 179, 8, 0.22); }
 .cq-swap-table th.cq-swap-side-now { background: #1d4ed8; color: #fff; text-align: left; }
-.cq-swap-table td.cq-swap-base, .cq-swap-table td.cq-swap-base-price { background: rgba(148, 163, 184, 0.06); }
+.cq-swap-table td.cq-swap-base, .cq-swap-table td.cq-swap-base-price { background: rgba(234, 179, 8, 0.08); }
 .cq-swap-table td.cq-swap-now-cell, .cq-swap-table td.cq-swap-now-price { background: rgba(59, 130, 246, 0.13); }
 .cq-swap-table td.cq-swap-now-cell { border-left: 3px solid #3b82f6; }
 .cq-swap-table td.cq-swap-now-cell .cq-swap-cur { color: #dbeafe; }
 /* 바뀐 행: 재취합 쪽을 더 진하게, 원래 쪽은 흐리게 */
 .cq-swap-table tr.is-changed td.cq-swap-now-cell, .cq-swap-table tr.is-changed td.cq-swap-now-price { background: rgba(59, 130, 246, 0.32); }
-.cq-swap-table tr.is-changed td.cq-swap-base, .cq-swap-table tr.is-changed td.cq-swap-base-price { background: rgba(148, 163, 184, 0.06); }
+.cq-swap-table tr.is-changed td.cq-swap-base, .cq-swap-table tr.is-changed td.cq-swap-base-price { background: rgba(234, 179, 8, 0.05); }
 .cq-swap-table tr.is-changed td.cq-swap-base .cq-swap-cur { color: #94a3b8; }
 .cq-swap-table tr.is-changed td.cq-swap-base-price { color: #94a3b8; }
 .cq-swap-arrow { text-align: center; color: #60a5fa; font-size: 0.85rem; padding: 0 !important; }
