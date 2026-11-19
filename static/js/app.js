@@ -4768,7 +4768,14 @@ async function saveTrForm() {
     fillTrForm(result.report);
     loadTrReportsList();
     updateBlinkWarnings();
-    alert("✔ 작업내역서가 성공적으로 저장되었습니다.");
+    // 작업내역서를 저장하면 서버가 연결된 거래명세서도 만들거나 고친다(명세서 → 작업내역서 방향은 없음).
+    const stmt = result.statement;
+    let stmtMsg = "";
+    if (stmt?.error) stmtMsg = `\n⚠️ ${stmt.error}`;
+    else if (stmt?.doc_no) stmtMsg = `\n🧾 거래명세서에도 저장했습니다 (${stmt.doc_no} · ${tsFmt(stmt.total)}원).`;
+    else stmtMsg = "\n(작업 내역이 비어 있어 거래명세서는 만들지 않았습니다.)";
+    if (typeof loadTsList === "function") loadTsList();
+    alert(`✔ 작업내역서가 성공적으로 저장되었습니다.${stmtMsg}`);
   } catch (e) {
     alert(e.message);
   } finally {

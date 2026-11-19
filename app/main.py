@@ -1330,11 +1330,20 @@ def api_get_task_reports():
     return {"reports": load_task_reports()}
 
 
+def _sync_statement_from_report(report: dict) -> dict | None:
+    """작업내역서 저장 → 연결된 거래명세서도 저장(한 방향). 명세서 저장이 실패해도 작업내역서 저장은 성공으로 둔다."""
+    try:
+        stmt = trade_statement.sync_from_task_report(report)
+    except (OSError, ValueError) as e:
+        return {"error": f"거래명세서 동시 저장 실패: {e}"}
+    return {"id": stmt["id"], "doc_no": stmt.get("doc_no", ""), "total": stmt.get("total", 0)} if stmt else None
+
+
 @app.post("/api/task-reports")
 def api_create_task_report(data: dict = Body(...)):
     """새 작업내역서 저장"""
     created = create_task_report(data)
-    return {"status": "ok", "report": created}
+    return {"status": "ok", "report": created, "statement": _sync_statement_from_report(created)}
 
 
 @app.get("/api/task-reports/backup/settings")
@@ -1406,7 +1415,7 @@ def api_update_task_report(report_id: str, data: dict = Body(...)):
     updated = update_task_report(report_id, data)
     if not updated:
         raise HTTPException(status_code=404, detail="작업내역서를 찾을 수 없습니다.")
-    return {"status": "ok", "report": updated}
+    return {"status": "ok", "report": updated, "statement": _sync_statement_from_report(updated)}
 
 
 @app.delete("/api/task-reports/{report_id}")

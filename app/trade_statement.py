@@ -157,6 +157,71 @@ def save_statement(data: dict[str, Any]) -> dict[str, Any]:
         return rec
 
 
+def _items_from_task_report(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """작업내역서의 작업 행 → 명세서 품목. 작업 내용(없으면 부품)을 품명으로, 비용을 단가(수량 1)로 쓴다."""
+    items: list[dict[str, Any]] = []
+    for t in report.get("tasks") or []:
+        if not isinstance(t, dict):
+            continue
+        desc = str(t.get("description") or "").strip()
+        parts = str(t.get("parts") or "").strip()
+        name = f"{desc} ({parts})" if desc and parts else (desc or parts)
+        if name:
+            items.append({"category": "작업", "name": name, "qty": 1, "unit_price": _int(t.get("cost"), 0)})
+    if not items and _int(report.get("total_cost"), 0) > 0:
+        items.append({"category": "작업", "name": "컴퓨터 작업", "qty": 1, "unit_price": _int(report.get("total_cost"), 0)})
+    return items
+
+
+def sync_from_task_report(report: dict[str, Any]) -> dict[str, Any] | None:
+    """작업내역서를 저장할 때 연결된 거래명세서를 만들거나 고친다(작업내역서 → 명세서 한 방향만).
+
+    명세서에 task_report_id 로 연결한다. 이미 연결된 명세서가 있으면 품목 · 고객 · 날짜 · 제목만 바꾸고
+    서명 상태 · 서명본 · 비고 · 단가 표시 · 번호는 그대로 둔다. 작업 행이 모두 비면 아무것도 하지 않는다(None).
+    명세서 쪽 저장(save_statement)은 작업내역서를 만들지 않는다.
+    """
+    report_id = str(report.get("id") or "")
+    items = clean_items(_items_from_task_report(report))
+    if not report_id or not items:
+        return None
+    tr_no = str(report.get("doc_no") or "").strip()
+    model = " ".join(str(report.get(k) or "").strip() for k in ("device_type", "device_model")).strip()
+    fields = {
+        "title": f"작업내역서 {tr_no}{(' · ' + model) if model else ''}".strip()[:200],
+        "issue_date": str(report.get("receipt_date") or "").strip()[:10] or date.today().isoformat(),
+        "customer_info": clean_customer({
+            "name": report.get("customer_name"),
+            "phone": report.get("customer_phone"),
+            "email": report.get("customer_email"),
+            "address": report.get("customer_address"),
+        }),
+        "items": items,
+        "source": f"📋 작업내역서 {tr_no}".strip()[:200],
+        "task_report_id": report_id,
+    }
+    with _lock:
+        records = load_statements()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for idx, old in enumerate(records):
+            if old.get("task_report_id") == report_id:
+                rec = {**old, **fields, "updated_at": now}
+                rec["total"] = total_of(items)
+                rec["customer"] = _customer_info(rec)["name"]
+                records[idx] = rec
+                _save_all(records)
+                return rec
+        rec = clean_record(fields)
+        rec["task_report_id"] = report_id
+        rec["total"] = total_of(items)
+        rec["customer"] = _customer_info(rec)["name"]
+        rec["doc_no"] = _next_doc_no(records, rec["issue_date"])
+        rec["updated_at"] = now
+        rec = {"id": uuid.uuid4().hex[:12], "created_at": now, "signed_file": "", **rec}
+        records.insert(0, rec)
+        _save_all(records)
+        return rec
+
+
 def delete_statement(stmt_id: str) -> bool:
     with _lock:
         records = load_statements()
