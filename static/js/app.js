@@ -1301,7 +1301,7 @@ $("#formGalleryModal")?.addEventListener("click", (e) => {
   if (e.target === $("#formGalleryModal")) closeFormGallery();
 });
 
-// ---------- 🗂️ 견적서 관리 (설정관리 탭) ----------
+// ---------- 🗂️ 견적서 (설정 탭) ----------
 // 두 저장소를 한 목록으로 보여 준다(최신순 · 15개씩 페이지).
 //   📝 작성본  : 새 견적 만들기로 직접 작성해 저장한 견적(manual_quotes.json) — 다시 열어 고칠 수 있다
 //   📥 보관 파일: 카드 · 작성 창에서 Excel 다운로드 · 이메일로 만든 xlsx 사본(quote_archive/)
@@ -1636,7 +1636,7 @@ $("#qaTbody")?.addEventListener("click", (e) => {
     if (rec) openMqEditor(rec);
   }
 });
-// 시작 시 견적서 관리 탭의 건수 배지 (작성본은 아래 새 견적 만들기 코드 끝에서 읽는다)
+// 시작 시 견적서 탭의 건수 배지 (작성본은 아래 새 견적 만들기 코드 끝에서 읽는다)
 loadQuoteArchive();
 
 /** 모니터·무선키보드 공통 표시: "{이름} (포함됨|제외됨)" */
@@ -1828,7 +1828,7 @@ $("#btnMarginCycle")?.addEventListener("click", (e) => {
 
 updateExtrasUI();
 
-// ---------- 견적처/공급자 정보 관리 (설정관리 → 견적정보 · 거래처 탭) ----------
+// ---------- 견적처/공급자 정보 관리 (설정 → 견적정보 · 거래처 탭) ----------
 const qiFields = {
   customer_name: "#qiCustomerName",
   customer_manager: "#qiCustomerManager",
@@ -1893,7 +1893,7 @@ function isTaskReportCompanyDummy(name, addr, phone) {
 
 // 깜박임(Blink Warning) 상태 통합 갱신 함수
 function updateBlinkWarnings() {
-  // 1. 견적처가 기본(가짜) 값이면 "설정관리" 버튼 · 경고 배너 깜박임
+  // 1. 견적처가 기본(가짜) 값이면 "설정" 버튼 · 경고 배너 깜박임
   const qiDummy = isQuoteInfoDummy(quoteInfo);
   qiToggleWarningBanners(qiDummy);
   $("#btnSettings")?.classList.toggle("blink-warning", qiDummy);
@@ -1932,7 +1932,7 @@ function syncQuoteInfoToTaskReport(force = false) {
   updateBlinkWarnings();
 }
 
-// 견적요소관리 · 거래처관리 탭에 같은 경고 배너 · 상태 줄이 하나씩 있다(class 로 함께 갱신)
+// 견적요소 · 거래처 탭에 같은 경고 배너 · 상태 줄이 하나씩 있다(class 로 함께 갱신)
 function qiToggleWarningBanners(show) {
   document.querySelectorAll(".qi-warning-banner").forEach((el) => el.classList.toggle("hidden", !show));
 }
@@ -2001,7 +2001,7 @@ document.addEventListener("keydown", (e) => {
     hide(pwHelp);
     return;
   }
-  // 새 견적 작성 창: 위에 메일 발송 창이 떠 있으면 그대로 두고, 아니면 이 창만 닫는다(아래 설정관리는 그대로)
+  // 새 견적 작성 창: 위에 메일 발송 창이 떠 있으면 그대로 두고, 아니면 이 창만 닫는다(아래 설정는 그대로)
   const mqOpen = mqModal && !mqModal.classList.contains("hidden");
   if (mqOpen) {
     if (mailModal.classList.contains("hidden")) closeMqEditor();
@@ -2016,7 +2016,7 @@ document.addEventListener("keydown", (e) => {
   if (galleryModal && !galleryModal.classList.contains("hidden")) closeFormGallery();
 });
 
-// 💾 저장: 견적요소관리(#qiElemSave) · 거래처관리(#quoteInfoSave) 어느 탭에서 눌러도
+// 💾 저장: 견적요소(#qiElemSave) · 거래처(#quoteInfoSave) 어느 탭에서 눌러도
 // 두 탭의 칸을 모두 보낸다(save_quote_info 는 안 보낸 키를 기본값으로 되돌리므로 일부만 보내면 안 됨).
 document.querySelectorAll(".qi-save-btn").forEach((btn) => btn.addEventListener("click", async () => {
   const payload = {};
@@ -2063,7 +2063,7 @@ $("#quoteInfoReset")?.addEventListener("click", async () => {
 
 
 
-// ---------- 거래처 목록 (customers.json) — 설정관리 → 견적정보 · 거래처 탭 ----------
+// ---------- 거래처 목록 (customers.json) — 설정 → 견적정보 · 거래처 탭 ----------
 // 행을 누르면 견적처 칸에 불러오고(저장 전), [✔ 적용]은 불러온 뒤 바로 견적정보로 저장한다.
 // 상호명이 같으면 같은 거래처로 보고 갱신한다(이름을 바꿔 저장하면 새 거래처로 등록, 옛 항목은 그대로).
 let custList = [];
@@ -2252,7 +2252,7 @@ $("#custTbody")?.addEventListener("click", (e) => {
   qiSetStatus(`'${c?.name || ""}' 불러옴 — 💾 저장을 누르면 견적서에 적용됩니다.`);
 });
 
-// ---------- ⚙️ 설정관리 (🧩 견적요소관리 | 📒 거래처관리 · 🗂️ 견적서관리 · 📋 작업내역서) ----------
+// ---------- ⚙️ 설정 (🧩 견적요소 | 📒 거래처 · 🗂️ 견적서 · 📋 작업내역서) ----------
 const settingsModal = $("#settingsModal");
 let settingsTab = "elements";
 
@@ -2281,7 +2281,7 @@ function switchSettingsTab(tab) {
   }
 }
 
-/** 설정관리 창을 연다. 견적정보 칸은 열 때마다 저장된 값으로 다시 채운다(저장하지 않은 수정은 버림). */
+/** 설정 창을 연다. 견적정보 칸은 열 때마다 저장된 값으로 다시 채운다(저장하지 않은 수정은 버림). */
 function openSettings(tab = settingsTab) {
   if (!settingsModal) return;
   custSelectedName = "";
@@ -2296,7 +2296,7 @@ function closeSettings() {
 }
 
 $("#btnSettings")?.addEventListener("click", () => openSettings());
-// 메인창 상단 바로가기: 설정관리의 해당 탭을 바로 연다
+// 메인창 상단 바로가기: 설정의 해당 탭을 바로 연다
 $("#btnNavArchive")?.addEventListener("click", () => openSettings("archive"));
 $("#btnNavTaskReport")?.addEventListener("click", () => openSettings("taskreport"));
 $("#settingsClose")?.addEventListener("click", closeSettings);
@@ -4767,7 +4767,7 @@ window.loadTrReportItem = async function(id) {
     if (!res.ok) throw new Error("내역 조회 실패");
     const data = await res.json();
     fillTrForm(data.report);
-    openTrModal(); // 설정관리 위에 작업내역서 창이 뜬다. 닫으면 목록으로 돌아온다.
+    openTrModal(); // 설정 위에 작업내역서 창이 뜬다. 닫으면 목록으로 돌아온다.
   } catch (e) {
     alert(e.message);
   }
@@ -5066,7 +5066,7 @@ function filteredTrReports() {
   });
 }
 $("#trSearchInput")?.addEventListener("input", () => renderTrListTable(filteredTrReports()));
-// 설정관리 목록 검색 버튼: 🔍 검색 / Enter 는 필터를 다시 적용, ✕ 는 검색어를 지우고 전체 목록으로
+// 설정 목록 검색 버튼: 🔍 검색 / Enter 는 필터를 다시 적용, ✕ 는 검색어를 지우고 전체 목록으로
 function runSettingsSearch(inputId, clear = false) {
   const inp = document.getElementById(inputId);
   if (!inp) return;
@@ -5084,14 +5084,14 @@ document.querySelectorAll(".set-search-clear").forEach((b) => b.addEventListener
   });
 });
 // ---------- 📝 새 견적 만들기 (직접 작성 견적, app/manual_quote.py) ----------
-// 설정관리 [📝 새 견적 만들기] 탭에서 폼1~8 중 하나를 고르면 빈 견적 작성 창이 열린다.
+// 설정 [📝 새 견적 만들기] 탭에서 폼1~8 중 하나를 고르면 빈 견적 작성 창이 열린다.
 // 단가는 부가세 포함 금액 그대로 쓴다(마진 · 만원 올림 없음). Excel · PDF · 메일은 카드 견적과 같은 서버 코드를 쓴다.
 const mqModal = $("#manualQuoteModal");
 const MQ_MAX_ROWS = 20; // 서버 manual_quote.MAX_ITEMS 와 같게
 // 종이에 처음 보이는 행 수. 실제 견적서(manual_quote.MIN_ITEM_ROWS = 20행)와 같은 칸 수로 보여 준다.
 const MQ_MIN_ROWS = MQ_MAX_ROWS;
 let mqCurrentId = "";
-// mqList(작성본 목록)는 위 🗂️ 견적서 관리 코드에 선언돼 있다
+// mqList(작성본 목록)는 위 🗂️ 견적서 코드에 선언돼 있다
 let mqPreviewUrl = "";
 let mqPreviewSeq = 0;
 
@@ -5103,7 +5103,7 @@ function mqFmt(n) {
   return (Number(n) || 0).toLocaleString("ko-KR");
 }
 
-/** 🗂️ 견적서 관리 탭 [➕ 새 견적 만들기]로 펼치는 서식 8개 고르기 칸 */
+/** 🗂️ 견적서 탭 [➕ 새 견적 만들기]로 펼치는 서식 8개 고르기 칸 */
 function renderMqFormGrid() {
   const grid = $("#mqFormGrid");
   if (!grid || grid.childElementCount) return;
@@ -5116,7 +5116,7 @@ function renderMqFormGrid() {
     b.addEventListener("click", () => openMqEditor(null, Number(b.dataset.form))));
 }
 
-/** 작성본 목록을 읽어 🗂️ 견적서 관리 목록에 합쳐 그린다. */
+/** 작성본 목록을 읽어 🗂️ 견적서 목록에 합쳐 그린다. */
 async function loadMqList() {
   const before = mqList.length;
   try {
@@ -5591,7 +5591,7 @@ async function saveMq() {
   } finally {
     hideBusy();
   }
-  alert("✔ 견적을 저장했습니다. ⚙️ 설정관리 → 🗂️ 견적서 관리 목록(📝 작성본)에서 다시 열 수 있습니다.");
+  alert("✔ 견적을 저장했습니다. ⚙️ 설정 → 🗂️ 견적서 목록(📝 작성본)에서 다시 열 수 있습니다.");
 }
 
 function mqExcelBody(quote, extra = {}) {
@@ -5702,7 +5702,7 @@ $("#mqBtnClose")?.addEventListener("click", closeMqEditor);
 mqModal?.addEventListener("click", (e) => {
   if (e.target === mqModal) closeMqEditor();
 });
-loadMqList(); // 🗂️ 견적서 관리 탭의 건수 표시
+loadMqList(); // 🗂️ 견적서 탭의 건수 표시
 
 // ---------- 독립 창 계산기 ----------
 const CALC_POPUP_NAME = "quoteCalcPopup";
@@ -5776,9 +5776,9 @@ $("#btnOpenCalc")?.addEventListener("click", openCalcWindow);
 
 
 // ===================================================================
-// 🧾 거래명세서관리 (app/trade_statement.py)
+// 🧾 거래명세서 (app/trade_statement.py)
 //  - 거래명세표 = 견적서 폼5(리테일) 모양에 제목만 "거 래 명 세 표", A4 한 장에 위(공급자 보관용) · 아래(공급받는자 보관용) 두 벌
-//  - 목록은 ⚙️ 설정관리의 🧾 거래명세서관리 탭, 작성은 #tradeStatementModal
+//  - 목록은 ⚙️ 설정의 🧾 거래명세서 탭, 작성은 #tradeStatementModal
 //  - 품목은 직접 입력하거나 견적 카드의 🧾 버튼(화면에 보이는 마진 적용 단가 그대로) · 📝 작성본에서 가져온다
 // ===================================================================
 // 거래명세표 품목 최대 행 수. app/trade_statement.py 의 MAX_ITEMS 와 같아야 한다(양쪽 주석에 명시).
@@ -6080,7 +6080,7 @@ async function saveTs({ quiet = false } = {}) {
   } finally {
     hideBusy();
   }
-  if (!quiet) alert(`✔ 거래명세서 ${tsCurrent.doc_no}를 저장했습니다. ⚙️ 설정관리 → 🧾 거래명세서관리 목록에서 다시 열 수 있습니다.`);
+  if (!quiet) alert(`✔ 거래명세서 ${tsCurrent.doc_no}를 저장했습니다. ⚙️ 설정 → 🧾 거래명세서 목록에서 다시 열 수 있습니다.`);
   return true;
 }
 
@@ -6238,7 +6238,7 @@ $("#tsBtnDelSigned")?.addEventListener("click", async () => {
   syncTsHeader();
   loadTsList();
 });
-// Esc: 거래명세표 창만 닫는다(아래 설정관리는 그대로). 다른 Esc 처리보다 먼저 받는다.
+// Esc: 거래명세표 창만 닫는다(아래 설정는 그대로). 다른 Esc 처리보다 먼저 받는다.
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !tsModal || tsModal.classList.contains("hidden")) return;
   if (e.target.id === "tsSearch") return;

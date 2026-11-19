@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """거래처(견적처) 목록 저장·관리 (customers.json)
 
-[설정관리 → 견적정보] 탭에서 거래처를 생성·저장·검색·삭제하고, 하나를 골라 현재 견적처(quote_info.json)로 불러온다.
+[설정 → 견적정보] 탭에서 거래처를 생성·저장·검색·삭제하고, 하나를 골라 현재 견적처(quote_info.json)로 불러온다.
 quote_info.json 과는 따로 둔다(save_quote_info 는 모달이 보내지 않은 키를 기본값으로 되돌리므로 섞지 않는다).
 """
 from __future__ import annotations

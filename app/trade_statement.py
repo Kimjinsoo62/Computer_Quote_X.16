@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""🧾 거래명세서관리: 거래명세표 작성 · 저장 · Excel/PDF · 서명본 보관.
+"""🧾 거래명세서: 거래명세표 작성 · 저장 · Excel/PDF · 서명본 보관.
 
 - 서식은 견적서 폼5(리테일)를 그대로 옮겨 제목만 "거 래 명 세 표"로 바꾼 것이다. 같은 내용을 A4 한 장에
   위(공급자 보관용) · 아래(공급받는자 보관용) 두 벌로 찍고 사이에 절취선을 둔다. 납품할 때 인수자 서명을
@@ -92,7 +92,7 @@ def total_of(items: list[dict[str, Any]]) -> int:
 
 
 def _customer_info(rec: dict[str, Any]) -> dict[str, str]:
-    """명세서에 찍을 공급받는자. 칸이 모두 비면 견적정보(📒 거래처관리)의 견적처를 쓴다."""
+    """명세서에 찍을 공급받는자. 칸이 모두 비면 견적정보(📒 거래처)의 견적처를 쓴다."""
     cust = clean_customer(rec.get("customer_info"))
     if any(cust.values()):
         return cust

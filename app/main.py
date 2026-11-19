@@ -412,7 +412,7 @@ def api_quote_info_delete():
     return reset_quote_info()
 
 
-# 거래처 목록 (data/customers/customers.json) — [설정관리 → 견적정보] 탭
+# 거래처 목록 (data/customers/customers.json) — [설정 → 견적정보] 탭
 @app.get("/api/customers")
 def api_customers_list():
     return {"customers": customer_book.list_customers()}
@@ -1515,7 +1515,7 @@ def api_manual_quote_excel(payload: dict = Body(...)):
 
 
 # ---------------------------------------------------------------------------
-# 🧾 거래명세서관리 (app/trade_statement.py) — 폼5 모양 거래명세표 위아래 두 벌, 서명본 보관
+# 🧾 거래명세서 (app/trade_statement.py) — 폼5 모양 거래명세표 위아래 두 벌, 서명본 보관
 # ---------------------------------------------------------------------------
 @app.get("/api/trade-statements")
 def api_trade_statements():

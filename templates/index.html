@@ -17,19 +17,19 @@
           <span class="logo-icon">⚡</span>
           <span>컴퓨존 <strong>견적 자동화 Ver XII.15</strong></span>
         </a>
-        <!-- 설정관리 바로가기: 제목 바로 오른쪽. 견적서 관리 · 작업내역서는 설정관리 창의 해당 탭을 바로 연다 -->
+        <!-- 설정 바로가기: 제목 바로 오른쪽. 견적서 · 작업내역서는 설정 창의 해당 탭을 바로 연다 -->
         <div class="nav-quick">
           <button type="button" id="btnSettings" class="btn btn-outline btn-sm blink-warning" title="견적요소 · 거래처 · 견적서 · 작업내역서를 한 곳에서 관리합니다">
-            <span class="btn-icon">⚙️</span> <span id="settingsBtnText" class="blink-warning-text">설정관리</span>
+            <span class="btn-icon">⚙️</span> <span id="settingsBtnText" class="blink-warning-text">설정</span>
           </button>
-          <button type="button" id="btnNavArchive" class="btn btn-outline btn-sm" title="설정관리 → 견적서 관리 탭을 엽니다 (작성본 · 보관 파일 · 새 견적 만들기)">
-            🗂️ 견적서 관리
+          <button type="button" id="btnNavArchive" class="btn btn-outline btn-sm" title="설정 → 견적서 탭을 엽니다 (작성본 · 보관 파일 · 새 견적 만들기)">
+            🗂️ 견적서
           </button>
-          <button type="button" id="btnNavTaskReport" class="btn btn-outline btn-sm" title="설정관리 → 작업내역서 탭을 엽니다 (새로 작성 · 검색 · 열기 · 삭제)">
+          <button type="button" id="btnNavTaskReport" class="btn btn-outline btn-sm" title="설정 → 작업내역서 탭을 엽니다 (새로 작성 · 검색 · 열기 · 삭제)">
             📋 작업내역서
           </button>
-          <button type="button" id="btnNavStatement" class="btn btn-outline btn-sm" title="설정관리 → 거래명세서관리 탭을 엽니다 (거래명세표 작성 · 인쇄 · 서명본 보관)">
-            🧾 거래명세서관리
+          <button type="button" id="btnNavStatement" class="btn btn-outline btn-sm" title="설정 → 거래명세서 탭을 엽니다 (거래명세표 작성 · 인쇄 · 서명본 보관)">
+            🧾 거래명세서
           </button>
         </div>
       </div>
@@ -364,28 +364,28 @@
     </div>
   </footer>
 
-  <!-- ⚙️ 설정관리: 🧩 견적요소관리 | 📒 거래처관리 · 🗂️ 견적서관리 · 📋 작업내역서 를 한 곳에서 관리 -->
+  <!-- ⚙️ 설정: 🧩 견적요소 | 📒 거래처 · 🗂️ 견적서 · 📋 작업내역서 를 한 곳에서 관리 -->
   <div id="settingsModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal modal-xl settings-modal" role="dialog" aria-labelledby="settingsTitle">
       <div class="modal-header">
         <div class="tr-modal-header-left">
-          <h3 id="settingsTitle">⚙️ 설정관리</h3>
+          <h3 id="settingsTitle">⚙️ 설정</h3>
           <div class="settings-tabs" role="tablist">
-            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="elements" role="tab" title="모든 견적서에 공통으로 들어가는 공급자 · 견적일 · 추가 품목 금액 · 입금 계좌를 정합니다">🧩 견적요소관리</button>
+            <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="elements" role="tab" title="모든 견적서에 공통으로 들어가는 공급자 · 견적일 · 추가 품목 금액 · 입금 계좌를 정합니다">🧩 견적요소</button>
             <span class="settings-tab-sep" aria-hidden="true"></span>
             <!-- 거래처 → 견적서 → 작업내역서: 거래 흐름이 같은 탭끼리 한 묶음 -->
             <div class="settings-tab-group" role="group" aria-label="거래처 · 견적서 · 작업내역서">
-              <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="customer" role="tab" title="거래처 목록을 관리하고 이번 견적서의 견적처를 정합니다">📒 거래처관리</button>
-              <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab" title="직접 작성한 견적(작성본)과 내려받은 Excel 견적서(보관 파일)를 한 목록에서 관리하고, 새 견적을 만듭니다">🗂️ 견적서관리 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
+              <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="customer" role="tab" title="거래처 목록을 관리하고 이번 견적서의 견적처를 정합니다">📒 거래처</button>
+              <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="archive" role="tab" title="직접 작성한 견적(작성본)과 내려받은 Excel 견적서(보관 파일)를 한 목록에서 관리하고, 새 견적을 만듭니다">🗂️ 견적서 <span id="quoteArchiveCount" class="archive-count hidden">0</span></button>
               <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="taskreport" role="tab">📋 작업내역서 <span id="trListCount" class="archive-count">0</span></button>
-              <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="statement" role="tab" title="납품할 때 인수자 서명을 받는 거래명세표(위아래 두 벌)를 만들고, 서명 여부와 서명본을 관리합니다">🧾 거래명세서관리 <span id="tsListCount" class="archive-count">0</span></button>
+              <button type="button" class="btn btn-sm btn-outline settings-tab" data-tab="statement" role="tab" title="납품할 때 인수자 서명을 받는 거래명세표(위아래 두 벌)를 만들고, 서명 여부와 서명본을 관리합니다">🧾 거래명세서 <span id="tsListCount" class="archive-count">0</span></button>
             </div>
           </div>
         </div>
         <button type="button" class="modal-close btn-modal-close" id="settingsClose" aria-label="닫기">✕ 닫기</button>
       </div>
       <div class="modal-body settings-body">
-        <!-- 1. 🧩 견적요소관리: 모든 견적서에 공통으로 들어가는 값 (quote_info.json 의 공급자 · 견적일 · 추가 금액 · 계좌) -->
+        <!-- 1. 🧩 견적요소: 모든 견적서에 공통으로 들어가는 값 (quote_info.json 의 공급자 · 견적일 · 추가 금액 · 계좌) -->
         <section class="settings-panel" data-panel="elements">
           <div class="qi-warning-banner hidden">
             ⚠️ 견적처 또는 공급자에 기본 가짜 데이터(대한민국주식회사 등)가 입력되어 있습니다. 실제 정보로 변경 후 저장해 주세요.
@@ -461,7 +461,7 @@
           </div>
         </section>
 
-        <!-- 2. 📒 거래처관리: 거래처 목록(customers.json) + 이번 견적서의 견적처 -->
+        <!-- 2. 📒 거래처: 거래처 목록(customers.json) + 이번 견적서의 견적처 -->
         <section class="settings-panel hidden" data-panel="customer">
           <div class="settings-info-grid">
             <aside class="cust-book">
@@ -514,7 +514,7 @@
                   </label>
                 </div>
               </fieldset>
-              <p class="qa-hint">공급자 · 견적일 · 추가 품목 금액 · 입금 계좌는 <strong>🧩 견적요소관리</strong> 탭에서 정합니다.</p>
+              <p class="qa-hint">공급자 · 견적일 · 추가 품목 금액 · 입금 계좌는 <strong>🧩 견적요소</strong> 탭에서 정합니다.</p>
               <p class="modal-status qi-status"></p>
               <div class="settings-info-foot">
                 <button type="button" class="btn btn-outline btn-sm" id="custBtnSaveOnly" title="현재 견적처 칸의 내용을 거래처 목록에만 저장합니다 (견적서에는 적용하지 않음)">📒 거래처 목록에만 저장</button>
@@ -524,7 +524,7 @@
           </div>
         </section>
 
-        <!-- 3. 견적서 관리: 직접 작성한 견적(작성본, manual_quotes.json) + 내려받은 Excel(보관 파일, quote_archive/) 통합 목록 -->
+        <!-- 3. 견적서: 직접 작성한 견적(작성본, manual_quotes.json) + 내려받은 Excel(보관 파일, quote_archive/) 통합 목록 -->
         <section class="settings-panel hidden" data-panel="archive">
           <div class="qa-toolbar">
             <button type="button" id="mqBtnToggleForms" class="btn btn-primary btn-sm" aria-expanded="false" title="폼1~8 중 하나를 골라 빈 견적에 품목을 직접 적어 견적서를 만듭니다">➕ 새 견적 만들기</button>
@@ -546,7 +546,7 @@
           </div>
           <!-- 새 견적 만들기: 서식 8개 중 하나를 고르면 빈 견적 작성 창이 열린다 (➕ 버튼으로 펼침) -->
           <div id="mqFormStrip" class="mq-form-strip hidden">
-            <p class="qa-hint mq-pick-hint">서식을 고르면 빈 견적 작성 창이 열립니다. 품목 · 수량 · 단가(부가세 포함)를 적고 💾 저장하면 <strong>📝 작성본</strong>으로, 📥 Excel · ✉️ 이메일로 보내면 그 파일이 <strong>📥 보관 파일</strong>로 이 목록에 들어갑니다. 견적처 기본값은 📒 거래처관리에서 정한 견적처입니다.</p>
+            <p class="qa-hint mq-pick-hint">서식을 고르면 빈 견적 작성 창이 열립니다. 품목 · 수량 · 단가(부가세 포함)를 적고 💾 저장하면 <strong>📝 작성본</strong>으로, 📥 Excel · ✉️ 이메일로 보내면 그 파일이 <strong>📥 보관 파일</strong>로 이 목록에 들어갑니다. 견적처 기본값은 📒 거래처에서 정한 견적처입니다.</p>
             <div id="mqFormGrid" class="mq-form-grid"></div>
           </div>
           <div class="tr-list-table-wrap qa-table-wrap settings-table-wrap hub-table-wrap">
@@ -608,7 +608,7 @@
           <p class="qa-hint">📂 열기를 누르면 작업내역서 창에서 수정 · 인쇄할 수 있습니다. 백업 폴더는 견적보관함 백업과 같은 폴더를 씁니다.</p>
         </section>
 
-        <!-- 5. 🧾 거래명세서관리: 거래명세표(폼5 모양, 위아래 두 벌) 목록 · 서명 상태 · 서명본 (trade_statements.json, trade_statements/) -->
+        <!-- 5. 🧾 거래명세서: 거래명세표(폼5 모양, 위아래 두 벌) 목록 · 서명 상태 · 서명본 (trade_statements.json, trade_statements/) -->
         <section class="settings-panel hidden" data-panel="statement">
           <div class="qa-toolbar">
             <button type="button" id="tsBtnNew" class="btn btn-primary btn-sm" title="빈 거래명세표를 새로 작성합니다 (견적 카드의 🧾 버튼이나 작성 창의 📝 작성본 불러오기로 품목을 가져올 수 있습니다)">➕ 새 거래명세서</button>
@@ -651,7 +651,7 @@
     </div>
   </div>
 
-  <!-- 📝 새 견적 작성 창 (설정관리 위에 뜬다. 메일 발송 창은 이 창보다 뒤에 있어 그 위에 뜬다) -->
+  <!-- 📝 새 견적 작성 창 (설정 위에 뜬다. 메일 발송 창은 이 창보다 뒤에 있어 그 위에 뜬다) -->
   <div id="manualQuoteModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal modal-xl mq-modal" role="dialog" aria-labelledby="mqTitle">
       <div class="modal-header">
@@ -692,7 +692,7 @@
               <input type="text" class="tr-inp" data-mq="customer.address" placeholder="주소 (거래처 목록 저장용)" />
             </label>
             <div class="mq-meta-btns">
-              <button type="button" id="mqCustReset" class="btn btn-outline btn-sm" title="⚙️ 설정관리 → 📒 거래처관리에서 정한 견적처로 되돌립니다">↺ 기본 견적처</button>
+              <button type="button" id="mqCustReset" class="btn btn-outline btn-sm" title="⚙️ 설정 → 📒 거래처에서 정한 견적처로 되돌립니다">↺ 기본 견적처</button>
               <button type="button" id="mqCustSave" class="btn btn-outline btn-sm" title="지금 견적처 칸의 내용을 거래처 목록에 저장합니다(같은 상호면 갱신)">📒 거래처 목록에 저장</button>
             </div>
           </div>
@@ -711,7 +711,7 @@
     </div>
   </div>
 
-  <!-- 🧾 거래명세표 작성 창 (설정관리 위에 뜬다) -->
+  <!-- 🧾 거래명세표 작성 창 (설정 위에 뜬다) -->
   <div id="tradeStatementModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal modal-xl ts-modal" role="dialog" aria-labelledby="tsTitle">
       <div class="modal-header">
@@ -743,7 +743,7 @@
             <label title="저장된 거래처를 고르면 공급받는자 칸이 채워집니다">📇 거래처 불러오기<select id="tsCustPick" class="tr-inp"></select></label>
           </div>
           <div class="ts-meta">
-            <label>공급받는자 (상호)<input type="text" class="tr-inp" data-ts-cust="name" placeholder="비우면 📒 거래처관리의 견적처" /></label>
+            <label>공급받는자 (상호)<input type="text" class="tr-inp" data-ts-cust="name" placeholder="비우면 📒 거래처의 견적처" /></label>
             <label>담당자<input type="text" class="tr-inp" data-ts-cust="manager" /></label>
             <label>연락처<input type="text" class="tr-inp" data-ts-cust="phone" /></label>
             <label>이메일<input type="text" class="tr-inp" data-ts-cust="email" /></label>
@@ -1025,7 +1025,7 @@
           <h3 id="trModalTitle">📋 컴퓨터 작업 내역서</h3>
           <div class="tr-tab-buttons">
             <span class="btn btn-sm btn-primary active" style="cursor: default;">📝 내역서 작성 / 수정</span>
-            <button type="button" id="trTabListBtn" class="btn btn-sm btn-outline" title="설정관리 → 작업내역서 탭에서 저장된 내역을 검색 · 열기 · 삭제합니다">📂 저장된 내역 목록 (설정관리)</button>
+            <button type="button" id="trTabListBtn" class="btn btn-sm btn-outline" title="설정 → 작업내역서 탭에서 저장된 내역을 검색 · 열기 · 삭제합니다">📂 저장된 내역 목록 (설정)</button>
           </div>
         </div>
         <button type="button" class="modal-close btn-modal-close" id="trModalClose" aria-label="닫기">✕ 닫기</button>
@@ -1052,7 +1052,7 @@
 
           <!-- 실제 인쇄/작성되는 작업내역서 페이퍼 영역 -->
           <div id="trCompanyWarningNotice" class="tr-company-warning-notice no-print">
-            ⚠️ 작업내역서의 업체 정보가 기본 가짜 데이터(대한민국주식회사 등) 상태입니다. [설정관리 → 🧩 견적요소관리] 탭에서 공급자 정보를 변경하거나 직접 수정한 후 저장하세요.
+            ⚠️ 작업내역서의 업체 정보가 기본 가짜 데이터(대한민국주식회사 등) 상태입니다. [설정 → 🧩 견적요소] 탭에서 공급자 정보를 변경하거나 직접 수정한 후 저장하세요.
           </div>
           <div class="tr-paper" id="trPrintPaper">
             <!-- 상단 헤더 -->
