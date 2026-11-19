@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
-"""📤 견적서 올리기: 예전에 따로 만든 Excel · PDF 견적서를 🗂️ 견적서 목록에 넣는다.
+"""📤 견적서 올리기에서 견적서 내용(거래처 · 합계 · 견적일)을 읽는 도우미.
 
-- Excel(.xlsx): 파일을 그대로 보관 파일(quote_archive)로 넣는다. 목록 표시용 거래처 · 합계만 읽어 둔다.
-- PDF: 글자를 읽어 견적처 · 견적일 · 품목(구분 · 품명 · 수량 · 단가)을 뽑고 📝 작성본(manual_quote)으로 만든다.
-  작성본은 폼1~8 Excel 견적서로 바로 나오므로 "PDF → 엑셀 서식 변환"이 된다. 원본 PDF 는 작성본 옆에 보관한다.
+- Excel(.xlsx) · PDF 를 올리면 둘 다 📥 보관 파일로 들어간다. PDF 는 app/pdf_to_excel.py 가 PDF 모양 그대로 Excel 로
+  바꾸고, 이 모듈은 목록에 보일 거래처 · 합계 · 견적일만 best-effort 로 읽는다(parse_rows). 못 읽어도 올리기는 된다.
+- 예전(XII.18)에는 PDF 품목을 읽어 📝 작성본(폼1~8)으로 만들었으나, 견적서마다 표 모양이 달라 틀리게 읽는 일이 많아
+  "PDF 모양 그대로 Excel" 로 바꿨다. 그때 만든 작성본의 원본 PDF(data/manual_quotes/pdf/)는 그대로 볼 수 있다.
 
-PDF 읽기는 best-effort 다. 글자 순서는 서식마다 뒤섞여 나오므로(폼3 · 폼5 등) 순서 대신 **글자 덩어리의 위치**
-(pypdfium2 text rect)로 줄 · 칸을 다시 세운다. 품목 줄은 "수량 × 단가 = 금액"이 맞는 줄, 또는 수량 + 금액만 있는 줄이다.
-뽑은 품목 합계를 PDF 에 적힌 합계와 비교해 결과(warnings)로 돌려준다 — 틀린 견적을 조용히 저장하지 않으려는 것이다.
-스캔한 PDF(글자 층 없음)는 읽지 못한다(OCR 없음).
-
-PDFium 은 스레드 안전하지 않으므로 모든 호출을 pdf_export._pdfium_lock 안에서 한다(CLAUDE.md 참고).
+줄 · 칸 목록(rows)에서 품목 줄은 "수량 × 단가 = 금액" 또는 수량 + 금액이 있는 줄, 합계는 '합계 · 총액 · TOTAL' 줄의 금액이다.
+견적처는 '견적처 · 수신 · To · 귀하'(강한 표시)를 먼저, '상호 · 회사명'(공급자 칸에도 흔함)은 마지막에 본다.
+🧩 견적요소의 공급자(우리 회사) 값은 견적처로 쓰지 않는다.
 """
 from __future__ import annotations
 
@@ -25,8 +23,6 @@ from app import manual_quote
 from app.quote_info import load_quote_info
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-MAX_PDF_PAGES = 10
-ROW_TOL_PT = 4.5  # 같은 줄로 묶을 글자 덩어리 세로 가운데 차이(pt)
 
 _NUM_RE = re.compile(r"^[-−–]?\s*[₩\\]?\s*-?\d{1,3}(?:,\d{3})+\s*(?:원)?$|^[-−–]?\s*[₩\\]?\s*-?\d+\s*(?:원|개|대|EA|ea|식|SET|set)?$")
 _DATE_RE = re.compile(r"(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})")
@@ -71,51 +67,6 @@ def _num(s: str) -> int | None:
 # ---------------------------------------------------------------------------
 # 파일 → 줄(칸 목록)
 # ---------------------------------------------------------------------------
-def _pdf_rows(content: bytes) -> list[list[str]]:
-    """PDF 각 쪽의 글자 덩어리를 위치로 줄 · 칸으로 다시 세운다. 줄은 위→아래, 칸은 왼→오른쪽."""
-    if not content.startswith(b"%PDF-"):
-        raise ImportError_("PDF 파일이 아닙니다(파일 내용이 PDF 형식이 아님).")
-    import pypdfium2 as pdfium
-
-    from app.pdf_export import _pdfium_lock
-
-    rows_all: list[list[str]] = []
-    with _pdfium_lock:  # PDFium 은 스레드 안전하지 않다 — 미리보기 썸네일과 동시에 부르면 서버가 죽는다
-        try:
-            doc = pdfium.PdfDocument(content)
-        except Exception as e:
-            raise ImportError_(f"PDF 를 열지 못했습니다(손상되었거나 암호가 걸린 파일): {e}") from e
-        try:
-            if len(doc) > MAX_PDF_PAGES:
-                raise ImportError_(f"쪽수가 너무 많습니다({len(doc)}쪽). 견적서는 {MAX_PDF_PAGES}쪽까지 읽습니다.")
-            for pi in range(len(doc)):
-                page = doc[pi]
-                tp = page.get_textpage()
-                segs = []
-                for i in range(tp.count_rects()):
-                    l, b, r, t = tp.get_rect(i)
-                    text = " ".join(tp.get_text_bounded(l, b, r, t).split())
-                    if text:
-                        segs.append(((-t) + (t - b) / 2, l, text))  # (세로 가운데(아래로 +), 왼쪽 x, 글자)
-                tp.close()
-                page.close()
-                segs.sort()
-                rows: list[list[tuple[float, float, str]]] = []
-                for seg in segs:
-                    if rows and abs(seg[0] - sum(s[0] for s in rows[-1]) / len(rows[-1])) <= ROW_TOL_PT:
-                        rows[-1].append(seg)
-                    else:
-                        rows.append([seg])
-                for row in rows:
-                    rows_all.append([s[2] for s in sorted(row, key=lambda s: s[1])])
-        finally:
-            doc.close()
-    if sum(len(r) for r in rows_all) < 5:
-        raise ImportError_("PDF 에서 글자를 읽지 못했습니다. 스캔하거나 사진으로 만든 PDF 는 글자 층이 없어 읽을 수 없습니다"
-                           "(Excel · 한글 등에서 'PDF로 저장'한 파일만 읽습니다).")
-    return rows_all
-
-
 def _cell_text(v: Any) -> str:
     if v is None:
         return ""
@@ -256,7 +207,7 @@ def _value_after(cells: list[str], labels: tuple[str, ...]) -> list[str]:
 
 def _split_customer(text: str) -> tuple[str, str, str]:
     """'(주) 경방테크롤 (안병욱차장 / 032-818-0892)' · '(주) 경방테크롤 - 안병욱차장 귀하 (032-...)' → (상호, 담당자, 연락처)"""
-    text = re.sub(r"\s*귀\s*하(?=\s|$|\()", "", str(text or "")).strip()
+    text = re.sub(r"\s*귀\s*[하중](?=\s|$|\()", "", str(text or "")).strip()
     manager = phone = ""
     m = re.match(r"^(.*\S)\s*\(([^()]*)\)\s*$", text)
     if m and m.group(1).strip() not in ("(주)", "(유)", "㈜"):
@@ -341,9 +292,9 @@ def _extract_meta(rows: list[list[str]], supplier: dict[str, str]) -> dict[str, 
                         put("phone", pm.group(0))
                     elif part.strip():
                         put("manager", re.sub(r"\s*귀\s*하$", "", part.strip()))
-            if c.endswith("귀하") and len(c) > 2 and not _TO_RE.match(c):
+            if c.endswith(("귀하", "귀중")) and len(c) > 2 and not _TO_RE.match(c):
                 if ci > 0 and _norm(texts[ci - 1]) in _MANAGER_LABELS:
-                    put("manager", re.sub(r"\s*귀\s*하$", "", c))
+                    put("manager", re.sub(r"\s*귀\s*[하중]$", "", c))
                 else:
                     put_customer(c)
         if not cust["name"]:
@@ -447,16 +398,6 @@ def parse_rows(rows: list[list[str]]) -> dict[str, Any]:
         "quote_date": meta["quote_date"],
         "warnings": warnings,
     }
-
-
-def parse_pdf(content: bytes) -> dict[str, Any]:
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise ImportError_("파일이 너무 큽니다(20MB 이하).")
-    result = parse_rows(_pdf_rows(content))
-    if not result["items"]:
-        raise ImportError_("PDF 에서 품목 줄(품명 · 수량 · 단가 · 금액)을 찾지 못했습니다. 표 모양의 견적서가 아니거나 "
-                           "스캔한 PDF 일 수 있습니다. ➕ 새 견적 만들기로 직접 적어 주세요.")
-    return result
 
 
 def summarize_xlsx(content: bytes) -> dict[str, Any]:

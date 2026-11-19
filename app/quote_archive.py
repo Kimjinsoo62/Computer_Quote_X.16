@@ -92,6 +92,31 @@ def add_entry(content: bytes, *, filename: str, meta: dict[str, Any]) -> dict[st
     return entry
 
 
+def source_pdf_path(entry: dict[str, Any]) -> Path | None:
+    """📤 PDF 를 올려 만든 보관 파일의 원본 PDF(같은 이름 .pdf). 이름은 서버가 정한 stored_name 에서만 만든다."""
+    if not entry.get("source_pdf"):
+        return None
+    stored = str(entry.get("stored_name") or "")
+    if not stored.lower().endswith(".xlsx"):
+        return None
+    p = ARCHIVE_DIR / (stored[:-5] + ".pdf")
+    return p if p.is_file() else None
+
+
+def attach_source_pdf(entry_id: str, content: bytes) -> dict[str, Any] | None:
+    """보관 파일 옆에 원본 PDF 를 둔다(보관 파일과 같은 이름 .pdf)."""
+    with _lock:
+        entries = _load_index()
+        for e in entries:
+            if e.get("id") == entry_id:
+                stored = str(e.get("stored_name") or "")
+                (ARCHIVE_DIR / (stored[:-5] + ".pdf")).write_bytes(content)
+                e["source_pdf"] = True
+                _save_index(entries)
+                return e
+    return None
+
+
 def update_note(entry_id: str, note: str) -> dict[str, Any] | None:
     with _lock:
         entries = _load_index()
@@ -111,10 +136,12 @@ def delete_entry(entry_id: str) -> bool:
             return False
         for e in entries:
             if e.get("id") == entry_id:
-                try:
-                    entry_path(e).unlink(missing_ok=True)
-                except OSError:
-                    pass
+                for p in (entry_path(e), source_pdf_path(e)):
+                    try:
+                        if p:
+                            p.unlink(missing_ok=True)
+                    except OSError:
+                        pass
         _save_index(keep)
     return True
 
@@ -151,13 +178,16 @@ def backup_archive(folder: str) -> dict[str, Any]:
                 if p.is_file():
                     zf.write(p, f"excel/{p.name}")
                     copied += 1
+                src = source_pdf_path(e)
+                if src:
+                    zf.write(src, f"excel/{src.name}")  # 📤 PDF 로 올린 견적서의 원본 PDF
             zf.writestr(
                 "README.txt",
                 "컴퓨존 견적 자동화 - 견적서 보관함 백업\n"
                 f"백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"견적서 수: {copied}건\n\n"
                 "index.json : 보관함 목록(복구할 때 프로그램 폴더의 data\\quote_archive\\index.json 에 덮어쓰기)\n"
-                "excel/     : 보관된 Excel 견적서(복구할 때 data\\quote_archive\\ 에 그대로 복사)\n",
+                "excel/     : 보관된 Excel 견적서 + 📤 PDF 로 올린 견적서의 원본 PDF(복구할 때 data\\quote_archive\\ 에 그대로 복사)\n",
             )
     return {
         "dir": str(target),

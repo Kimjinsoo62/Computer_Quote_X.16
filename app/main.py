@@ -1465,7 +1465,8 @@ def api_save_manual_quote(data: dict = Body(...)):
 
 @app.post("/api/quotes/upload")
 async def api_quote_upload(file: UploadFile = File(...)):
-    """📤 견적서 올리기. Excel(.xlsx)은 그대로 보관 파일로, PDF 는 품목을 읽어 📝 작성본(폼1)으로 만든다(app/quote_import.py)."""
+    """📤 견적서 올리기. Excel(.xlsx)은 그대로, PDF 는 그 모양 그대로 Excel 로 바꿔(app/pdf_to_excel.py) 📥 보관 파일로 넣는다.
+    폼1~8 에 맞추지 않는다. 거래처 · 합계는 목록 표시용으로만 읽는다(app/quote_import.py)."""
     from starlette.concurrency import run_in_threadpool
 
     from app import quote_import
@@ -1490,27 +1491,50 @@ async def api_quote_upload(file: UploadFile = File(...)):
             })
             return {"kind": "archive", "entry": entry}
         if low.endswith(".pdf"):
-            # PDF 읽기는 PDFium 잠금을 기다릴 수 있어 이벤트 루프 밖에서 한다(다른 요청이 멈추지 않게)
-            parsed = await run_in_threadpool(quote_import.parse_pdf, content)
-            rec = manual_quote.save_manual_quote({
-                "form": 1,
-                "title": title,
-                "quote_date": parsed["quote_date"] or date.today().isoformat(),
-                "customer_info": parsed["customer_info"],
-                "items": parsed["items"],
+            # PDF → 그 모양 그대로의 Excel(app/pdf_to_excel.py) → 📥 보관 파일. 원본 PDF 는 옆에 같은 이름으로 둔다.
+            # PDFium 잠금을 기다릴 수 있어 이벤트 루프 밖에서 한다(다른 요청이 멈추지 않게)
+            from app import pdf_to_excel
+
+            try:
+                xlsx, pages = await run_in_threadpool(pdf_to_excel.pdf_to_xlsx, content)
+            except pdf_to_excel.ConvertError as e:
+                raise quote_import.ImportError_(str(e)) from e
+            summary = {"customer": "", "total": 0, "quote_date": ""}
+            try:  # 목록에 보일 거래처 · 합계 · 견적일만 best-effort 로 읽는다(못 읽어도 변환은 그대로)
+                parsed = quote_import.parse_rows(pdf_to_excel.rows_for_meta(pages))
+                summary = {"customer": parsed["customer_info"]["name"],
+                           "total": parsed["grand_total"] or 0, "quote_date": parsed["quote_date"]}
+            except Exception:
+                pass
+            entry = quote_archive.add_entry(xlsx, filename=Path(name).stem or "견적서", meta={
+                "kind": "upload",
+                "source_file": name[:200],
+                "model": title,
+                "forms": [],
+                "pages": len(pages),
+                **summary,
             })
-            manual_quote.MANUAL_PDF_DIR.mkdir(parents=True, exist_ok=True)
-            (manual_quote.MANUAL_PDF_DIR / f"{rec['id']}.pdf").write_bytes(content)
-            rec = manual_quote.set_fields(rec["id"], source_pdf=f"{rec['id']}.pdf", source_file=name[:200],
-                                          import_warnings=parsed["warnings"]) or rec
-            return {"kind": "manual", "quote": rec, "warnings": parsed["warnings"],
-                    "items_total": parsed["items_total"], "grand_total": parsed["grand_total"]}
+            entry = quote_archive.attach_source_pdf(entry["id"], content) or entry
+            return {"kind": "archive", "entry": entry, "pages": len(pages),
+                    "pictures": sum(len(p.pics) for p in pages)}
         if low.endswith((".xls", ".xlsm")):
             raise quote_import.ImportError_("예전 형식(.xls) · 매크로 파일(.xlsm)은 넣을 수 없습니다. Excel 에서 [다른 이름으로 저장 → "
                                             "Excel 통합 문서(.xlsx)]로 바꿔 올려 주세요.")
         raise quote_import.ImportError_("Excel(.xlsx) 또는 PDF 파일만 올릴 수 있습니다.")
     except quote_import.ImportError_ as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/api/quotes/archive/{entry_id}/source-pdf")
+def api_quote_archive_source_pdf(entry_id: str):
+    """📤 PDF 로 올린 보관 파일의 원본 PDF 를 새 탭으로 본다."""
+    entry = quote_archive.get_entry(entry_id)
+    path = quote_archive.source_pdf_path(entry) if entry else None
+    if not path:
+        raise HTTPException(status_code=404, detail="원본 PDF 가 없습니다.")
+    stem = quote_archive.safe_filename_part(entry.get("source_file") or f"{entry_id}.pdf", 120) or "견적서.pdf"
+    return Response(content=path.read_bytes(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=\"source.pdf\"; filename*=UTF-8''{quote(stem)}"})
 
 
 @app.get("/api/manual-quotes/{quote_id}/source-pdf")
