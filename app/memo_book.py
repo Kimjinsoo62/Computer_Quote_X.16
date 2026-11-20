@@ -15,6 +15,7 @@ import json
 import re
 import secrets
 import threading
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ IMAGE_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "ima
 MEDIA_TYPES = {ext: mime for mime, ext in IMAGE_TYPES.items()}
 _FILE_RE = re.compile(r"^[0-9A-Za-z_-]+\.(png|jpg|gif|webp|bmp)$")
 _lock = threading.Lock()
+NL, BS = chr(10), chr(92)  # 백업 README 글자(줄바꿈 · 역슬래시)
 
 
 def _load() -> list[dict[str, Any]]:
@@ -160,3 +162,39 @@ def delete_memo(memo_id: str) -> bool:
         if p:
             p.unlink(missing_ok=True)
     return True
+
+
+def backup_memos(folder: str) -> dict[str, Any]:
+    """메모 목록(memos.json) + 붙인 그림을 folder 에 ZIP 한 파일(메모장_백업_날짜_시각.zip)로 저장한다."""
+    target = Path(folder)
+    if not target.is_dir():
+        raise FileNotFoundError(f"백업 폴더를 찾을 수 없습니다: {folder}")
+    with _lock:
+        items = _load()
+        stamp = datetime.now()
+        stem = f"메모장_백업_{stamp.strftime('%Y%m%d_%H%M%S')}"
+        zip_path = target / f"{stem}.zip"
+        seq = 2
+        while zip_path.exists():
+            zip_path = target / f"{stem}_{seq}.zip"
+            seq += 1
+        files = 0
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("memos.json", json.dumps(items, ensure_ascii=False, indent=2))
+            for m in items:
+                for img in m.get("images", []):
+                    p = image_path(str(img.get("file") or "")) if isinstance(img, dict) else None
+                    if p:
+                        zf.write(p, f"images/{p.name}")
+                        files += 1
+            zf.writestr(
+                "README.txt",
+                (
+                    "컴퓨존 견적 자동화 - 🗒️ 메모장 백업"
+                    f"{NL}백업 시각: {stamp.strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"{NL}메모: {len(items)}건 / 그림 파일: {files}개{NL}{NL}"
+                    f"memos.json : 메모 목록(복구할 때 프로그램 폴더의 data{BS}memos{BS} 에 덮어쓰기){NL}"
+                    f"images/    : 메모에 붙인 그림(복구할 때 data{BS}memos{BS}images{BS} 에 복사){NL}"
+                ),
+            )
+    return {"path": str(zip_path), "count": len(items), "files": files}

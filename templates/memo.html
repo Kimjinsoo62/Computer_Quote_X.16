@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko" class="memo-html">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 창 제목은 app/calc_window.py 의 MEMO_TITLE 과 같아야 한다(이미 열린 창을 앞으로 가져올 때 씀) -->
+  <title>견적 메모장</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{ asset_v("css/style.css") }}" />
+</head>
+<body class="memo-page">
+  <!-- 🗒️ 메모장: 왼쪽 목록(검색 · 📌 고정) | 오른쪽 작성(제목 · 내용 · 그림). 그림은 Ctrl+V 붙여넣기 · 끌어놓기 · 파일 선택 -->
+  <div id="memoApp" class="memo-window">
+    <header class="memo-head">
+      <h3>🗒️ 메모장 <span id="memoCount" class="memo-count"></span></h3>
+      <span id="memoBusy" class="memo-busy hidden"></span>
+      <span class="memo-spacer"></span>
+      <button type="button" id="memoBtnBackup" class="btn btn-outline btn-sm" title="메모 전체와 붙인 그림을 백업 폴더(작업내역서 · 거래처 · 견적서와 같은 폴더)에 ZIP 한 파일로 저장합니다">💽 백업 (ZIP)</button>
+      <button type="button" class="btn-modal-close" id="memoClose" title="메모장 창만 닫습니다">✕ 닫기</button>
+    </header>
+    <div class="memo-body">
+      <aside class="memo-side">
+        <div class="memo-side-tools">
+          <input type="text" id="memoSearch" class="tr-inp" placeholder="🔍 제목 · 내용 검색" autocomplete="off" />
+          <button type="button" id="memoBtnNew" class="btn btn-outline btn-sm" title="빈 메모를 새로 씁니다">➕ 새 메모</button>
+        </div>
+        <ul id="memoList" class="memo-list"></ul>
+      </aside>
+      <section class="memo-edit" id="memoEdit">
+        <div class="memo-edit-head">
+          <input type="text" id="memoTitle" class="tr-inp memo-title-inp" maxlength="200" placeholder="제목 (비우면 내용 첫 줄)" />
+          <label class="memo-pin" title="목록 맨 위에 고정합니다"><input type="checkbox" id="memoPinned" /> 📌 고정</label>
+          <span id="memoState" class="memo-state"></span>
+        </div>
+        <textarea id="memoBody" class="tr-inp memo-body-inp" placeholder="내용을 입력하세요. 그림은 Ctrl+V 로 붙여넣거나 이 창에 끌어다 놓으면 아래에 붙습니다."></textarea>
+        <div id="memoDrop" class="memo-images" title="그림을 여기로 끌어다 놓거나 Ctrl+V 로 붙여넣으세요">
+          <div id="memoImages" class="memo-thumbs"></div>
+          <div id="memoImgHint" class="memo-img-hint">🖼️ 그림 없음 — Ctrl+V 붙여넣기 · 끌어놓기 · [🖼️ 그림 추가]</div>
+        </div>
+        <div class="memo-actions">
+          <button type="button" id="memoBtnAddImg" class="btn btn-outline btn-sm">🖼️ 그림 추가</button>
+          <input type="file" id="memoFile" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" multiple hidden />
+          <span class="memo-spacer"></span>
+          <button type="button" id="memoBtnDelete" class="btn btn-outline btn-sm memo-del">🗑️ 삭제</button>
+          <button type="button" id="memoBtnSave" class="btn btn-primary btn-sm" title="Ctrl+S">💾 저장</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 🗒️ 메모 그림 크게 보기 -->
+  <div id="memoViewer" class="memo-viewer hidden" aria-hidden="true" title="클릭하거나 Esc 로 닫기">
+    <img id="memoViewerImg" alt="" />
+    <div id="memoViewerName" class="memo-viewer-name"></div>
+  </div>
+
+  <script src="/static/js/memo.js?v={{ asset_v("js/memo.js") }}"></script>
+</body>
+</html>

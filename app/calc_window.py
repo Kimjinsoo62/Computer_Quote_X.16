@@ -95,3 +95,64 @@ def close_calc_window() -> None:
         except OSError:
             pass
     _proc = None
+
+
+# ---------------------------------------------------------------------------
+# 🗒️ 메모장 창 — 계산기와 같은 방식(별도 --app 창, 전용 프로필 AI-PC-Quote-Memo). 창 크기는 마우스로 조절한다.
+# 프로필 폴더 이름이 종료 정리(shutdown_service · stop.bat)의 표식이므로 바꾸지 않는다.
+# 창 제목(templates/memo.html 의 <title>)은 Windows 메모장(Notepad)과 헷갈리지 않게 '견적 메모장'으로 둔다.
+# ---------------------------------------------------------------------------
+MEMO_W = 960
+MEMO_H = 720
+MEMO_TITLE = "견적 메모장"
+_memo_proc: subprocess.Popen | None = None
+
+
+def _memo_profile_dir() -> Path:
+    base = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
+    d = base / "AI-PC-Quote-Memo"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def open_memo_window(
+    url: str,
+    *,
+    left: int = 120,
+    top: int = 80,
+    width: int = MEMO_W,
+    height: int = MEMO_H,
+) -> dict:
+    """이미 열려 있으면 앞으로 가져오고, 없으면 메모장 --app 창을 연다(크기 조절 가능)."""
+    global _memo_proc
+    if _memo_proc is not None and _memo_proc.poll() is None:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"(New-Object -ComObject WScript.Shell).AppActivate('{MEMO_TITLE}') | Out-Null"],
+            capture_output=True,
+            timeout=8,
+            creationflags=_no_window(),
+        )
+        return {"ok": True, "already": True}
+
+    browser = _browser()
+    if browser is None:
+        return {"ok": False, "reason": "browser"}
+
+    width = max(520, min(int(width or MEMO_W), 3840))
+    height = max(420, min(int(height or MEMO_H), 2160))
+    _memo_proc = subprocess.Popen(
+        [
+            str(browser),
+            f"--app={url}",
+            f"--user-data-dir={_memo_profile_dir()}",
+            "--no-first-run",
+            "--no-default-browser-check",
+            f"--window-size={width},{height}",
+            f"--window-position={int(left)},{int(top)}",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=_no_window(),
+    )
+    return {"ok": True, "already": False}

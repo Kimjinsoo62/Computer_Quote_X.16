@@ -49,7 +49,7 @@ from app.quote_engine import (
     margin_kind_label,
     today_quotes_to_dict,
 )
-from app.calc_window import close_calc_window, open_calc_window
+from app.calc_window import close_calc_window, open_calc_window, open_memo_window
 from app import customer_book, mail_send, manual_quote, memo_book, pdf_export, quote_archive, trade_statement
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
@@ -275,6 +275,28 @@ def api_calc_open(request: Request, payload: dict = Body(default={})):
     )
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail="계산기 창을 열 브라우저를 찾지 못했습니다.")
+    return result
+
+
+@app.get("/memo", response_class=HTMLResponse)
+def memo_page(request: Request):
+    """🗒️ 메모장 — 계산기처럼 독립 창으로 띄운다(크기 조절 가능)."""
+    return templates.TemplateResponse(request, "memo.html", {})
+
+
+@app.post("/api/memo/open")
+def api_memo_open(request: Request, payload: dict = Body(default={})):
+    """메인 --app 창과 별도 프로세스로 메모장 창을 연다. 실패하면 화면이 window.open 으로 대신 연다."""
+    base = str(request.base_url).rstrip("/")
+    result = open_memo_window(
+        f"{base}/memo",
+        left=int(payload.get("left") or 120),
+        top=int(payload.get("top") or 80),
+        width=int(payload.get("width") or 960),
+        height=int(payload.get("height") or 720),
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail="메모장 창을 열 브라우저를 찾지 못했습니다.")
     return result
 
 
@@ -1697,6 +1719,20 @@ def api_save_memo(data: dict = Body(...)):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"메모를 저장하지 못했습니다: {e}") from e
+
+
+@app.post("/api/memos/backup")
+def api_memo_backup():
+    """메모 목록 + 그림 파일을 백업 폴더(작업내역서 · 거래처 · 견적서와 같은 폴더)에 ZIP 으로. 폴더가 없으면 428."""
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요(⚙️ 설정 → 📋 작업내역서의 📁 백업 폴더)."})
+    try:
+        return {"ok": True, **memo_book.backup_memos(folder)}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"백업 파일을 쓰지 못했습니다: {e}") from e
 
 
 @app.post("/api/memos/{memo_id}/pin")

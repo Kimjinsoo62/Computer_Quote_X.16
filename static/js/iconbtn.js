@@ -16,7 +16,7 @@
 
   const IB_CANDIDATE = "button, a.btn, .store-tab";
   // #settingsModal: 설정 창은 탭 · 도구 · 목록 버튼이 많아 이모지만으로는 알아보기 어려워 한글을 그대로 보인다
-  const IB_SKIP = ".game-card, .resolution-card, .mq-form-card, .tab-btn, .fg-tab, .game-step-tab, .game-chip-x, .cq-preset-btn, .cq-chip, .custom-quote-panel button, .hero-actions button, .cq-swap-open, .cq-swap-panel button, #settingsModal button, #memoModal button, [data-ib-skip]";
+  const IB_SKIP = ".game-card, .resolution-card, .mq-form-card, .tab-btn, .fg-tab, .game-step-tab, .game-chip-x, .cq-preset-btn, .cq-chip, .custom-quote-panel button, .hero-actions button, .cq-swap-open, .cq-swap-panel button, #settingsModal button, [data-ib-skip]";
   const IB_KEEP = ".ib-keep, #marginCycleLabel, .archive-count, [data-hub-count]";
   // 맨 앞 이모지(변형 선택자 · ZWJ 결합 포함) + 메뉴에 쓰는 기호
   const LEAD_RE = /^\s*((?:\p{Extended_Pictographic}|[✕×↺⬅＋←])(?:️|‍(?:\p{Extended_Pictographic}))*)/u;
