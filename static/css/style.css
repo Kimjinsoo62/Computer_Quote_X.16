@@ -2607,11 +2607,9 @@ html.memo-html { font-size: 10pt; height: 100%; }
 body.memo-page { height: 100%; overflow: hidden; background: var(--bg); }
 body.memo-page.is-busy { cursor: progress; }
 .memo-window { display: flex; flex-direction: column; height: 100vh; }
-.memo-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); background: var(--card); }
-.memo-head h3 { margin: 0; font-size: 1.05rem; white-space: nowrap; }
-.memo-head .btn-modal-close { padding: 3px 12px !important; }
+.memo-close { padding: 2px 10px !important; box-shadow: none !important; border-width: 1px !important; }
 .memo-busy { color: var(--accent); font-size: 0.9rem; white-space: nowrap; }
-.memo-count { font-size: 0.9rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.memo-count { font-size: 0.9rem; color: var(--muted); white-space: nowrap; align-self: center; }
 .memo-body { flex: 1 1 auto; display: grid; grid-template-columns: minmax(180px, 28%) 1fr; gap: 8px; padding: 6px 8px; overflow: hidden; min-height: 0; }
 @media (max-width: 640px) { .memo-body { grid-template-columns: 1fr; grid-template-rows: 32% 1fr; } .memo-side { border-right: 0; padding-right: 0; border-bottom: 1px solid var(--border); } }
 .memo-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); padding-right: 10px; }
