@@ -2302,6 +2302,40 @@ async function loadCustomers() {
     custList = [];
   }
   renderCustomers();
+  renderCustNameList();
+}
+
+// 거래명세서 · 작업내역서의 거래처명 칸 자동완성(#custNameList). 등록된 상호와 똑같으면 나머지 칸을 채운다.
+function renderCustNameList() {
+  const dl = $("#custNameList");
+  if (!dl) return;
+  const seen = new Set();
+  dl.innerHTML = custList
+    .filter((c) => { const n = (c.name || "").trim(); if (!n || seen.has(n)) return false; seen.add(n); return true; })
+    .map((c) => `<option value="${escapeHtml(c.name.trim())}">${escapeHtml([c.manager, c.phone].filter(Boolean).join(" · "))}</option>`)
+    .join("");
+}
+
+function findCustomerByName(name) {
+  const n = String(name || "").trim();
+  return n ? custList.find((c) => (c.name || "").trim() === n) || null : null;
+}
+
+/** 거래처명 칸에 등록된 상호가 들어오면 fill(거래처)를 부른다. 목록에서 고를 때는 바로, 직접 입력은 칸을 벗어날 때(change). */
+function bindCustomerAutofill(input, fill) {
+  if (!input) return;
+  let last = "";
+  const run = () => {
+    const c = findCustomerByName(input.value);
+    if (!c || c.name.trim() === last) return;
+    last = c.name.trim();
+    fill(c);
+  };
+  input.addEventListener("input", (e) => {
+    if (!e.inputType || e.inputType === "insertReplacementText") run(); // 자동완성 목록에서 고름
+    else if (!findCustomerByName(input.value)) last = "";
+  });
+  input.addEventListener("change", run);
 }
 
 function renderCustomers() {
@@ -5007,6 +5041,7 @@ function resetTrForm() {
 // 작업내역서 모달 열기/닫기
 function openTrModal() {
   if (!trModal) return;
+  if (!custList.length) loadCustomers(); // 거래처명 자동완성용
   initSignCanvas(signCanvasCust);
   initSignCanvas(signCanvasTech);
   syncTrDateWithSystem();
@@ -6502,6 +6537,18 @@ $("#tsBtnAddRow")?.addEventListener("click", () => {
   if (cur.length >= TS_MAX_ROWS) return;
   cur.push({});
   renderTsRows(cur);
+});
+bindCustomerAutofill(document.querySelector('[data-ts-cust="name"]'), (c) => {
+  document.querySelectorAll("[data-ts-cust]").forEach((el) => {
+    const v = (c[el.dataset.tsCust] || "").trim();
+    if (v) el.value = v;
+  });
+});
+bindCustomerAutofill($("#trCustName"), (c) => {
+  [["#trCustPhone", "phone"], ["#trCustAddress", "address"], ["#trCustEmail", "email"]].forEach(([sel, key]) => {
+    const el = $(sel), v = (c[key] || "").trim();
+    if (el && v) el.value = v;
+  });
 });
 $("#tsCustPick")?.addEventListener("change", (e) => {
   const c = custList.find((x) => x.id === e.target.value);

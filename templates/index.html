@@ -787,7 +787,7 @@
             <label title="저장된 거래처를 고르면 공급받는자 칸이 채워집니다">📇 거래처 불러오기<select id="tsCustPick" class="tr-inp"></select></label>
           </div>
           <div class="ts-meta">
-            <label>공급받는자 (상호)<input type="text" class="tr-inp" data-ts-cust="name" placeholder="비우면 📒 거래처의 견적처" /></label>
+            <label>공급받는자 (상호)<input type="text" class="tr-inp" data-ts-cust="name" list="custNameList" autocomplete="off" placeholder="비우면 📒 거래처의 견적처" title="등록된 거래처명을 고르거나 입력하면 담당자 · 연락처 · 이메일 · 주소를 불러옵니다" /></label>
             <label>담당자<input type="text" class="tr-inp" data-ts-cust="manager" /></label>
             <label>연락처<input type="text" class="tr-inp" data-ts-cust="phone" /></label>
             <label>이메일<input type="text" class="tr-inp" data-ts-cust="email" /></label>
@@ -1134,7 +1134,7 @@
               <table class="tr-table">
                 <tr>
                   <th style="width: 15%;">고객명</th>
-                  <td style="width: 35%;"><input type="text" id="trCustName" class="tr-inp" placeholder="성명 / 회사명" /></td>
+                  <td style="width: 35%;"><input type="text" id="trCustName" class="tr-inp" list="custNameList" autocomplete="off" placeholder="성명 / 회사명" title="등록된 거래처명을 고르거나 입력하면 연락처 · 주소 · 이메일을 불러옵니다" /></td>
                   <th style="width: 15%;">연락처</th>
                   <td style="width: 35%;"><input type="text" id="trCustPhone" class="tr-inp" /></td>
                 </tr>
@@ -1320,5 +1320,6 @@
 
   <script src="/static/js/iconbtn.js?v={{ asset_v("js/iconbtn.js") }}"></script>
   <script src="/static/js/app.js?v={{ asset_v("js/app.js") }}"></script>
+  <datalist id="custNameList"></datalist>
 </body>
 </html>
