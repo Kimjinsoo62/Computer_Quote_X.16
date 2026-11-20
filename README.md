@@ -1,13 +1,19 @@
-# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XII.53
+# ⚡ 컴퓨존 견적 자동화 & Apple Store 견적 시스템 Ver XII.60
 
 컴퓨존(Compuzone) 조립PC 및 Apple Store 공식몰의 실시간 견적을 자동 수집하고, 단가 조절 · 부가세 계산 · 중고 시세 검색 · 네트워크 다중 접속 · 작업내역서 작성 · 8종 Excel 견적서 발행을 지원하는 올인원 업무 솔루션입니다.
+
+---
+
+## 🆕 Ver XII.60 주요 변경
+
+1. **🧺 컴퓨존 사용자 장바구니** — 로그인해 담으면 견적마다 컴퓨존 사용자 장바구니(최대 4개)를 `거래처명 앞 4글자 + MMDDHHmm`(`compuzone_cart.user_basket_name`, 예 `김진수아11211530`) 이름으로 새로 만들어 옮깁니다(`compuzone_cart_runner.move_to_user_basket`). 기본 장바구니에 담은 뒤 새로 생긴 줄만 `CopyPrdBskMgr`(복사) → 확인 → `DelBskMgrSubCartPrd`로 기본에서 지웁니다. 4개가 모두 있거나 실패하면 기본 장바구니에 둡니다(결과 창 `basket`). 컴퓨존 `/bsk/basket_function.php`는 EUC-KR(이름 · 응답), `CozChk`는 소문자 `true|false`, 수량 바꾸기(`ChangeBskMgrCartEa`)는 Success 를 돌려줘도 안 바뀌어 쓰지 않습니다(2026-11 실제 계정으로 확인).
+2. **📐 메모장 · 계산기 머리줄 정리** — 두 창 안쪽의 제목 머리줄을 없앴습니다(창 이름은 Windows 제목 표시줄). 메모장의 💽 백업 · ✕ 닫기는 아래 버튼 줄로, 메모 수는 검색칸 옆. 계산기는 제목 표시줄 ✕ 또는 Esc 로 닫습니다. 메모장은 처음 448×550(`calc_window.MEMO_W/H` = `app.js MEMO_POPUP_W/H`)으로 열립니다.
 
 ---
 
 ## 🆕 Ver XII.53 주요 변경
 
 1. **🗒️ 메모장** — 상단 메뉴 🧮 계산기 옆 **🗒️ 메모장**. 계산기처럼 별도 `--app` 창(`calc_window.open_memo_window`, `POST /api/memo/open`, 전용 프로필 `AI-PC-Quote-Memo` — ⛔ 종료 · `stop.bat` 정리 대상, 창 제목 "견적 메모장")으로 `/memo`(`templates/memo.html` + `static/js/memo.js`)를 띄우며 창 크기를 마우스로 조절합니다(실패하면 `window.open` 팝업). **💽 백업 (ZIP)** 은 메모 + 그림을 공용 백업 폴더에 `메모장_백업_*.zip`으로(`POST /api/memos/backup`). 왼쪽 목록(제목 · 내용 검색, 📌 고정 먼저 · 최근 수정 순) | 오른쪽 작성(제목 · 내용 · 그림). 그림은 Ctrl+V 붙여넣기 · 끌어놓기 · 파일 선택(PNG · JPG · GIF · WEBP · BMP, 한 장 15MB · 메모당 30장), 💾 저장(Ctrl+S) 때 메모 한 건을 통째로 보냅니다(새 그림은 data URL, 저장된 그림은 파일 이름 — 빠진 옛 그림 파일은 서버가 지움). 그림 누르면 크게 보기, 저장 안 한 변경은 넘어갈 때 확인. 저장 위치 `data/memos/memos.json` + `data/memos/images/`(`app/memo_book.py`, API `/api/memos`).
-2. **🧺 컴퓨존 사용자 장바구니** — 로그인해 담으면 견적마다 컴퓨존 사용자 장바구니(최대 4개)를 `거래처명 앞 4글자 + MMDDHHmm`(`compuzone_cart.user_basket_name`, 예 `김진수아11211530`) 이름으로 새로 만들어 옮깁니다(`compuzone_cart_runner.move_to_user_basket`). 기본 장바구니에 담은 뒤 새로 생긴 줄만 `CopyPrdBskMgr`(복사) → 확인 → `DelBskMgrSubCartPrd`로 기본에서 지웁니다. 4개가 모두 있거나 실패하면 기본 장바구니에 둡니다(결과 창 `basket`). 컴퓨존 `/bsk/basket_function.php`는 EUC-KR(이름 · 응답), `CozChk`는 소문자 `true|false`, 수량 바꾸기(`ChangeBskMgrCartEa`)는 Success 를 돌려줘도 안 바뀌어 쓰지 않습니다(2026-11 실제 계정으로 확인).
 
 ---
 
