@@ -48,6 +48,9 @@
         <button type="button" id="btnOpenCalc" class="btn btn-outline btn-sm" title="견적 창 밖에 작은 계산기를 띄웁니다. 다른 모니터로도 옮길 수 있습니다">
           🧮 계산기
         </button>
+        <button type="button" id="btnOpenMemo" class="btn btn-outline btn-sm" title="글과 그림(붙여넣기 · 끌어놓기)을 메모로 저장하고 검색 · 관리합니다">
+          🗒️ 메모장
+        </button>
         <button type="button" id="btnUpdateApp" class="btn btn-outline btn-sm" title="GitHub에서 새 버전을 확인하고, 승인하면 내려받아 갱신합니다">
           🔄 업데이트
         </button>
@@ -380,6 +383,50 @@
         <p class="qa-hint">컴퓨존 작업은 따로 열린 Edge 창에서 사람이 쓰듯 천천히 진행됩니다. 다 담으면 그 창에 컴퓨존 장바구니가 열립니다(그 창을 닫기 전까지 로그인 상태가 유지됩니다).</p>
       </div>
     </div>
+  </div>
+
+  <!-- 🗒️ 메모장: 왼쪽 목록(검색 · 📌 고정) | 오른쪽 작성(제목 · 내용 · 그림). 그림은 Ctrl+V 붙여넣기 · 끌어놓기 · 파일 선택 -->
+  <div id="memoModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal memo-modal" role="dialog" aria-labelledby="memoTitleHead">
+      <div class="modal-header">
+        <h3 id="memoTitleHead">🗒️ 메모장 <span id="memoCount" class="memo-count"></span></h3>
+        <button type="button" class="modal-close btn-modal-close" id="memoClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body memo-body">
+        <aside class="memo-side">
+          <div class="memo-side-tools">
+            <input type="text" id="memoSearch" class="tr-inp" placeholder="🔍 제목 · 내용 검색" autocomplete="off" />
+            <button type="button" id="memoBtnNew" class="btn btn-outline btn-sm" title="빈 메모를 새로 씁니다">➕ 새 메모</button>
+          </div>
+          <ul id="memoList" class="memo-list"></ul>
+        </aside>
+        <section class="memo-edit" id="memoEdit">
+          <div class="memo-edit-head">
+            <input type="text" id="memoTitle" class="tr-inp memo-title-inp" maxlength="200" placeholder="제목 (비우면 내용 첫 줄)" />
+            <label class="memo-pin" title="목록 맨 위에 고정합니다"><input type="checkbox" id="memoPinned" /> 📌 고정</label>
+            <span id="memoState" class="memo-state"></span>
+          </div>
+          <textarea id="memoBody" class="tr-inp memo-body-inp" placeholder="내용을 입력하세요. 그림은 Ctrl+V 로 붙여넣거나 이 창에 끌어다 놓으면 아래에 붙습니다."></textarea>
+          <div id="memoDrop" class="memo-images" title="그림을 여기로 끌어다 놓거나 Ctrl+V 로 붙여넣으세요">
+            <div id="memoImages" class="memo-thumbs"></div>
+            <div id="memoImgHint" class="memo-img-hint">🖼️ 그림 없음 — Ctrl+V 붙여넣기 · 끌어놓기 · [🖼️ 그림 추가]</div>
+          </div>
+          <div class="memo-actions">
+            <button type="button" id="memoBtnAddImg" class="btn btn-outline btn-sm">🖼️ 그림 추가</button>
+            <input type="file" id="memoFile" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" multiple hidden />
+            <span class="memo-spacer"></span>
+            <button type="button" id="memoBtnDelete" class="btn btn-outline btn-sm memo-del">🗑️ 삭제</button>
+            <button type="button" id="memoBtnSave" class="btn btn-primary btn-sm" title="Ctrl+S">💾 저장</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🗒️ 메모 그림 크게 보기 -->
+  <div id="memoViewer" class="memo-viewer hidden" aria-hidden="true" title="클릭하거나 Esc 로 닫기">
+    <img id="memoViewerImg" alt="" />
+    <div id="memoViewerName" class="memo-viewer-name"></div>
   </div>
 
   <!-- ⚙️ 설정: 🧩 견적요소 | 📒 거래처 · 🗂️ 견적서 · 📋 작업내역서 를 한 곳에서 관리 -->

@@ -50,7 +50,7 @@ from app.quote_engine import (
     today_quotes_to_dict,
 )
 from app.calc_window import close_calc_window, open_calc_window
-from app import customer_book, mail_send, manual_quote, pdf_export, quote_archive, trade_statement
+from app import customer_book, mail_send, manual_quote, memo_book, pdf_export, quote_archive, trade_statement
 from app.shutdown_service import schedule_full_shutdown
 from app.update_service import apply_update, check_update, schedule_restart
 from app.task_report import (
@@ -1680,6 +1680,52 @@ def api_manual_quote_excel(payload: dict = Body(...)):
 
 # ---------------------------------------------------------------------------
 # 🧾 거래명세서 (app/trade_statement.py) — 폼5 모양 거래명세표 위아래 두 벌, 서명본 보관
+# ---------------------------------------------------------------------------
+# 🗒️ 메모장 (app/memo_book.py) — 글 + 그림, data/memos/
+# ---------------------------------------------------------------------------
+@app.get("/api/memos")
+def api_memos():
+    return {"memos": memo_book.list_memos(), "max_images": memo_book.MAX_IMAGES}
+
+
+@app.post("/api/memos")
+def api_save_memo(data: dict = Body(...)):
+    """id 가 있으면 수정, 없으면 새 메모. images: [{file} | {data: dataURL, name}]"""
+    try:
+        return {"status": "ok", "memo": memo_book.save_memo(data)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"메모를 저장하지 못했습니다: {e}") from e
+
+
+@app.post("/api/memos/{memo_id}/pin")
+def api_pin_memo(memo_id: str, payload: dict = Body(default={})):
+    memo = memo_book.set_pinned(memo_id, bool(payload.get("pinned")))
+    if not memo:
+        raise HTTPException(status_code=404, detail="메모를 찾을 수 없습니다.")
+    return {"status": "ok", "memo": memo}
+
+
+@app.delete("/api/memos/{memo_id}")
+def api_delete_memo(memo_id: str):
+    if not memo_book.delete_memo(memo_id):
+        raise HTTPException(status_code=404, detail="메모를 찾을 수 없습니다.")
+    return {"status": "ok"}
+
+
+@app.get("/api/memos/images/{file}")
+def api_memo_image(file: str):
+    path = memo_book.image_path(file)
+    if not path:
+        raise HTTPException(status_code=404, detail="그림을 찾을 수 없습니다.")
+    return Response(
+        content=path.read_bytes(),
+        media_type=memo_book.MEDIA_TYPES.get(path.suffix.lstrip(".").lower(), "application/octet-stream"),
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
 # ---------------------------------------------------------------------------
 @app.get("/api/trade-statements")
 def api_trade_statements():

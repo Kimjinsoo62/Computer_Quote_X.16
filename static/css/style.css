@@ -2601,3 +2601,50 @@ td > .mqp-in.w-email { width: 52%; }
 .cz-cart-money th { width: 34%; color: #cbd5e1; font-weight: 600; }
 .cz-cart-money td:nth-child(2) { width: 22%; text-align: right; font-weight: 700; white-space: nowrap; }
 .cz-cart-money td:nth-child(3) { color: #94a3b8; }
+
+/* ── 🗒️ 메모장 (#memoModal) — 왼쪽 목록 | 오른쪽 작성 ── */
+.memo-modal { max-width: 1240px; height: 86vh; }
+.memo-count { font-size: 0.9rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.memo-body { display: grid; grid-template-columns: 300px 1fr; gap: 10px; padding: 8px 10px; overflow: hidden; min-height: 0; }
+.memo-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); padding-right: 10px; }
+.memo-side-tools { display: flex; gap: 4px; margin-bottom: 6px; }
+.memo-side-tools .tr-inp { flex: 1; min-width: 0; }
+.memo-side-tools .btn { white-space: nowrap; }
+.memo-list { list-style: none; flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.memo-item { padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; margin-bottom: 2px; }
+.memo-item:hover { background: var(--card2); }
+.memo-item.is-active { background: rgba(59, 130, 246, 0.16); border-color: var(--primary); }
+.memo-item-top { display: flex; align-items: center; gap: 4px; }
+.memo-item-title { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.memo-item-pin { background: none; border: 0; cursor: pointer; font-size: 0.95rem; opacity: 0.22; padding: 0 2px; }
+.memo-item-pin.on { opacity: 1; }
+.memo-item-pin:hover { opacity: 0.8; }
+.memo-item-img { font-size: 0.9rem; color: var(--muted); white-space: nowrap; }
+.memo-item-sub { display: flex; gap: 6px; font-size: 0.9rem; color: var(--muted); padding-left: 20px; }
+.memo-item-sub span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.memo-item-sub time { white-space: nowrap; }
+.memo-empty { color: var(--muted); padding: 10px 4px; }
+.memo-edit { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.memo-edit-head { display: flex; align-items: center; gap: 8px; }
+.memo-modal .tr-inp { background: var(--bg2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
+.memo-modal .tr-inp:focus { outline: none; border-color: var(--primary); }
+.memo-title-inp { flex: 1; font-size: 1.15rem !important; font-weight: 700; padding: 4px 6px !important; }
+.memo-pin { white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+.memo-state { white-space: nowrap; font-size: 0.9rem; color: var(--muted); min-width: 150px; text-align: right; }
+.memo-state.is-dirty { color: var(--orange); font-weight: 700; }
+.memo-body-inp { flex: 1 1 55%; min-height: 120px; resize: none; padding: 6px !important; line-height: 1.5; font-family: inherit; }
+.memo-images { flex: 0 1 38%; min-height: 96px; overflow-y: auto; border: 1px dashed var(--border); border-radius: 6px; padding: 6px; }
+.memo-images.is-over { border-color: var(--accent); background: rgba(34, 211, 238, 0.08); }
+.memo-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.memo-thumb { position: relative; width: 132px; cursor: zoom-in; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: var(--bg2); }
+.memo-thumb.is-new { border-color: var(--orange); }
+.memo-thumb img { display: block; width: 100%; height: 96px; object-fit: cover; }
+.memo-thumb figcaption { font-size: 0.85rem; color: var(--muted); padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.memo-thumb-x { position: absolute; top: 2px; right: 2px; background: rgba(220, 38, 38, 0.9); color: #fff; border: 0; border-radius: 3px; cursor: pointer; font-size: 0.85rem; line-height: 1; padding: 2px 4px; }
+.memo-img-hint { color: var(--muted); text-align: center; padding: 26px 0; }
+.memo-actions { display: flex; align-items: center; gap: 6px; }
+.memo-spacer { flex: 1; }
+.memo-del:not(:disabled):hover { border-color: var(--red); color: var(--red); }
+.memo-viewer { position: fixed; inset: 0; z-index: 400; background: rgba(2, 6, 23, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: zoom-out; padding: 16px; }
+.memo-viewer img { max-width: 96vw; max-height: 90vh; object-fit: contain; box-shadow: var(--shadow); }
+.memo-viewer-name { color: var(--muted); }

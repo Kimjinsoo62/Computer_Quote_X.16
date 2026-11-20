@@ -105,6 +105,7 @@
       <div class="manual-note">
         <strong>🆕 Ver XII.52 주요 변경</strong>
         <ul>
+          <li><strong>🗒️ 메모장</strong>: 상단 메뉴 계산기 옆에 메모장을 넣었습니다. 글과 그림(Ctrl+V 붙여넣기 · 끌어놓기 · 파일 선택)을 메모 한 건으로 저장하고, 검색 · 📌 고정 · 그림 크게 보기 · 삭제로 관리합니다. (<a href="#s14-memo">14번 항목</a>)</li>
           <li><strong>☎️ 전화번호 자동 하이픈</strong>: 연락처를 <code>01023678481</code>처럼 숫자만 입력해도 칸을 벗어나면 <code>010-2367-8481</code>로 바뀌고, 저장 · 견적서 · 거래명세표 · 작업내역서 · 메일에도 이 형태로 들어갑니다. 예전에 숫자만 저장된 번호도 문서를 만들 때 맞춰 찍습니다(02 · 031 같은 지역번호, 1588 같은 대표번호 포함. 이미 - 가 있거나 글자가 섞인 번호는 그대로). (<a href="#s10">10번 항목</a>)</li>
           <li><strong>📇 거래처명으로 정보 불러오기</strong>: 거래명세서 · 작업내역서의 거래처명(공급받는자 · 고객명) 칸에 글자를 넣으면 등록된 거래처 목록이 펼쳐지고, 고르거나 등록된 상호를 그대로 입력하고 칸을 벗어나면 담당자 · 연락처 · 이메일 · 주소 칸을 채웁니다. (<a href="#s10">10번 항목</a>)</li>
           <li><strong>📒 새 거래처 자동 등록</strong>: 거래명세서 · 작업내역서를 저장할 때 고객(공급받는자) 상호가 거래처 목록에 없으면 <strong>거래처 목록에 자동으로 등록</strong>합니다(연락처 · 이메일 · 주소 포함). 이미 있는 거래처는 바꾸지 않습니다. (<a href="#s10">10번 항목</a>)</li>
@@ -659,7 +660,7 @@
         <li><a href="#s11">11. Excel 견적서 다운로드 (카드별 · 서식 · 보관함)</a></li>
         <li><a href="#s12">12. Excel 견적서 구성과 인쇄 (8종 서식 완비)</a></li>
         <li><a href="#s13">13. 컴퓨터 작업내역서 (출장/수리 작성 · 저장 · 인쇄 · 엑셀)</a></li>
-        <li><a href="#s14">14. 팝업 계산기 (부가세 역계산)</a></li>
+        <li><a href="#s14">14. 팝업 계산기 (부가세 역계산) · 🗒️ 메모장</a></li>
         <li><a href="#s15">15. 쿠팡 검색</a></li>
         <li><a href="#s16">16. 문제 해결 (FAQ)</a></li>
       </ol>
@@ -947,6 +948,7 @@
           <tr><th>폴더</th><th>들어 있는 것</th></tr>
           <tr><td><code>data\settings</code></td><td><code>quote_info.json</code>(견적처 · 공급자 · 추가 품목 금액 · 입금 계좌), <code>app_settings.json</code>(백업 폴더 위치 · 견적 메일 계정)</td></tr>
           <tr><td><code>data\customers</code></td><td><code>customers.json</code> — 📒 거래처 목록</td></tr>
+          <tr><td><code>data\memos</code></td><td><code>memos.json</code> — 🗒️ 메모장 글, <code>images\</code> — 메모에 붙인 그림</td></tr>
           <tr><td><code>data\trade_statements</code></td><td><code>trade_statements.json</code> — 🧾 거래명세서 목록, <code>signed\</code> — 서명받은 명세서 스캔 · 사진</td></tr>
           <tr><td><code>data\task_reports</code></td><td><code>task_reports.json</code> — 📋 작업내역서</td></tr>
           <tr><td><code>data\manual_quotes</code></td><td><code>manual_quotes.json</code> — 📝 새 견적 만들기 작성본</td></tr>
@@ -1157,7 +1159,7 @@
 
     <!-- 14 -->
     <section class="manual-sec" id="s14">
-      <h2>14. 팝업 계산기 (부가세 역계산)</h2>
+      <h2>14. 팝업 계산기 (부가세 역계산) · 🗒️ 메모장</h2>
       <p>상단 메뉴의 <strong>🧮 계산기</strong>를 누르면 견적 창과 분리된 <strong>운영체제 독립 창</strong>으로 계산기가 팝업됩니다. 창 제목 바를 잡고 보조 모니터나 화면 구석으로 자유롭게 옮겨두고 사용할 수 있습니다.</p>
 
       <h3>원클릭 부가세(VAT) 자동 계산</h3>
@@ -1179,6 +1181,16 @@
         <li><code>0</code>, <code>00</code>, <code>000</code> 버튼으로 큰 금액을 빠르게 입력할 수 있고, <code>C</code>(초기화) · <code>⌫</code>(한 글자 지우기) · <code>%</code> 키도 있습니다.</li>
         <li>키보드 입력도 됩니다: 숫자 · 넘패드, <span class="manual-key">Enter</span>(계산), <span class="manual-key">Backspace</span>, <span class="manual-key">Delete</span>/<span class="manual-key">C</span>(초기화), <span class="manual-key">Esc</span>(창 닫기).</li>
         <li>다른 기기에서 접속해 눌러도 계산기는 <strong>서버 PC 화면</strong>에 열립니다.</li>
+      </ul>
+
+      <h3 id="s14-memo">🗒️ 메모장 (글 + 그림)</h3>
+      <p>상단 메뉴 계산기 오른쪽의 <strong>🗒️ 메모장</strong>을 누르면 메모 창이 열립니다. 왼쪽은 저장된 메모 목록, 오른쪽은 지금 쓰는 메모입니다. 견적 상담 내용 · 부품 사진 · 화면 캡처 · 고객 요청을 그림과 함께 남겨 둘 때 씁니다.</p>
+      <ul>
+        <li><strong>쓰기</strong>: 제목과 내용을 적고 <strong>💾 저장</strong>(또는 <span class="manual-key">Ctrl</span>+<span class="manual-key">S</span>)을 누릅니다. 제목을 비우면 목록에 내용 첫 줄이 제목처럼 보입니다. 고친 뒤 저장하지 않으면 오른쪽 위에 <strong>● 저장 안 됨</strong>이 뜨고, 다른 메모로 넘어가거나 창을 닫을 때 한 번 더 묻습니다.</li>
+        <li><strong>그림 붙이기</strong>: 캡처 도구(<span class="manual-key">Win</span>+<span class="manual-key">Shift</span>+<span class="manual-key">S</span>)나 웹 그림을 복사한 뒤 메모 창에서 <span class="manual-key">Ctrl</span>+<span class="manual-key">V</span>, 탐색기의 그림 파일을 창에 <strong>끌어다 놓기</strong>, 또는 <strong>🖼️ 그림 추가</strong>로 파일 고르기(여러 장). PNG · JPG · GIF · WEBP · BMP, 한 장 15MB · 메모 한 건 30장까지입니다. 아직 저장하지 않은 그림은 주황 테두리로 보이고 💾 저장 때 함께 저장됩니다.</li>
+        <li><strong>그림 보기 · 빼기</strong>: 그림을 누르면 크게 보이고(누르거나 <span class="manual-key">Esc</span>로 닫기), 그림 오른쪽 위 <strong>✕</strong>로 뺍니다(💾 저장해야 실제로 지워짐).</li>
+        <li><strong>관리</strong>: 왼쪽 위 검색칸은 제목 · 내용으로 거릅니다. 목록의 <strong>📌</strong>을 누르거나 오른쪽 <strong>📌 고정</strong>을 체크해 저장하면 맨 위에 고정됩니다. 목록에는 🖼️(그림 수) · 마지막 수정 시각이 보입니다. <strong>➕ 새 메모</strong>로 빈 메모를 쓰고, <strong>🗑️ 삭제</strong>는 확인 후 메모와 붙인 그림을 함께 지웁니다(되돌릴 수 없음).</li>
+        <li>메모는 프로그램 폴더의 <code>data\memos\memos.json</code>, 그림은 <code>data\memos\images\</code>에 저장됩니다. 업데이트해도 지워지지 않고 GitHub 에 올라가지 않습니다. 다른 기기에서 접속해도 같은 메모를 봅니다(서버 PC 에 저장).</li>
       </ul>
     </section>
 

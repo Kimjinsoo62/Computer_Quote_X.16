@@ -10,6 +10,7 @@
       manual_quotes/              manual_quotes.json(📝 새 견적 만들기 작성본) + pdf/(📤 올린 PDF 원본)
       quote_archive/              index.json + 보관한 견적서 xlsx
       cache/                      Apple · 컴퓨존 수집 스냅샷(지워도 다시 받음)
+      memos/                      memos.json(🗒️ 메모장) + images/(메모에 붙인 그림)
 
 예전 버전은 이 파일들을 프로젝트 폴더 바로 아래에 두었다. 이 모듈을 처음 불러올 때(서버 시작) 옛 위치에만 있는
 항목을 새 위치로 옮긴다. 두 곳에 다 있으면 아무것도 지우지 않고 새 위치를 쓰며 경고를 찍는다. 옮기다 실패하면
@@ -27,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 
-_SUBDIRS = ("settings", "customers", "trade_statements", "task_reports", "manual_quotes", "quote_archive", "cache")
+_SUBDIRS = ("settings", "customers", "trade_statements", "task_reports", "manual_quotes", "quote_archive", "cache", "memos")
 
 README_TEXT = """컴퓨존 견적 자동화 — 데이터 폴더
 
@@ -43,6 +44,8 @@ README_TEXT = """컴퓨존 견적 자동화 — 데이터 폴더
   manual_quotes\\manual_quotes.json  📝 새 견적 만들기 작성본
   manual_quotes\\pdf\\              📤 견적서 올리기로 넣은 PDF 원본 (작성본마다 하나)
   quote_archive\\                    🗂️ 견적서 보관함 (index.json + 견적서 xlsx)
+  memos\\memos.json                  🗒️ 메모장 (글)
+  memos\\images\\                    🗒️ 메모에 붙인 그림
   cache\\                            Apple · 컴퓨존 수집 스냅샷 (지워도 다음 수집 때 다시 만들어짐)
   AI-PC-Quote-Compuzone\\            🧺 컴퓨존 장바구니 담기용 Edge 프로필 (컴퓨존 로그인 상태가 들어 있음 — 다른 사람에게 넘길 때는 지우세요)
 
@@ -138,6 +141,9 @@ APPLE_CACHE_FILE: Path = _P["apple_cache"]
 PARTS_CACHE_FILE: Path = _P["parts_cache"]
 # 📤 견적서 올리기로 PDF 에서 만든 작성본의 원본 PDF (옛 위치 없음 — 이전 대상 아님)
 MANUAL_PDF_DIR: Path = MANUAL_QUOTES_FILE.parent / "pdf"
+# 🗒️ 메모장 (새 기능 — 옛 위치 없음)
+MEMOS_FILE: Path = DATA_DIR / "memos" / "memos.json"
+MEMO_IMAGE_DIR: Path = DATA_DIR / "memos" / "images"
 # 🛒 컴퓨존 장바구니 담기용 앱 전용 Edge 프로필(로그인 상태 유지). 폴더 이름이 종료 정리의 표식이므로 바꾸지 않는다.
 COMPUZONE_PROFILE_DIR: Path = DATA_DIR / "AI-PC-Quote-Compuzone"
 
