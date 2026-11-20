@@ -4,7 +4,9 @@
 Playwright 로 이 PC 의 Edge 를 **보이는 창**으로 띄워(앱 전용 프로필 data/AI-PC-Quote-Compuzone) 사람이 쓰듯
 컴퓨존에 로그인하고, 상품 페이지마다 컴퓨존 자체 [장바구니 담기] 버튼을 눌러 담은 뒤 장바구니 화면을 열어 둔다.
 
-- 작업은 stdin 으로 한 줄에 JSON 하나씩 받는다: {"job": id, "user": 아이디, "password": 비밀번호, "items": [{pno, qty, name}]}
+- 작업은 stdin 으로 한 줄에 JSON 하나씩 받는다: {"job": id, "user": 아이디, "password": 비밀번호, "items": [{pno, qty, name}],
+  "group_name": 사용자 장바구니 이름}. group_name 이 있으면 기본 장바구니에 담은 뒤 새로 생긴 줄을 그 이름의 새 사용자
+  장바구니로 옮긴다(최대 4개 — 다 있으면 기본 장바구니에 그대로 둔다, move_to_user_basket)
   (비밀번호는 명령줄 인자로 넘기지 않는다 — 다른 프로그램이 명령줄을 볼 수 있으므로)
 - 진행은 stdout 으로 한 줄에 JSON 하나씩 낸다: {"job", "type": "log"|"progress"|"need_user"|"done"|"error", ...}
 - 입력 · 클릭 사이에 사람처럼 무작위 간격을 둔다(컴퓨존 서버에 무리를 주지 않게). 캡차 · 추가 인증을 우회하지 않는다:
@@ -405,6 +407,119 @@ class Runner:
     def basket_counts(self) -> dict[int, int]:
         return self.basket_state()["counts"]
 
+    # -- 사용자 장바구니(그룹) -----------------------------------------------------------
+    # 컴퓨존 회원은 기본 장바구니 외에 '사용자 장바구니'를 최대 4개 만들 수 있다(5개째는 "최대 개수 초과", 2026-11 확인).
+    # 관리 API 는 /bsk/basket_function.php (컴퓨존 script/basket_group.js 가 쓰는 것과 같음):
+    #   getBskMgrGrpList                         → {"GrpCnt": n, "0": {OrderCartGroupNo, CartGroupName, CartProductCnt}, …}
+    #   getBskMgrList&OrderCartGroupNo=N         → {"Data": [{OrderCartNo, CartProductNo, CartProductEa, CozChk, …}]} (0 = 기본)
+    #   AddBskMgrGrp&CartGroupName=…             → "Success"
+    #   CopyPrdBskMgr&arrOrderCartNo[]&arrCozChk[]&OrderCartGroupNo → "Success" — 이동이 아니라 **복사**(기본에 그대로 남음)
+    #   DelBskMgrSubCartPrd&OrderCartNo&OrderCartGroupNo=0&CozChk=false|true → "Success" (CozChk 는 소문자여야 함)
+    # 글자는 EUC-KR 이다: 이름을 UTF-8 로 보내면 컴퓨존 화면에서 깨지고, 응답도 EUC-KR 로 풀어야 한다.
+    # 수량 바꾸기(ChangeBskMgrCartEa)는 "Success" 를 돌려줘도 실제로는 안 바뀌어(시험함) 쓰지 않는다.
+    _BSK_JS = """async ([method, qs]) => {
+        qs += '&time=' + Date.now();
+        const r = method === 'GET' ? await fetch('/bsk/basket_function.php?' + qs, {credentials: 'include'})
+          : await fetch('/bsk/basket_function.php', {method: 'POST', credentials: 'include',
+              headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: qs});
+        return new TextDecoder('euc-kr').decode(await r.arrayBuffer());
+    }"""
+    MAX_USER_BASKETS = 4
+
+    @staticmethod
+    def _bsk_qs(pairs: list[tuple[str, Any]]) -> str:
+        from urllib.parse import quote
+
+        def val(v: Any) -> str:
+            if isinstance(v, bool):
+                v = "true" if v else "false"
+            return quote(str(v).encode("cp949", errors="ignore"), safe="")
+
+        return "&".join(f"{quote(k, safe='[]')}={val(v)}" for k, v in pairs)
+
+    def _bsk(self, method: str, pairs: list[tuple[str, Any]]) -> str:
+        if "compuzone.co.kr" not in (self.page.url or ""):
+            self.goto(BASKET_URL)  # fetch 가 컴퓨존 쿠키를 쓰도록 컴퓨존 페이지에서 부른다
+        return str(self.page.evaluate(self._BSK_JS, [method, self._bsk_qs(pairs)]) or "").strip()
+
+    def bsk_groups(self) -> list[dict[str, Any]]:
+        g = json.loads(self._bsk("GET", [("actype", "getBskMgrGrpList")]))
+        return [g[str(i)] for i in range(int(g.get("GrpCnt") or 0)) if str(i) in g]
+
+    def bsk_rows(self, group_no: Any) -> list[dict[str, Any]]:
+        d = json.loads(self._bsk("GET", [("actype", "getBskMgrList"), ("OrderCartGroupNo", group_no)]))
+        return [x for x in (d.get("Data") or []) if isinstance(x, dict)]
+
+    def move_to_user_basket(self, job: str, name: str, before_rows: list[dict[str, Any]] | None) -> dict[str, Any]:
+        """이번에 기본 장바구니에 새로 생긴 줄을 새 사용자 장바구니(이름 name)로 옮긴다.
+        사용자 장바구니가 4개 다 있으면(또는 어디서든 실패하면) 기본 장바구니에 그대로 둔다. 결과를 돌려준다."""
+        def base(reason: str) -> dict[str, Any]:
+            emit(job, "log", msg=f"🧺 {reason}")
+            return {"mode": "base", "reason": reason}
+
+        if before_rows is None:
+            return base("담기 전 장바구니를 읽지 못해 기본 장바구니에 그대로 둡니다.")
+        created_no = ""
+        try:
+            self.goto(BASKET_URL)
+            had = {str(r.get("OrderCartNo")): int(r.get("CartProductEa") or 0) for r in before_rows}
+            rows_now = self.bsk_rows(0)
+            new_rows = [r for r in rows_now if str(r.get("OrderCartNo")) not in had]
+            # 이미 기본 장바구니에 있던 상품은 컴퓨존이 그 줄의 수량만 늘린다. 그 줄은 원래 있던 수량과 섞여 있어 옮기지 않는다
+            bumped = [r for r in rows_now if str(r.get("OrderCartNo")) in had and int(r.get("CartProductEa") or 0) > had[str(r.get("OrderCartNo"))]]
+            if bumped:
+                emit(job, "log", msg=f"ℹ️ {len(bumped)}개 상품은 이미 기본 장바구니에 있어 그 줄의 수량만 늘었습니다 — 기본 장바구니에 그대로 둡니다.")
+            if not new_rows:
+                return base("새로 생긴 장바구니 줄이 없어(이미 기본 장바구니에 있던 상품) 기본 장바구니에 그대로 둡니다.")
+            groups = self.bsk_groups()
+            if len(groups) >= self.MAX_USER_BASKETS:
+                names = ", ".join(str(g.get("CartGroupName") or "") for g in groups)
+                return base(f"사용자 장바구니 {len(groups)}개가 모두 있어({names[:80]}) 기본 장바구니에 담았습니다.")
+            old = {str(g.get("OrderCartGroupNo")) for g in groups}
+            res = self._bsk("POST", [("actype", "AddBskMgrGrp"), ("CartGroupName", name)])
+            if res != "Success":
+                return base(f"사용자 장바구니를 만들지 못해(컴퓨존: {res[:60]}) 기본 장바구니에 담았습니다.")
+            fresh = [g for g in self.bsk_groups() if str(g.get("OrderCartGroupNo")) not in old]
+            if not fresh:
+                return base("새 사용자 장바구니를 찾지 못해 기본 장바구니에 담았습니다.")
+            target = next((g for g in fresh if str(g.get("CartGroupName")) == name), fresh[0])
+            created_no = str(target.get("OrderCartGroupNo"))
+            emit(job, "log", msg=f"🧺 사용자 장바구니 '{name}'을(를) 만들었습니다({len(groups) + 1}/{self.MAX_USER_BASKETS}).")
+            pairs: list[tuple[str, Any]] = [("actype", "CopyPrdBskMgr")]
+            for r in new_rows:
+                pairs += [("arrOrderCartNo[]", r.get("OrderCartNo")), ("arrCozChk[]", bool(r.get("CozChk")) and str(r.get("CozChk")).lower() != "false")]
+            pairs.append(("OrderCartGroupNo", created_no))
+            res = self._bsk("POST", pairs)
+            in_group = {str(r.get("CartProductNo")): int(r.get("CartProductEa") or 0) for r in self.bsk_rows(created_no)}
+            copied = [r for r in new_rows if in_group.get(str(r.get("CartProductNo")), 0) >= int(r.get("CartProductEa") or 0)]
+            if res != "Success" or not copied:
+                self._bsk("POST", [("actype", "DelBskMgrCart"), ("OrderCartGroupNo", created_no)])  # 빈 장바구니를 남기지 않는다
+                return base(f"사용자 장바구니로 옮기지 못해(컴퓨존: {res[:60]}) 기본 장바구니에 그대로 둡니다.")
+            # 복사가 확인된 줄만 기본 장바구니에서 지운다(옮기기 = 복사 + 지우기)
+            for r in copied:
+                coz = bool(r.get("CozChk")) and str(r.get("CozChk")).lower() != "false"
+                self._bsk("POST", [("actype", "DelBskMgrSubCartPrd"), ("OrderCartNo", r.get("OrderCartNo")),
+                                   ("OrderCartGroupNo", 0), ("CozChk", coz)])
+            left = {str(r.get("OrderCartNo")) for r in self.bsk_rows(0)}
+            stuck = [r for r in copied if str(r.get("OrderCartNo")) in left]
+            missing = [r for r in new_rows if r not in copied]
+            emit(job, "log", msg=f"🧺 '{name}'에 {len(copied)}줄을 옮겼습니다" + (f" · 기본 장바구니에 {len(missing)}줄 남음" if missing else "")
+                 + (f" · 기본 장바구니에서 {len(stuck)}줄을 지우지 못함(두 곳에 있음)" if stuck else "") + ".")
+            try:
+                self.goto(BASE + f"/bsk/basket_group_main.htm?GNo={created_no}")  # 사용자 장바구니 관리 화면을 열어 둔다
+            except Exception:
+                pass
+            return {"mode": "group", "group_no": created_no, "group_name": name, "moved": len(copied),
+                    "left_in_base": len(missing) + len(bumped), "duplicated": len(stuck), "user_baskets": len(groups) + 1}
+        except Exception as e:  # noqa: BLE001 - 옮기기가 실패해도 담은 상품은 기본 장바구니에 있다
+            if created_no:
+                try:
+                    if not self.bsk_rows(created_no):
+                        self._bsk("POST", [("actype", "DelBskMgrCart"), ("OrderCartGroupNo", created_no)])
+                except Exception:
+                    pass
+            return base(f"사용자 장바구니로 옮기는 중 오류가 나 기본 장바구니에 그대로 둡니다: {e}")
+
     def run(self, task: dict[str, Any]) -> None:
         job = str(task.get("job") or "")
         items = [i for i in task.get("items") or [] if str(i.get("pno") or "").isdigit()]
@@ -417,6 +532,15 @@ class Runner:
             elif not self.login(job, str(task.get("user") or ""), str(task.get("password") or "")):
                 return
             emit(job, "progress", step=1, total=total + 2, msg="로그인 확인")
+            group_name = str(task.get("group_name") or "").strip()
+            guest = bool(task.get("guest_test") and os.environ.get("CZ_HEADLESS") == "1")
+            before_rows = None
+            if group_name and not guest:
+                try:
+                    self.goto(BASKET_URL)
+                    before_rows = self.bsk_rows(0)  # 담기 전 기본 장바구니 줄(새로 생긴 줄만 사용자 장바구니로 옮긴다)
+                except Exception as e:  # noqa: BLE001
+                    emit(job, "log", msg=f"담기 전 장바구니 줄을 읽지 못했습니다(기본 장바구니에 담습니다): {e}")
             before_st = self.basket_state()
             before = before_st["counts"]
             emit(job, "log", msg=f"담기 전 장바구니: {len(before)}종 · 합계 {before_st['total']:,}원")
@@ -460,10 +584,13 @@ class Runner:
                 pno = int(it["pno"])
                 added_amount += max(0, after_st["amounts"].get(pno, 0) - before_st["amounts"].get(pno, 0))
             emit(job, "log", msg=f"담은 상품 컴퓨존 합계 {added_amount:,}원 · 장바구니 전체 합계 {after_st['total']:,}원")
+            basket = {"mode": "base", "reason": "비회원은 사용자 장바구니가 없어 기본 장바구니에 담았습니다." if guest else ""}
+            if group_name and not guest and added:
+                basket = self.move_to_user_basket(job, group_name, before_rows)
             self.save_session()
             emit(job, "done", added=len(added), failed=failed, qty_diff=qty_diff, already=already,
                  missing=[], in_cart=len(after), added_amount=added_amount, basket_total=after_st["total"],
-                 before_total=before_st["total"], before_kinds=len(before))
+                 before_total=before_st["total"], before_kinds=len(before), basket=basket)
             try:
                 self.page.bring_to_front()
             except Exception:

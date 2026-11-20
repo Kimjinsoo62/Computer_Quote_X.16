@@ -652,7 +652,12 @@ async function startCompuzoneCart(i, ev) {
   if (!confirm(msg)) return;
   let job;
   try {
-    const res = await postJsonRaw("/api/compuzone/cart", { items, label: `${q?.tab_label || ""} ${q?.model || ""}`.trim() });
+    // customer: 사용자 장바구니 이름(거래처명 앞 4글자 + MMDDHHmm, app/compuzone_cart.py user_basket_name)용 견적처 상호
+    const res = await postJsonRaw("/api/compuzone/cart", {
+      items,
+      label: `${q?.tab_label || ""} ${q?.model || ""}`.trim(),
+      customer: quoteInfo?.customer_name || "",
+    });
     if (!res.ok) throw new Error(res.data.detail || `시작 실패 (${res.status})`);
     job = res.data;
   } catch (e) {
@@ -711,7 +716,12 @@ function showCzCartProgress(st) {
         <tr><th>이번에 담은 상품(장바구니)</th><td>${fmt(r.added_amount || 0)}</td><td>${diffCost ? `카드 원가와 ${signedW(diffCost)} — 견적 뒤 컴퓨존 가격이 바뀌었거나 일부가 덜 담김` : "카드 원가와 같음"}</td></tr>
         <tr><th>장바구니 전체 합계</th><td>${fmt(r.basket_total || 0)}</td><td>${r.before_kinds ? `원래 있던 ${r.before_kinds}종(${fmt(r.before_total || 0)}) 포함` : "이번에 담은 상품만"}</td></tr>
       </table>` : "";
-    box.innerHTML = `<p class="${r.added === n ? "cz-cart-ok" : "cz-cart-err"}">${r.added === n ? "✔" : "⚠️"} ${n}개 중 ${r.added}개가 장바구니에 담겼습니다(담기 전후 장바구니를 비교해 확인). 컴퓨존 창에 장바구니가 열려 있습니다(장바구니 ${r.in_cart}종).</p>${money}${fails || qd || al ? `<ul>${fails}${qd}${al}</ul>` : ""}`;
+    // 어느 장바구니에 담겼나: 새 사용자 장바구니(최대 4개) 또는 기본 장바구니(4개가 다 있거나 옮기지 못했을 때)
+    const bk = r.basket || {};
+    const where = bk.mode === "group"
+      ? `<p class="cz-cart-ok">🧺 사용자 장바구니 <b>${escapeHtml(bk.group_name || "")}</b>에 ${bk.moved}줄을 담았습니다(사용자 장바구니 ${bk.user_baskets}/4개)${bk.left_in_base ? ` · ${bk.left_in_base}줄은 기본 장바구니에 남음` : ""}${bk.duplicated ? ` · ${bk.duplicated}줄은 기본 장바구니에도 남아 있으니 지워 주세요` : ""}. 컴퓨존 창에 사용자 장바구니 화면이 열려 있습니다.</p>`
+      : `<p class="cz-cart-note">🧺 기본 장바구니에 담았습니다${bk.reason ? ` — ${escapeHtml(bk.reason)}` : ""}</p>`;
+    box.innerHTML = `<p class="${r.added === n ? "cz-cart-ok" : "cz-cart-err"}">${r.added === n ? "✔" : "⚠️"} ${n}개 중 ${r.added}개가 장바구니에 담겼습니다(담기 전후 장바구니를 비교해 확인). 컴퓨존 창에 장바구니가 열려 있습니다(장바구니 ${r.in_cart}종).</p>${where}${money}${fails || qd || al ? `<ul>${fails}${qd}${al}</ul>` : ""}`;
   } else if (st.state === "error") {
     box.innerHTML = `<p class="cz-cart-err">✕ ${escapeHtml(st.error || "장바구니 담기에 실패했습니다.")}</p>`;
   } else {

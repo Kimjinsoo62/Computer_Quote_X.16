@@ -14,6 +14,7 @@ import json
 import subprocess
 import sys
 import threading
+from datetime import datetime
 import time
 import uuid
 from typing import Any
@@ -142,8 +143,24 @@ def _ensure_proc() -> subprocess.Popen:
     return _proc
 
 
-def start(items: list[dict[str, Any]], label: str = "") -> dict[str, Any]:
-    """장바구니 담기 작업을 시작한다. items = [{pno, qty, category, name}]"""
+def user_basket_name(customer: str, when: datetime | None = None) -> str:
+    """사용자 장바구니 이름: 거래처명 앞 4글자(공백 · 따옴표 · 컴퓨존이 못 쓰는 글자 뺌) + MMDDHHmm. 예: 김진수아11211530.
+    거래처명이 없으면 '견적'. 컴퓨존은 이름을 EUC-KR 로 저장하므로 그 밖의 글자(이모지 등)는 뺀다."""
+    keep = []
+    for ch in str(customer or ""):
+        if ch.isspace() or ch in "'\"<>&%#+\\":
+            continue
+        try:
+            ch.encode("cp949")
+        except UnicodeEncodeError:
+            continue
+        keep.append(ch)
+    head = "".join(keep)[:4] or "견적"
+    return head + (when or datetime.now()).strftime("%m%d%H%M")
+
+
+def start(items: list[dict[str, Any]], label: str = "", customer: str = "") -> dict[str, Any]:
+    """장바구니 담기 작업을 시작한다. items = [{pno, qty, category, name}], customer = 견적처 상호(사용자 장바구니 이름용)"""
     if not playwright_available():
         raise RuntimeError("Playwright 가 설치되어 있지 않습니다. install.bat 을 다시 실행해 주세요.")
     clean = []
@@ -168,7 +185,8 @@ def start(items: list[dict[str, Any]], label: str = "") -> dict[str, Any]:
         _jobs[job_id] = {"id": job_id, "label": label[:120], "state": "running", "step": 0, "total": len(clean) + 2,
                          "log": [], "need_user": "", "error": "", "result": None, "created": now, "items": len(clean)}
     proc = _ensure_proc()
-    task = {"job": job_id, "user": acct.get("user") or "", "password": _password(), "items": clean}
+    task = {"job": job_id, "user": acct.get("user") or "", "password": _password(), "items": clean,
+            "group_name": user_basket_name(customer)}
     try:
         proc.stdin.write((json.dumps(task, ensure_ascii=False) + "\n").encode("utf-8"))  # type: ignore[union-attr]
         proc.stdin.flush()  # type: ignore[union-attr]

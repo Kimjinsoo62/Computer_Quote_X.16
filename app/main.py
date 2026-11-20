@@ -1543,7 +1543,7 @@ def api_compuzone_cart(payload: dict = Body(...)):
     from app import compuzone_cart
 
     try:
-        return compuzone_cart.start(payload.get("items") or [], str(payload.get("label") or ""))
+        return compuzone_cart.start(payload.get("items") or [], str(payload.get("label") or ""), str(payload.get("customer") or ""))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
