@@ -8,6 +8,7 @@ from pathlib import Path
 
 CALC_W = 280
 CALC_H = 540
+CALC_TITLE = "계산기"  # templates/calc.html 의 <title> 과 같아야 한다(창을 앞으로 가져올 때 찾는 이름)
 _proc: subprocess.Popen | None = None
 
 
@@ -35,6 +36,72 @@ def _no_window() -> int:
     return int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
+# ---------------------------------------------------------------------------
+# 창을 맨 앞으로 — 서버(백그라운드 프로그램)가 띄운 창은 Windows 가 '앞으로 끼어들기'를 막아 메인 창 뒤에 뜬다.
+# 그래서 창이 뜰 때까지 제목으로 찾아(Edge · Chrome 창만), 잠깐 '항상 위'로 올렸다 풀고 포커스를 준다.
+# 제목은 명령줄 대신 환경 변수(CQ_WIN_TITLE)로 넘긴다(한글이 명령줄에서 깨지지 않게).
+# ---------------------------------------------------------------------------
+_FRONT_PS = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type @"
+using System; using System.Runtime.InteropServices; using System.Text;
+public class CqFront {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
+}
+"@
+$title = $env:CQ_WIN_TITLE
+$deadline = (Get-Date).AddSeconds([double]$env:CQ_WIN_WAIT)
+while ((Get-Date) -lt $deadline) {
+  $script:hit = [IntPtr]::Zero
+  [CqFront]::EnumWindows({ param($h, $l)
+    if (-not [CqFront]::IsWindowVisible($h)) { return $true }
+    $sb = New-Object System.Text.StringBuilder 256
+    [void][CqFront]::GetWindowText($h, $sb, 256)
+    if ($sb.ToString() -ne $title) { return $true }
+    $procId = 0; [void][CqFront]::GetWindowThreadProcessId($h, [ref]$procId)
+    $p = Get-Process -Id $procId
+    if ($p -and $p.ProcessName -match '^(msedge|chrome)$') { $script:hit = $h; return $false }
+    return $true
+  }, [IntPtr]::Zero) | Out-Null
+  if ($script:hit -ne [IntPtr]::Zero) {
+    $h = $script:hit
+    if ([CqFront]::IsIconic($h)) { [void][CqFront]::ShowWindow($h, 9) }
+    [CqFront]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [CqFront]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    [void][CqFront]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0043)
+    [void][CqFront]::SetWindowPos($h, [IntPtr](-2), 0, 0, 0, 0, 0x0043)
+    [void][CqFront]::SetForegroundWindow($h)
+    exit 0
+  }
+  Start-Sleep -Milliseconds 250
+}
+exit 1
+"""
+
+
+def bring_to_front(title: str, wait_sec: float = 12.0) -> subprocess.Popen | None:
+    """제목이 title 인 Edge/Chrome 창이 뜨기를 기다렸다가 맨 앞으로 가져온다(기다리지 않고 바로 돌아옴)."""
+    try:
+        env = dict(os.environ, CQ_WIN_TITLE=title, CQ_WIN_WAIT=str(wait_sec))
+        return subprocess.Popen(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", _FRONT_PS],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=_no_window(),
+        )
+    except OSError:
+        return None
+
+
 def open_calc_window(
     url: str,
     *,
@@ -46,17 +113,7 @@ def open_calc_window(
     """이미 있으면 앞으로 가져오고, 없으면 작은 --app 창을 연다."""
     global _proc
     if _proc is not None and _proc.poll() is None:
-        subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                "(New-Object -ComObject WScript.Shell).AppActivate('계산기') | Out-Null",
-            ],
-            capture_output=True,
-            timeout=8,
-            creationflags=_no_window(),
-        )
+        bring_to_front(CALC_TITLE, 3)
         return {"ok": True, "already": True}
 
     browser = _browser()
@@ -82,6 +139,7 @@ def open_calc_window(
         stderr=subprocess.DEVNULL,
         creationflags=_no_window(),
     )
+    bring_to_front(CALC_TITLE)  # 서버가 띄운 창은 메인 창 뒤에 뜨므로 앞으로 가져온다
     return {"ok": True, "already": False}
 
 
@@ -126,13 +184,7 @@ def open_memo_window(
     """이미 열려 있으면 앞으로 가져오고, 없으면 메모장 --app 창을 연다(크기 조절 가능)."""
     global _memo_proc
     if _memo_proc is not None and _memo_proc.poll() is None:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             f"(New-Object -ComObject WScript.Shell).AppActivate('{MEMO_TITLE}') | Out-Null"],
-            capture_output=True,
-            timeout=8,
-            creationflags=_no_window(),
-        )
+        bring_to_front(MEMO_TITLE, 3)
         return {"ok": True, "already": True}
 
     browser = _browser()
@@ -155,4 +207,5 @@ def open_memo_window(
         stderr=subprocess.DEVNULL,
         creationflags=_no_window(),
     )
+    bring_to_front(MEMO_TITLE)  # 서버가 띄운 창은 메인 창 뒤에 뜨므로 앞으로 가져온다
     return {"ok": True, "already": False}
