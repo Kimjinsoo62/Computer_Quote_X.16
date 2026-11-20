@@ -18,6 +18,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.app_settings import get_setting, set_setting
+from app.phone_format import format_phone
 from app.quote_info import bank_account_line, load_quote_info
 
 from app.data_paths import TASK_REPORTS_FILE as DATA_FILE  # data/task_reports/task_reports.json
@@ -99,14 +100,14 @@ def create_task_report(data: dict[str, Any]) -> dict[str, Any]:
         "updated_at": now_str,
         "company_name": data.get("company_name") or qi.get("supplier_name", "대한민국주식회사"),
         "company_address": data.get("company_address") or qi.get("supplier_address", "서울시"),
-        "company_phone": data.get("company_phone") or qi.get("supplier_phone", "010-1234-5678"),
+        "company_phone": format_phone(data.get("company_phone") or qi.get("supplier_phone", "010-1234-5678")),
         "business_number": data.get("business_number") or qi.get("supplier_business_number", ""),
         "doc_no": data.get("doc_no") or f"TR-{datetime.now().strftime('%Y%m%d')}-{report_id[:4].upper()}",
         "receipt_date": data.get("receipt_date") or datetime.now().strftime("%Y-%m-%d"),
         
         # 1. 고객 정보
         "customer_name": data.get("customer_name", ""),
-        "customer_phone": data.get("customer_phone", ""),
+        "customer_phone": format_phone(data.get("customer_phone", "")),
         "customer_address": data.get("customer_address", ""),
         "customer_email": data.get("customer_email", ""),
         "contact_method": data.get("contact_method", "전화"),  # 전화, 문자, 이메일
@@ -172,6 +173,9 @@ def update_task_report(report_id: str, data: dict[str, Any]) -> dict[str, Any] |
     for key in SIGN_IMG_KEYS:
         if key in data:
             data[key] = clean_sign_image(data[key])
+    for key in ("company_phone", "customer_phone"):
+        if key in data:
+            data[key] = format_phone(data[key])
     existing.update(data)
     existing["id"] = report_id
     existing["updated_at"] = now_str
@@ -210,7 +214,7 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
     comp_name = report.get("company_name", "0000 ")
     ws["A1"] = f"{comp_name} 컴퓨터 판매·수리센터"
     ws["A3"] = f"주소 : {report.get('company_address', '')}"
-    ws["A4"] = f"전화 : {report.get('company_phone', '')}  |   사업자등록번호: {report.get('business_number', '')}"
+    ws["A4"] = f"전화 : {format_phone(report.get('company_phone', ''))}  |   사업자등록번호: {report.get('business_number', '')}"
     
     ws["E3"] = f"접수번호 : {report.get('doc_no', '')}"
     r_date = report.get("receipt_date", "")
@@ -218,7 +222,7 @@ def build_task_report_excel(report: dict[str, Any]) -> BytesIO:
 
     # 2. 고객 정보
     ws["B7"] = report.get("customer_name", "")
-    ws["E7"] = report.get("customer_phone", "")
+    ws["E7"] = format_phone(report.get("customer_phone", ""))
     ws["B8"] = report.get("customer_address", "")
     ws["B9"] = report.get("customer_email", "")
 

@@ -15,6 +15,7 @@ from typing import Any
 
 from app.quote_engine import Quote, QuotePart, TodayQuotesResult
 from app.quote_info import load_quote_info
+from app.phone_format import format_phone
 
 from app.data_paths import MANUAL_QUOTES_FILE as DATA_FILE  # data/manual_quotes/manual_quotes.json
 from app.data_paths import MANUAL_PDF_DIR  # data/manual_quotes/pdf/ (📤 올린 PDF 원본)
@@ -56,7 +57,9 @@ def clean_items(items: Any) -> list[dict[str, Any]]:
 
 def clean_customer(value: Any) -> dict[str, str]:
     src = value if isinstance(value, dict) else {}
-    return {k: str(src.get(k) or "").strip()[:200] for k in CUSTOMER_FIELDS}
+    out = {k: str(src.get(k) or "").strip()[:200] for k in CUSTOMER_FIELDS}
+    out["phone"] = format_phone(out["phone"])
+    return out
 
 
 def clean_record(data: dict[str, Any]) -> dict[str, Any]:

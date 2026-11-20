@@ -26,6 +26,7 @@ from email.utils import formatdate, make_msgid
 from typing import Any
 
 from app import pdf_export
+from app.phone_format import format_phone
 from app.app_settings import get_setting, set_setting
 
 SMTP_HOST = "smtp.gmail.com"
@@ -129,7 +130,7 @@ def compose_fields(info: dict[str, Any], model: str, total: int, quote_date: str
         x
         for x in (
             " ".join(y for y in (supplier, distinct_manager(info.get("supplier_manager"), supplier)) if y),
-            " / ".join(y for y in ((info.get("supplier_phone") or "").strip(), (info.get("supplier_email") or "").strip()) if y),
+            " / ".join(y for y in (format_phone(info.get("supplier_phone")), (info.get("supplier_email") or "").strip()) if y),
         )
         if x
     )

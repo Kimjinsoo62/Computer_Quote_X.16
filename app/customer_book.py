@@ -17,6 +17,7 @@ from typing import Any
 
 from app.data_paths import CUSTOMERS_FILE as DATA_FILE  # data/customers/customers.json
 from app.data_paths import QUOTE_INFO_FILE  # data/settings/quote_info.json
+from app.phone_format import format_phone
 FIELDS = ("name", "manager", "address", "phone", "email", "memo")
 _lock = threading.Lock()
 
@@ -32,6 +33,12 @@ def _load() -> list[dict[str, Any]]:
     return []
 
 
+def _clean(data: dict[str, Any]) -> dict[str, str]:
+    clean = {k: str(data.get(k) or "").strip()[:200] for k in FIELDS}
+    clean["phone"] = format_phone(clean["phone"])
+    return clean
+
+
 def _save(items: list[dict[str, Any]]) -> None:
     DATA_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -45,7 +52,7 @@ def list_customers() -> list[dict[str, Any]]:
 
 def save_customer(data: dict[str, Any]) -> dict[str, Any]:
     """id 가 있으면 수정, 없으면 생성. 같은 상호명이 이미 있으면 그 항목을 갱신한다."""
-    clean = {k: str(data.get(k) or "").strip()[:200] for k in FIELDS}
+    clean = _clean(data)
     if not clean["name"]:
         raise ValueError("거래처 상호명을 입력해 주세요.")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -67,7 +74,7 @@ def add_if_new(data: dict[str, Any] | None, memo: str = "") -> dict[str, Any] | 
     """거래명세서 · 작업내역서를 저장할 때 부른다. 상호명이 거래처 목록에 없으면 새로 등록하고 그 항목을, 이미 있거나
     상호명이 비었으면 None 을 돌려준다. 이미 있는 거래처는 건드리지 않는다(목록에서 고친 값을 덮어쓰지 않도록)."""
     src = data if isinstance(data, dict) else {}
-    clean = {k: str(src.get(k) or "").strip()[:200] for k in FIELDS}
+    clean = _clean(src)
     if not clean["name"]:
         return None
     if memo and not clean["memo"]:
@@ -171,20 +178,7 @@ def _cell_text(value: Any) -> str:
     return " ".join(str(value).split())
 
 
-def _format_phone(text: str) -> str:
-    """숫자만 있는 전화번호에 - 를 넣는다. 엑셀이 숫자로 바꿔 앞의 0 이 빠진 번호(1012345678)도 되살린다."""
-    if not text or not text.isdigit():
-        return text  # 이미 - 가 있거나 글자가 섞인 값은 그대로
-    digits = text
-    if digits[0] != "0" and len(digits) in (9, 10):
-        digits = "0" + digits
-    if digits.startswith("02") and len(digits) in (9, 10):
-        return f"02-{digits[2:-4]}-{digits[-4:]}"
-    if len(digits) in (10, 11):
-        return f"{digits[:3]}-{digits[3:-4]}-{digits[-4:]}"
-    if len(digits) == 8 and digits[:2] in ("15", "16", "18"):
-        return f"{digits[:4]}-{digits[4:]}"
-    return text
+_format_phone = format_phone  # 엑셀 가져오기용 이름(app/phone_format.py 로 옮김)
 
 
 def _match_columns(header: list[Any]) -> dict[str, list[int]]:
@@ -334,7 +328,7 @@ def import_customers(customers: list[dict[str, Any]]) -> dict[str, int]:
         for seq, data in enumerate(customers if isinstance(customers, list) else []):
             if not isinstance(data, dict):
                 continue
-            clean = {k: str(data.get(k) or "").strip()[:200] for k in FIELDS}
+            clean = _clean(data)
             if not clean["name"]:
                 continue
             found = by_name.get(clean["name"])

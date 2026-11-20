@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from app.config import SUPPLIER
+from app.phone_format import format_phone
 
 from app.data_paths import QUOTE_INFO_FILE as DATA_FILE  # data/settings/quote_info.json
 
@@ -83,6 +84,8 @@ def load_quote_info() -> dict:
 
 def save_quote_info(data: dict) -> dict:
     info = {k: str(data.get(k, DEFAULT_INFO[k]) or "").strip() for k in DEFAULT_INFO}
+    for k in ("supplier_phone", "customer_phone"):
+        info[k] = format_phone(info[k])
     DATA_FILE.write_text(
         json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8"
     )

@@ -25,6 +25,7 @@ from openpyxl.worksheet.properties import PageSetupProperties
 from app.config import QUOTE_DISCLAIMER
 from app.quote_engine import Quote, QuotePart, TodayQuotesResult, fetch_today_quotes
 from app.quote_info import bank_account_line, load_quote_info
+from app.phone_format import format_phone
 
 # 견적서마다 사용자가 개별 항목을 추가할 수 있는 빈 행 수
 USER_BLANK_ROWS = 2
@@ -839,7 +840,7 @@ def build_excel(
         date_str = quote_date
         cust_name = info["customer_name"]
         cust_mgr = info["customer_manager"]
-        cust_phone = (info.get("customer_phone") or "").strip()
+        cust_phone = format_phone(info.get("customer_phone"))
         cust_email = (info.get("customer_email") or "").strip()
         # 견적처 연락처 칸은 행을 늘리지 않고 '전화 / 이메일' 로 한 칸에 넣는다(칸은 shrink_to_fit 이라 줄바꿈 없음).
         cust_contact = " / ".join(x for x in (cust_phone, cust_email) if x)
@@ -852,7 +853,7 @@ def build_excel(
         sup_name = info["supplier_name"]
         sup_mgr = info["supplier_manager"]
         sup_mgr_x = distinct_manager(sup_mgr, sup_name)
-        sup_phone = info["supplier_phone"]
+        sup_phone = format_phone(info["supplier_phone"])
         sup_email = (info.get("supplier_email") or "").strip()
 
         # =====================================================================

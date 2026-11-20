@@ -24,6 +24,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, Side
 
 from app.excel_export import FONT_NAME, FORM5_COL_WIDTHS, _apply_page_setup, _set_cell, distinct_manager
+from app.phone_format import format_phone
 from app.manual_quote import CUSTOMER_FIELDS, clean_customer
 from app.quote_info import load_quote_info
 
@@ -97,7 +98,7 @@ def _customer_info(rec: dict[str, Any]) -> dict[str, str]:
     if any(cust.values()):
         return cust
     info = load_quote_info()
-    return {k: (info.get(f"customer_{k}") or "").strip() for k in CUSTOMER_FIELDS}
+    return clean_customer({k: info.get(f"customer_{k}") for k in CUSTOMER_FIELDS})
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +546,7 @@ def _write_copy(ws, r0: int, rec: dict[str, Any], cust: dict[str, str], info: di
     ws[f"A{r}"] = (
         f"공급자: {sup_name} / "
         + (f"담당: {sup_mgr} / " if sup_mgr else "")
-        + f"Tel: {info.get('supplier_phone', '')}" + (f" / E-mail: {sup_email}" if sup_email else "")
+        + f"Tel: {format_phone(info.get('supplier_phone', ''))}" + (f" / E-mail: {sup_email}" if sup_email else "")
     )
     _set_cell(ws[f"A{r}"], font=normal, alignment=Alignment(horizontal="center", vertical="center", shrink_to_fit=True))
     ws.row_dimensions[r].height = lay["line_h"]

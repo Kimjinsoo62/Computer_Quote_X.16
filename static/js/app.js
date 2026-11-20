@@ -2305,6 +2305,30 @@ async function loadCustomers() {
   renderCustNameList();
 }
 
+// 전화번호 표기: 숫자만 쓴 번호(01023678481)를 010-2367-8481 로. app/phone_format.py 의 format_phone 과 같은 규칙.
+function formatPhone(value) {
+  const text = String(value ?? "").trim();
+  let d = text.replace(/ /g, "");
+  if (!/^\d+$/.test(d)) return text; // 이미 - 가 있거나 글자가 섞인 값은 그대로
+  if (d[0] !== "0" && (d.length === 9 || d.length === 10)) d = "0" + d;
+  if (d.startsWith("02") && (d.length === 9 || d.length === 10)) return `02-${d.slice(2, -4)}-${d.slice(-4)}`;
+  if ((d.length === 10 || d.length === 11) && d[0] === "0") return `${d.slice(0, 3)}-${d.slice(3, -4)}-${d.slice(-4)}`;
+  if (d.length === 8 && ["15", "16", "18"].includes(d.slice(0, 2))) return `${d.slice(0, 4)}-${d.slice(4)}`;
+  return text;
+}
+const PHONE_INPUTS = '#qiSupplierPhone, #qiCustomerPhone, #trCompanyPhone, #trCustPhone, [data-ts-cust="phone"]';
+// 칸을 벗어날 때(change) - 를 넣는다. 자동으로 채운 값은 fillPhoneInputs() 로 맞춘다.
+document.addEventListener("change", (e) => {
+  const el = e.target;
+  if (el?.matches?.(PHONE_INPUTS)) {
+    const v = formatPhone(el.value);
+    if (v !== el.value) el.value = v;
+  }
+}, true);
+function fillPhoneInputs() {
+  document.querySelectorAll(PHONE_INPUTS).forEach((el) => { el.value = formatPhone(el.value); });
+}
+
 // 거래명세서 · 작업내역서의 거래처명 칸 자동완성(#custNameList). 등록된 상호와 똑같으면 나머지 칸을 채운다.
 function renderCustNameList() {
   const dl = $("#custNameList");
@@ -6333,6 +6357,7 @@ function calcTsTotal() {
 
 function tsSetCustomer(c) {
   document.querySelectorAll("[data-ts-cust]").forEach((el) => { el.value = (c?.[el.dataset.tsCust] || "").trim(); });
+  fillPhoneInputs();
 }
 
 function tsGetCustomer() {
@@ -6543,12 +6568,14 @@ bindCustomerAutofill(document.querySelector('[data-ts-cust="name"]'), (c) => {
     const v = (c[el.dataset.tsCust] || "").trim();
     if (v) el.value = v;
   });
+  fillPhoneInputs();
 });
 bindCustomerAutofill($("#trCustName"), (c) => {
   [["#trCustPhone", "phone"], ["#trCustAddress", "address"], ["#trCustEmail", "email"]].forEach(([sel, key]) => {
     const el = $(sel), v = (c[key] || "").trim();
     if (el && v) el.value = v;
   });
+  fillPhoneInputs();
 });
 $("#tsCustPick")?.addEventListener("change", (e) => {
   const c = custList.find((x) => x.id === e.target.value);
