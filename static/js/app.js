@@ -6745,3 +6745,197 @@ function openTsFromQuote(index) {
 
 // 시작 시 탭 건수 배지
 loadTsList();
+
+// ===========================================================================
+// 💽 전체 백업 (#fullBackupModal, 서버 app/full_backup.py)
+// ⚙️ 설정 머리줄의 [💽 전체 백업] → 항목(data/ 아래 폴더) 고르기 → 공용 백업 폴더에 ZIP 한 파일. 진행은 1초마다 읽는다.
+// ===========================================================================
+const fbModal = $("#fullBackupModal");
+let fbItems = [];
+let fbTimer = null;
+let fbRunning = false;
+
+function fbBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function fbChosen() {
+  return Array.from(document.querySelectorAll("#fbItems input[data-key]:checked")).map((el) => el.dataset.key);
+}
+
+function fbSyncSum() {
+  const keys = new Set(fbChosen());
+  const sel = fbItems.filter((it) => keys.has(it.key));
+  $("#fbSumFiles").textContent = sel.reduce((t, it) => t + it.files, 0).toLocaleString("ko-KR");
+  $("#fbSumBytes").textContent = fbBytes(sel.reduce((t, it) => t + it.bytes, 0));
+  const all = $("#fbAll");
+  if (all) {
+    all.checked = keys.size === fbItems.length;
+    all.indeterminate = keys.size > 0 && keys.size < fbItems.length;
+  }
+  const start = $("#fbBtnStart");
+  if (start) start.disabled = fbRunning || !keys.size;
+}
+
+function fbSetDir(dir) {
+  const el = $("#fbDir");
+  if (el) {
+    el.textContent = dir || "아직 지정하지 않음 — 백업을 시작하면 먼저 고릅니다";
+    el.classList.toggle("is-empty", !dir);
+  }
+  const open = $("#fbBtnOpenDir");
+  if (open) open.disabled = !dir;
+}
+
+function fbSetProgress(pct, text, state = "") {
+  const fill = $("#fbBarFill");
+  if (fill) {
+    fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    fill.classList.toggle("is-error", state === "error");
+  }
+  const st = $("#fbStatus");
+  if (st) st.textContent = text;
+}
+
+async function openFullBackup() {
+  if (!fbModal) return;
+  show(fbModal);
+  if (fbRunning) return; // 진행 중이면 그 화면을 그대로 보여 준다
+  $("#fbResult").innerHTML = "";
+  fbSetProgress(0, "항목을 읽는 중…");
+  try {
+    const res = await fetch("/api/backup/full/info", { cache: "no-store" });
+    const data = await res.json();
+    fbItems = data.items || [];
+    fbSetDir(data.dir || "");
+    trBackupDir = data.dir || trBackupDir;
+  } catch (_) {
+    fbItems = [];
+    fbSetProgress(0, "서버에서 항목을 읽지 못했습니다.", "error");
+    return;
+  }
+  $("#fbItems").innerHTML = fbItems.map((it) => `
+    <tr class="${it.files ? "" : "fb-empty"}">
+      <td class="fb-chk"><input type="checkbox" data-key="${escapeHtml(it.key)}" id="fb_${escapeHtml(it.key)}" ${it.default ? "checked" : ""} /></td>
+      <td><label for="fb_${escapeHtml(it.key)}"><strong>${escapeHtml(it.label)}</strong> <span class="fb-desc">${escapeHtml(it.desc)}</span></label><div class="fb-folder">${escapeHtml(it.folder)}</div></td>
+      <td class="fb-num">${it.files.toLocaleString("ko-KR")}</td>
+      <td class="fb-num">${fbBytes(it.bytes)}</td>
+    </tr>`).join("");
+  fbSyncSum();
+  fbSetProgress(0, "백업할 항목을 고르고 [💽 백업 시작]을 누르세요.");
+}
+
+function closeFullBackup() {
+  hide(fbModal); // 진행 중이어도 창만 닫는다(백업은 서버에서 계속됨, 다시 열면 진행 화면)
+}
+
+async function startFullBackup() {
+  const items = fbChosen();
+  if (!items.length) {
+    alert("백업할 항목을 하나 이상 고르세요.");
+    return;
+  }
+  if (!trBackupDir) {
+    const dir = await chooseTrBackupDir();
+    if (!dir) return;
+    fbSetDir(dir);
+  }
+  fbRunning = true;
+  fbSyncSum();
+  $("#fbResult").innerHTML = "";
+  fbSetProgress(0, "백업을 시작합니다…");
+  let res = await postJsonRaw("/api/backup/full", { items });
+  if (res.status === 428) {
+    const dir = await chooseTrBackupDir();
+    if (dir) {
+      fbSetDir(dir);
+      res = await postJsonRaw("/api/backup/full", { items });
+    }
+  }
+  if (!res.ok) {
+    fbRunning = false;
+    fbSyncSum();
+    fbSetProgress(0, "✕ " + (res.data?.detail?.message || res.data?.detail || `백업을 시작하지 못했습니다 (${res.status})`), "error");
+    return;
+  }
+  fbWatch(res.data.id);
+}
+
+function fbWatch(jobId) {
+  clearInterval(fbTimer);
+  const tick = async () => {
+    let st;
+    try {
+      const r = await fetch(`/api/backup/full/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      st = await r.json();
+    } catch (e) {
+      clearInterval(fbTimer);
+      fbRunning = false;
+      fbSyncSum();
+      fbSetProgress(0, "✕ 진행 상황을 읽지 못했습니다: " + e.message, "error");
+      return;
+    }
+    const pct = st.total_bytes ? (100 * st.done_bytes) / st.total_bytes : st.total ? (100 * st.done) / st.total : 0;
+    if (st.state === "running") {
+      fbSetProgress(pct, `${st.done.toLocaleString("ko-KR")} / ${st.total.toLocaleString("ko-KR")}개 · ${fbBytes(st.done_bytes)} / ${fbBytes(st.total_bytes)} — ${st.current || ""}`);
+      return;
+    }
+    clearInterval(fbTimer);
+    fbRunning = false;
+    fbSyncSum();
+    if (st.state === "done") {
+      fbSetProgress(100, `✔ 백업을 마쳤습니다 — 파일 ${st.total.toLocaleString("ko-KR")}개 · ZIP ${fbBytes(st.size)}`);
+      const skipped = (st.skipped || []).map((x) => `<li>⚠️ ${escapeHtml(x)}</li>`).join("");
+      $("#fbResult").innerHTML = `<p class="fb-ok">💽 <code>${escapeHtml(st.path)}</code></p>
+        <p class="fb-items">들어간 항목: ${escapeHtml((st.items || []).join(" · "))}</p>
+        ${skipped ? `<p class="fb-warn">읽지 못해 빠진 파일 ${st.skipped.length}개(앱이 쓰는 중이었을 수 있음):</p><ul>${skipped}</ul>` : ""}
+        <button type="button" class="btn btn-outline btn-sm" id="fbBtnShowZip" data-path="${escapeHtml(st.path)}">🗂️ 백업 파일 위치 열기</button>`;
+    } else {
+      fbSetProgress(pct, "✕ " + (st.error || "백업에 실패했습니다."), "error");
+    }
+  };
+  tick();
+  fbTimer = setInterval(tick, 700);
+}
+
+async function fbOpenDir(path = "") {
+  try {
+    const r = await postJsonRaw("/api/task-reports/backup/open-dir", path ? { path } : {});
+    if (!r.ok) alert(r.data?.detail?.message || r.data?.detail || "탐색기를 열지 못했습니다.");
+  } catch (_) {
+    alert("서버에 연결할 수 없습니다.");
+  }
+}
+
+$("#btnFullBackup")?.addEventListener("click", openFullBackup);
+$("#fbClose")?.addEventListener("click", closeFullBackup);
+$("#fbBtnStart")?.addEventListener("click", startFullBackup);
+$("#fbBtnDir")?.addEventListener("click", async () => {
+  const dir = await chooseTrBackupDir();
+  if (dir) fbSetDir(dir);
+});
+$("#fbBtnOpenDir")?.addEventListener("click", () => fbOpenDir());
+$("#fbItems")?.addEventListener("change", fbSyncSum);
+$("#fbAll")?.addEventListener("change", (e) => {
+  document.querySelectorAll("#fbItems input[data-key]").forEach((el) => { el.checked = e.target.checked; });
+  fbSyncSum();
+});
+$("#fbResult")?.addEventListener("click", (e) => {
+  const b = e.target.closest("#fbBtnShowZip");
+  if (b) fbOpenDir(b.dataset.path);
+});
+fbModal?.addEventListener("click", (e) => {
+  if (e.target === fbModal) closeFullBackup();
+});
+// Esc: 전체 백업 창이 열려 있으면 그 창만 닫는다(아래 ⚙️ 설정 창은 그대로)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !fbModal || fbModal.classList.contains("hidden")) return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeFullBackup();
+}, true);

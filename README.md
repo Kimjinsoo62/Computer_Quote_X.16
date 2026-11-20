@@ -9,6 +9,8 @@
 1. **🧺 컴퓨존 사용자 장바구니** — 로그인해 담으면 견적마다 컴퓨존 사용자 장바구니(최대 4개)를 `거래처명 앞 4글자 + MMDDHHmm`(`compuzone_cart.user_basket_name`, 예 `김진수아11211530`) 이름으로 새로 만들어 옮깁니다(`compuzone_cart_runner.move_to_user_basket`). 기본 장바구니에 담은 뒤 새로 생긴 줄만 `CopyPrdBskMgr`(복사) → 확인 → `DelBskMgrSubCartPrd`로 기본에서 지웁니다. 4개가 모두 있거나 실패하면 기본 장바구니에 둡니다(결과 창 `basket`). 컴퓨존 `/bsk/basket_function.php`는 EUC-KR(이름 · 응답), `CozChk`는 소문자 `true|false`, 수량 바꾸기(`ChangeBskMgrCartEa`)는 Success 를 돌려줘도 안 바뀌어 쓰지 않습니다(2026-11 실제 계정으로 확인).
 2. **📐 메모장 · 계산기 머리줄 정리** — 두 창 안쪽의 제목 머리줄을 없앴습니다(창 이름은 Windows 제목 표시줄). 메모장의 💽 백업 · ✕ 닫기는 아래 버튼 줄로, 메모 수는 검색칸 옆. 계산기는 제목 표시줄 ✕ 또는 Esc 로 닫습니다. 메모장은 처음 448×550(`calc_window.MEMO_W/H` = `app.js MEMO_POPUP_W/H`)으로 열립니다.
 3. **🌸 메모장 색** — 메모장 창만 파스텔 연분홍(`style.css`의 `body.memo-page` 에서 색 변수 `--bg` · `--text` · `--primary` 등을 다시 정함). 메인 창 · 계산기는 그대로.
+4. **⬆️ 메모장 · 계산기 창 맨 앞에** — 서버(백그라운드)가 띄운 창은 Windows 가 앞으로 끼어들기를 막아 메인 창 뒤에 떴습니다. `calc_window.bring_to_front(제목)`이 창이 뜰 때까지 제목(`MEMO_TITLE` "견적 메모장" · `CALC_TITLE` "계산기", Edge/Chrome 창만)으로 찾아 잠깐 항상 위로 올렸다 풀고 포커스를 줍니다(이미 열린 창도 같은 방법, 예전 `AppActivate` 대신).
+5. **💽 전체 백업** — ⚙️ 설정 머리줄(✕ 닫기 옆) `#btnFullBackup` → `#fullBackupModal`. `data/` 아래 폴더를 항목별(설정 · 거래처 · 견적서 보관함 · 작성본 · 작업내역서 · 거래명세서 · 메모장 · 캐시[기본 제외])로 골라 공용 백업 폴더에 `전체백업_*.zip`(ZIP 안 경로 `data/…` — 프로그램 폴더에 풀면 복구, `manifest.json` · `복구방법.txt` 포함). `app/full_backup.py`가 백그라운드 스레드로 만들고 `GET /api/backup/full/{id}`로 진행(파일 수 · 바이트)을 보여 줍니다(`/api/backup/full/info`, `POST /api/backup/full`). 컴퓨존 Edge 프로필은 항상 제외.
 
 ---
 

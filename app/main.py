@@ -1459,6 +1459,44 @@ def api_task_report_backup_open_dir(payload: dict = Body(default={})):
     return {"ok": True, "opened": target}
 
 
+# ---------------------------------------------------------------------------
+# 💽 전체 백업 (app/full_backup.py) — data/ 를 항목별로 골라 공용 백업 폴더에 ZIP 한 파일로
+# ---------------------------------------------------------------------------
+@app.get("/api/backup/full/info")
+def api_full_backup_info():
+    from app import full_backup
+
+    return {"items": full_backup.info(), "dir": get_backup_dir(), "excluded": list(full_backup.EXCLUDED)}
+
+
+@app.post("/api/backup/full")
+def api_full_backup_start(payload: dict = Body(default={})):
+    """백업 시작(백그라운드). 진행은 GET /api/backup/full/{id}. 백업 폴더가 없으면 428."""
+    from app import full_backup
+
+    folder = get_backup_dir()
+    if not folder:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": "백업 폴더를 먼저 지정하세요."})
+    try:
+        return full_backup.start(folder, [str(k) for k in (payload.get("items") or [])])
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=428, detail={"code": "no_dir", "message": str(e)}) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@app.get("/api/backup/full/{job_id}")
+def api_full_backup_status(job_id: str):
+    from app import full_backup
+
+    try:
+        return full_backup.status(job_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="백업 작업을 찾을 수 없습니다.") from e
+
+
 @app.get("/api/task-reports/{report_id}")
 def api_get_task_report_detail(report_id: str):
     """작업내역서 단건 조회"""

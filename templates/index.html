@@ -385,6 +385,43 @@
     </div>
   </div>
 
+  <!-- 💽 전체 백업 (⚙️ 설정 머리줄 버튼 → app/full_backup.py, /api/backup/full) -->
+  <div id="fullBackupModal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal fb-modal" role="dialog" aria-labelledby="fbTitle">
+      <div class="modal-header">
+        <h3 id="fbTitle">💽 전체 백업</h3>
+        <button type="button" class="modal-close btn-modal-close" id="fbClose" aria-label="닫기">✕ 닫기</button>
+      </div>
+      <div class="modal-body">
+        <p class="fb-lead">업무 데이터(<code>data</code> 폴더)를 골라 <strong>ZIP 한 파일</strong>로 저장합니다. 복구할 때는 앱을 끄고 이 ZIP 을 프로그램 폴더에 풀면 됩니다(ZIP 안 <code>복구방법.txt</code>).</p>
+        <div class="fb-dir">
+          <span class="fb-dir-label">📁 백업 폴더</span>
+          <span id="fbDir" class="fb-dir-path">-</span>
+          <button type="button" id="fbBtnDir" class="btn btn-outline btn-sm" title="백업 폴더를 고릅니다(작업내역서 · 거래처 · 견적서 백업과 같은 폴더)">📂 바꾸기</button>
+          <button type="button" id="fbBtnOpenDir" class="btn btn-outline btn-sm" title="백업 폴더를 탐색기로 엽니다">🗂️ 열기</button>
+        </div>
+        <table class="fb-table">
+          <thead>
+            <tr><th class="fb-chk"><input type="checkbox" id="fbAll" title="모두 고르기 / 풀기" /></th><th>항목</th><th class="fb-num">파일</th><th class="fb-num">크기</th></tr>
+          </thead>
+          <tbody id="fbItems"></tbody>
+          <tfoot>
+            <tr><td></td><td>고른 항목 합계</td><td class="fb-num" id="fbSumFiles">0</td><td class="fb-num" id="fbSumBytes">0</td></tr>
+          </tfoot>
+        </table>
+        <p class="fb-note">🔒 컴퓨존 장바구니용 Edge 프로필(<code>data\AI-PC-Quote-Compuzone</code>, 로그인 상태)은 넣지 않습니다. 메일 · 컴퓨존 비밀번호는 이 PC 에서만 풀립니다.</p>
+        <div class="fb-progress">
+          <div class="fb-bar"><div id="fbBarFill"></div></div>
+          <div id="fbStatus" class="fb-status">백업할 항목을 고르고 [💽 백업 시작]을 누르세요.</div>
+        </div>
+        <div id="fbResult" class="fb-result"></div>
+        <div class="fb-actions">
+          <button type="button" id="fbBtnStart" class="btn btn-primary btn-sm">💽 백업 시작</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ⚙️ 설정: 🧩 견적요소 | 📒 거래처 · 🗂️ 견적서 · 📋 작업내역서 를 한 곳에서 관리 -->
   <div id="settingsModal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal modal-xl settings-modal" role="dialog" aria-labelledby="settingsTitle">
@@ -408,6 +445,7 @@
             <span id="settingsCurrentDesc" class="settings-current-desc"></span>
           </div>
         </div>
+        <button type="button" id="btnFullBackup" class="btn btn-outline btn-sm settings-fullbackup" title="거래처 · 견적서 · 작업내역서 · 거래명세서 · 메모장 · 설정 등 업무 데이터 전체를 골라 ZIP 한 파일로 백업합니다">💽 전체 백업</button>
         <button type="button" class="modal-close btn-modal-close" id="settingsClose" aria-label="닫기">✕ 닫기</button>
       </div>
       <div class="modal-body settings-body">
