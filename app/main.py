@@ -292,8 +292,8 @@ def api_memo_open(request: Request, payload: dict = Body(default={})):
         f"{base}/memo",
         left=int(payload.get("left") or 120),
         top=int(payload.get("top") or 80),
-        width=int(payload.get("width") or 960),
-        height=int(payload.get("height") or 720),
+        width=int(payload.get("width") or 560),
+        height=int(payload.get("height") or 1080),
     )
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail="메모장 창을 열 브라우저를 찾지 못했습니다.")
