@@ -652,7 +652,7 @@ async function startCompuzoneCart(i, ev) {
   if (!confirm(msg)) return;
   let job;
   try {
-    // customer: 사용자 장바구니 이름(거래처명 앞 4글자 + MMDDHHmm, app/compuzone_cart.py user_basket_name)용 견적처 상호
+    // customer: 사용자 장바구니 이름(거래처명 + 공백 + MMDDHHmm, 컴퓨존 한도 50자에 맞춰 자름 — app/compuzone_cart.py user_basket_name)용 견적처 상호
     const res = await postJsonRaw("/api/compuzone/cart", {
       items,
       label: `${q?.tab_label || ""} ${q?.model || ""}`.trim(),

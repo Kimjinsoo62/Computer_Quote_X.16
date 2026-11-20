@@ -143,20 +143,30 @@ def _ensure_proc() -> subprocess.Popen:
     return _proc
 
 
+# 컴퓨존 사용자 장바구니 이름은 글자 수 50자까지 저장된다(2026-11 실제 계정으로 확인: 영문 62자 → 50자로 잘림,
+# 한글 36자 · 64바이트는 그대로 → 바이트가 아니라 글자 수). 그 안에 '거래처명 + 공백 + MMDDHHmm' 을 넣는다.
+USER_BASKET_NAME_MAX = 50
+_STAMP_LEN = 8  # MMDDHHmm
+
+
 def user_basket_name(customer: str, when: datetime | None = None) -> str:
-    """사용자 장바구니 이름: 거래처명 앞 4글자(공백 · 따옴표 · 컴퓨존이 못 쓰는 글자 뺌) + MMDDHHmm. 예: 김진수아11211530.
-    거래처명이 없으면 '견적'. 컴퓨존은 이름을 EUC-KR 로 저장하므로 그 밖의 글자(이모지 등)는 뺀다."""
+    """사용자 장바구니 이름: 견적서의 거래처명 + ' ' + MMDDHHmm. 예: '김진수아저씨 11211530'.
+    거래처명은 컴퓨존 한도(USER_BASKET_NAME_MAX 글자)에 맞게 뒤를 자른다(시각은 늘 남긴다). 거래처명이 없으면 '견적'.
+    컴퓨존은 이름을 EUC-KR 로 저장하므로 그 밖의 글자(이모지 등)는 빼고, 컴퓨존 화면이 이름을 HTML 에 그대로 넣으므로
+    따옴표 · < > 도 뺀다(컴퓨존도 따옴표는 지운다). 공백이 여러 개면 하나로."""
     keep = []
     for ch in str(customer or ""):
-        if ch.isspace() or ch in "'\"<>&%#+\\":
+        if ch in "'\"<>\\" or (not ch.isprintable() and not ch.isspace()):
             continue
         try:
             ch.encode("cp949")
         except UnicodeEncodeError:
             continue
-        keep.append(ch)
-    head = "".join(keep)[:4] or "견적"
-    return head + (when or datetime.now()).strftime("%m%d%H%M")
+        keep.append(" " if ch.isspace() else ch)
+    name = " ".join("".join(keep).split()) or "견적"
+    room = USER_BASKET_NAME_MAX - _STAMP_LEN - 1
+    name = name[:room].rstrip()
+    return f"{name} {(when or datetime.now()).strftime('%m%d%H%M')}"
 
 
 def start(items: list[dict[str, Any]], label: str = "", customer: str = "") -> dict[str, Any]:
