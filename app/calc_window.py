@@ -102,8 +102,8 @@ def close_calc_window() -> None:
 # 프로필 폴더 이름이 종료 정리(shutdown_service · stop.bat)의 표식이므로 바꾸지 않는다.
 # 창 제목(templates/memo.html 의 <title>)은 Windows 메모장(Notepad)과 헷갈리지 않게 '견적 메모장'으로 둔다.
 # ---------------------------------------------------------------------------
-MEMO_W = 560  # 계산기(280×540)의 두 배
-MEMO_H = 1080  # 화면보다 크면 화면이 줄여 보냄(app.js memoPopupPos)
+MEMO_W = 448  # 사용자가 맞춘 창 크기(XII.53, 448×550)
+MEMO_H = 550
 MEMO_TITLE = "견적 메모장"
 _memo_proc: subprocess.Popen | None = None
 
@@ -139,8 +139,8 @@ def open_memo_window(
     if browser is None:
         return {"ok": False, "reason": "browser"}
 
-    width = max(520, min(int(width or MEMO_W), 3840))
-    height = max(420, min(int(height or MEMO_H), 2160))
+    width = max(360, min(int(width or MEMO_W), 3840))
+    height = max(400, min(int(height or MEMO_H), 2160))
     _memo_proc = subprocess.Popen(
         [
             str(browser),

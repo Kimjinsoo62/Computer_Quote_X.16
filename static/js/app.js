@@ -6163,8 +6163,8 @@ $("#btnOpenCalc")?.addEventListener("click", openCalcWindow);
 
 // 🗒️ 메모장 — 계산기처럼 견적 창 밖의 별도 창(서버가 전용 --app 창을 띄움, 크기 조절 가능). 실패하면 팝업 창으로 연다.
 const MEMO_POPUP_NAME = "aiPcQuoteMemo";
-const MEMO_POPUP_W = 560; // 계산기(CALC_POPUP_W 280 × 540)의 두 배
-const MEMO_POPUP_H = 1080; // 작업 표시줄을 뺀 화면 높이보다 크면 그 높이로 줄인다
+const MEMO_POPUP_W = 448; // 처음 열 때 크기(사용자가 맞춘 448×550). app/calc_window.py MEMO_W · MEMO_H 와 같게
+const MEMO_POPUP_H = 550;
 let memoWin = null;
 
 function memoPopupPos() {
