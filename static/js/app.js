@@ -5149,6 +5149,10 @@ async function saveTrForm() {
     else if (stmt?.doc_no) stmtMsg = `\n🧾 거래명세서에도 저장했습니다 (${stmt.doc_no} · ${tsFmt(stmt.total)}원).`;
     else stmtMsg = "\n(작업 내역이 비어 있어 거래명세서는 만들지 않았습니다.)";
     if (typeof loadTsList === "function") loadTsList();
+    if (result.customer_added) {
+      stmtMsg += `\n📒 새 거래처 '${result.customer_added.name}'을(를) 거래처 목록에 등록했습니다.`;
+      loadCustomers();
+    }
     alert(`✔ 작업내역서가 성공적으로 저장되었습니다.${stmtMsg}`);
   } catch (e) {
     alert(e.message);
@@ -6381,6 +6385,8 @@ function tsPayload() {
   };
 }
 
+let tsCustAdded = null; // 마지막 저장에서 새로 등록된 거래처(없으면 null)
+
 async function saveTs({ quiet = false } = {}) {
   const body = tsPayload();
   if (!body.items.length) {
@@ -6392,6 +6398,8 @@ async function saveTs({ quiet = false } = {}) {
     const res = await postJsonRaw("/api/trade-statements", body);
     if (!res.ok) throw new Error(res.data?.detail || `저장 실패 (${res.status})`);
     tsCurrent = res.data.statement;
+    tsCustAdded = res.data.customer_added || null;
+    if (tsCustAdded) loadCustomers();
     tsPendingSource = "";
     $("#tsDocNo").value = tsCurrent.doc_no || "";
     $("#tsSignedDate").value = tsCurrent.signed_date || "";
@@ -6403,7 +6411,8 @@ async function saveTs({ quiet = false } = {}) {
   } finally {
     hideBusy();
   }
-  if (!quiet) alert(`✔ 거래명세서 ${tsCurrent.doc_no}를 저장했습니다. ⚙️ 설정 → 🧾 거래명세서 목록에서 다시 열 수 있습니다.`);
+  const custMsg = tsCustAdded ? `\n📒 새 거래처 '${tsCustAdded.name}'을(를) 거래처 목록에 등록했습니다.` : "";
+  if (!quiet) alert(`✔ 거래명세서 ${tsCurrent.doc_no}를 저장했습니다. ⚙️ 설정 → 🧾 거래명세서 목록에서 다시 열 수 있습니다.${custMsg}`);
   return true;
 }
 

@@ -63,6 +63,26 @@ def save_customer(data: dict[str, Any]) -> dict[str, Any]:
     return found
 
 
+def add_if_new(data: dict[str, Any] | None, memo: str = "") -> dict[str, Any] | None:
+    """거래명세서 · 작업내역서를 저장할 때 부른다. 상호명이 거래처 목록에 없으면 새로 등록하고 그 항목을, 이미 있거나
+    상호명이 비었으면 None 을 돌려준다. 이미 있는 거래처는 건드리지 않는다(목록에서 고친 값을 덮어쓰지 않도록)."""
+    src = data if isinstance(data, dict) else {}
+    clean = {k: str(src.get(k) or "").strip()[:200] for k in FIELDS}
+    if not clean["name"]:
+        return None
+    if memo and not clean["memo"]:
+        clean["memo"] = memo[:200]
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with _lock:
+        items = _load()
+        if any((c.get("name") or "").strip() == clean["name"] for c in items):
+            return None
+        found = {"id": datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3], "created_at": now, **clean, "updated_at": now}
+        items.append(found)
+        _save(items)
+    return found
+
+
 def delete_customer(customer_id: str) -> bool:
     with _lock:
         items = _load()

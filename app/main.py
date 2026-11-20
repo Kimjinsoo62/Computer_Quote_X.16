@@ -1358,11 +1358,29 @@ def _sync_statement_from_report(report: dict) -> dict | None:
     return {"id": stmt["id"], "doc_no": stmt.get("doc_no", ""), "total": stmt.get("total", 0)} if stmt else None
 
 
+def _register_customer(info: dict | None, memo: str) -> dict | None:
+    """거래명세서 · 작업내역서에 처음 쓴 거래처명이면 📒 거래처 목록에 등록한다. 실패해도 문서 저장은 성공으로 둔다."""
+    try:
+        added = customer_book.add_if_new(info, memo)
+    except (OSError, ValueError):
+        return None
+    return {"id": added["id"], "name": added["name"]} if added else None
+
+
+def _report_customer(report: dict) -> dict:
+    return {k: report.get(f"customer_{k}", "") for k in ("name", "phone", "email", "address")}
+
+
 @app.post("/api/task-reports")
 def api_create_task_report(data: dict = Body(...)):
     """새 작업내역서 저장"""
     created = create_task_report(data)
-    return {"status": "ok", "report": created, "statement": _sync_statement_from_report(created)}
+    return {
+        "status": "ok",
+        "report": created,
+        "statement": _sync_statement_from_report(created),
+        "customer_added": _register_customer(_report_customer(created), "작업내역서 저장 때 자동 등록"),
+    }
 
 
 @app.get("/api/task-reports/backup/settings")
@@ -1434,7 +1452,12 @@ def api_update_task_report(report_id: str, data: dict = Body(...)):
     updated = update_task_report(report_id, data)
     if not updated:
         raise HTTPException(status_code=404, detail="작업내역서를 찾을 수 없습니다.")
-    return {"status": "ok", "report": updated, "statement": _sync_statement_from_report(updated)}
+    return {
+        "status": "ok",
+        "report": updated,
+        "statement": _sync_statement_from_report(updated),
+        "customer_added": _register_customer(_report_customer(updated), "작업내역서 저장 때 자동 등록"),
+    }
 
 
 @app.delete("/api/task-reports/{report_id}")
@@ -1667,9 +1690,12 @@ def api_trade_statements():
 def api_save_trade_statement(data: dict = Body(...)):
     """id 가 있으면 수정, 없으면 새로 저장(번호 TS-YYYYMMDD-NN 자동)."""
     try:
-        return {"status": "ok", "statement": trade_statement.save_statement(data)}
+        stmt = trade_statement.save_statement(data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    # 칸에 직접 쓴 공급받는자만 본다(빈 칸이면 견적처를 쓰는데, 그건 이미 거래처 화면에서 고른 값이다).
+    added = _register_customer(stmt.get("customer_info"), "거래명세서 저장 때 자동 등록")
+    return {"status": "ok", "statement": stmt, "customer_added": added}
 
 
 @app.delete("/api/trade-statements/{stmt_id}")
